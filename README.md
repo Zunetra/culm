@@ -5,11 +5,12 @@ Pronounced **ìpìlẹ̀**, Yoruba for *foundation*.
 Workspace tooling for polyglot repositories. One binary that scaffolds a
 workspace and then runs its tasks.
 
-> **Status: pre-alpha.** Nothing is built yet. This repository currently
-> holds design documents only. Read [docs/DECISIONS.md](docs/DECISIONS.md)
-> first, since it records what is settled and what is still open, then
-> [docs/NEXT.md](docs/NEXT.md), which is the only document tracking
-> actual state.
+> **Status: pre-alpha.** The merge engine is the only code that exists,
+> and there is no usable CLI yet. Read
+> [docs/DECISIONS.md](docs/DECISIONS.md) first, since it records what is
+> settled and what is still open, then
+> [docs/CONTEXT.md](docs/CONTEXT.md), which holds the coding conventions
+> and the context that has to survive between sessions.
 
 The written brand is **Ìpìlẹ̀**. Everything a machine touches is plain
 ASCII `ipile`: the folder, the repository, the binary, the npm package,
@@ -70,7 +71,7 @@ See [docs/DECISIONS.md](docs/DECISIONS.md) decision 8.
 | Doc | What it covers |
 | --- | --- |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Every settled decision, with reasons. Read first. |
-| [docs/NEXT.md](docs/NEXT.md) | What exists, what is next, what is blocked. The only doc tracking state. |
+| [docs/CONTEXT.md](docs/CONTEXT.md) | Coding conventions, known traps, and context worth keeping. Read second. |
 | [docs/01-scaffolder.md](docs/01-scaffolder.md) | The v0.1 product: layers, the merge engine, the wizard, presets. |
 | [docs/02-runner.md](docs/02-runner.md) | The task graph and build cache. Higher risk, ships second. |
 | [docs/TELEMETRY.md](docs/TELEMETRY.md) | The exact payload sent, published verbatim. |
@@ -84,4 +85,4 @@ naming and reserved names, live in that repository, not this one.
 
 ## Licence
 
-Apache-2.0.
+MIT.

@@ -178,9 +178,9 @@ pub struct CacheEntry {
 }
 ```
 
-`crates/cas` lives inside this repository, unpublished. Per
-[DECISIONS.md](DECISIONS.md) decision 11, it is extracted only if a
-second project genuinely needs it.
+`cas` lives inside this repository as a module, unpublished. Per
+[DECISIONS.md](DECISIONS.md) decision 11, it is extracted to its own
+crate only if a second project genuinely needs it.
 
 ## 6. Milestones
 
@@ -190,7 +190,7 @@ v1.0.
 **r0.1 (2 weeks).** `ipile run <task>`, sequential execution respecting
 `depends_on`, no caching. Just the graph and correct ordering.
 
-**r0.2 (2 weeks).** Content-based hashing, local cache via `crates/cas`,
+**r0.2 (2 weeks).** Content-based hashing, local cache via `cas`,
 hit and miss reporting. **This milestone either proves or kills the
 premise.** Run it against a real subset of the Klassivox workspace and
 check every cache hit by hand against a fresh build for at least two
@@ -238,7 +238,7 @@ serde       = { version = "1", features = ["derive"] }
 serde_yaml  = "0.9"
 globset     = "0.4"          # input glob matching
 ignore      = "0.4"          # gitignore-aware walking, the ripgrep crate
-blake3      = "1"            # fast content hashing, feeds crates/cas
+blake3      = "1"            # fast content hashing, feeds the cas module
 git2        = "0.19"         # --affected: diff against a base ref
 thiserror   = "2"
 anyhow      = "1"

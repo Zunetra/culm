@@ -244,11 +244,18 @@ It matters to the runner because a build cache is exactly that shape.
 "Given these inputs, here are the output bytes" is a lookup keyed by a
 hash of the inputs.
 
-**Decision:** ipile builds `crates/cas` internally, unpublished. If
-project 01's job queue later needs the same thing, extract it then, with
-two real consumers shaping the API instead of one imagined one. This
-costs nothing now, because `cas` is not needed until the runner's v0.2,
-which is months away.
+**Decision:** ipile builds `cas` internally as a module, unpublished. If
+project 01's job queue later needs the same thing, extract it to its own
+crate then, with two real consumers shaping the API instead of one
+imagined one. This costs nothing now, because `cas` is not needed until
+the runner's v0.2, which is months away.
+
+**Clarified 2026-08-04.** This previously said ipile "builds `crates/cas`
+internally", which reads as a directory layout mandate and was taken as
+one. It is not. ipile is a single crate with one `src/`, no workspace and
+no `crates/` directory, per the same abstract-later reasoning above.
+Splitting a module into a crate later is mechanical. Un-splitting a
+premature workspace is not.
 
 ## 12. The organisation is Zunetra `LOCKED`
 
@@ -262,21 +269,45 @@ nothing. `Nomia` was the first choice and was already taken.
 
 Org-level decisions live in the `handbook` repository, not here.
 
-## 13. Klassivox is not modified `LOCKED`
+## 13. Klassivox is not modified unless explicitly instructed `LOCKED`
 
-Klassivox is the proving fixture and the first customer. Its
-`docs/Projects/05-task-runner.md` stays exactly as written. Whether it
-eventually becomes a stub pointing here is a separate call that has not
-been made.
+Klassivox is the proving fixture and the first customer. It lives in a
+separate repository, and work in this one does not reach into it. No
+amount of "the docs are now out of sync" justifies an edit there.
 
-`docs/jottings/` in Klassivox remains read-only under all circumstances.
+The exception is the owner explicitly asking for a change in Klassivox,
+naming it. That instruction is authorisation, and it is the only thing
+that is. A generic instruction that merely sounds repository-wide, such
+as "fix the docs" or "clean this up everywhere", is not.
 
-## 14. Licence is Apache-2.0 `LOCKED`
+Whether `docs/Projects/05-task-runner.md` eventually becomes a stub
+pointing here is a separate call that has not been made.
 
-Permissive, with the patent grant. Matches the open-core doctrine: the
-binary, the config format, and single-machine operation are free forever.
-Hosted remote cache, distributed execution, cache analytics, and SSO are
-the paid line. Never charge for the cache being correct.
+`docs/jottings/` in Klassivox is stricter still. Only an explicit
+instruction naming that specific file authorises a change to it.
+
+**Reworded 2026-08-04.** This previously read as an absolute ban, "not
+modified for any reason". That was overtaken by an explicit instruction
+to change licence references in Klassivox's `docs/Projects/`, which the
+absolute wording made impossible to obey without contradicting a
+`LOCKED` decision. The default is unchanged. Only the escape hatch is
+now written down.
+
+## 14. Licence is MIT `LOCKED`
+
+Maximum permissiveness and near-zero friction to adopt. The open-core
+line is unchanged: the binary, the config format, and single-machine
+operation are free forever. Hosted remote cache, distributed execution,
+cache analytics, and SSO are the paid line. Never charge for the cache
+being correct.
+
+**Changed 2026-08-04.** This previously named a licence carrying an
+express patent grant. MIT has none. That grant was judged not worth the
+extra licence surface for a tool at this stage.
+
+**Reopen if:** a commercial adopter's legal review asks for a patent
+grant, or ipile takes outside contributions at a scale where a
+contribution licence matters.
 
 ## 15. ASCII everywhere a machine reads it `LOCKED`
 
