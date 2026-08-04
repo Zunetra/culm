@@ -1,0 +1,24 @@
+# === Rust
+/target
+**/*.rs.bk
+*.pdb
+
+# === Node
+node_modules/
+.pnpm-store/
+*.tsbuildinfo
+
+# === Scaffolder fixtures
+# Nightly CI scaffolds real workspaces into these; none are ever committed.
+/fixtures/generated/
+/tmp/
+
+# === Environment
+.env
+.env.local
+!.env.example
+
+# === Editor and OS
+.DS_Store
+*.swp
+.idea/
