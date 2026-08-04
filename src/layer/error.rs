@@ -1,5 +1,7 @@
 // === Errors
 
+use std::path::PathBuf;
+
 use thiserror::Error;
 
 use super::category::{Category, Shape};

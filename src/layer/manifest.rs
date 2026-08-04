@@ -44,8 +44,14 @@ pub struct FileSpec {
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(tag = "strategy", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum MergeSpec {
-    JsonDeep { target: PathBuf, value: toml::Value },
-    LineBlock { target: PathBuf, lines: Vec<String> },
+    JsonDeep {
+        target: PathBuf,
+        value: toml::Value,
+    },
+    LineBlock {
+        target: PathBuf,
+        lines: Vec<String>,
+    },
     TomlMembers {
         target: PathBuf,
         members: Vec<String>,
@@ -98,10 +104,9 @@ impl Manifest {
                 MergeSpec::LineBlock { target, lines } => {
                     (target.clone(), Contribution::LineBlock(lines.clone()))
                 }
-                MergeSpec::TomlMembers { target, members } => (
-                    target.clone(),
-                    Contribution::TomlMembers(members.clone()),
-                ),
+                MergeSpec::TomlMembers { target, members } => {
+                    (target.clone(), Contribution::TomlMembers(members.clone()))
+                }
             };
             merges.insert(target, contribution);
         }

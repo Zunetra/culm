@@ -1,0 +1,28 @@
+# Express, the minimal Node HTTP framework.
+
+id = "express"
+category = "backend"
+requires = ["toolchain/node-pnpm"]
+default = false
+
+# Namespaced by layer id for the same reason the frontends are: a monorepo can
+# hold several backends, and two layers writing different values to one script
+# key is a hard merge error rather than a last-one-wins.
+[[merge]]
+strategy = "json-deep"
+target = "package.json"
+[merge.value.scripts]
+"dev:express" = "node --watch src/express/server.js"
+"start:express" = "node src/express/server.js"
+
+# CommonJS, so the layer needs no `type` key at the package root. That key is a
+# whole-workspace switch, and one app's module system is not a decision this
+# layer gets to make for every other app beside it.
+[[files]]
+from = "files/server.js"
+to = "src/express/server.js"
+
+[[install]]
+manager = "pnpm"
+dev = false
+packages = ["express"]
