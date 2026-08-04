@@ -1,0 +1,13 @@
+[package]
+name = "ipile"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/Zunetra/ipile"
+
+[dependencies]
+serde_json = "1"
+thiserror = "2"
+
+[dev-dependencies]
+proptest = "1"
