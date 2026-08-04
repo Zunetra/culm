@@ -1,0 +1,20 @@
+# The Node and pnpm toolchain, implied by any JavaScript app rather than asked for.
+
+id = "node-pnpm"
+category = "toolchain"
+default = false
+
+# `private` is the one root key every JS layer can agree on, and they all agree
+# on the same value, so it merges rather than conflicts.
+[[merge]]
+strategy = "json-deep"
+target = "package.json"
+[merge.value]
+private = true
+
+[[merge]]
+strategy = "line-block"
+target = ".gitignore"
+# Node's own artefacts only. `.env` and `*.log` are not Node-specific and live
+# in the base layer, so listing them here too would emit them in two blocks.
+lines = ["node_modules/", ".pnpm-store/", ".npm/"]

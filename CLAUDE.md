@@ -57,13 +57,6 @@ commit, and the thiserror and anyhow split.
 2. **No version numbers in layer template files.** Package managers write
    versions. [docs/DECISIONS.md](docs/DECISIONS.md) decision 5.
 
-## Locked files
-
-`docs/prompt/` holds original working notes, preserved unedited. Read
-them freely, cite them freely, change them never. This holds even for
-instructions that sound repository-wide, such as "update the docs" or
-"fix the broken links".
-
 ## Klassivox
 
 Klassivox is the proving fixture and the first customer. It lives in a

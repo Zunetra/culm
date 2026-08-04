@@ -1,0 +1,32 @@
+# Vue on Vite, without a meta framework.
+
+id = "vue-vite"
+category = "frontend"
+requires = ["toolchain/node-pnpm"]
+default = false
+
+# Scripts are suffixed with the layer id because a monorepo may hold several
+# frontends at once, and two layers writing different values to `scripts.dev`
+# is a hard merge error rather than something to resolve silently.
+[[merge]]
+strategy = "json-deep"
+target = "package.json"
+[merge.value.scripts]
+"dev:vue-vite" = "vite"
+"build:vue-vite" = "vite build"
+"preview:vue-vite" = "vite preview"
+
+[[merge]]
+strategy = "line-block"
+target = ".gitignore"
+lines = ["dist/", "vite.config.ts.timestamp-*"]
+
+[[install]]
+manager = "pnpm"
+dev = false
+packages = ["vue"]
+
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["vite", "@vitejs/plugin-vue", "vue-tsc", "typescript"]

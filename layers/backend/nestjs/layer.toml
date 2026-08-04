@@ -1,0 +1,49 @@
+# Nest, the opinionated Node application framework.
+
+id = "nestjs"
+category = "backend"
+requires = ["toolchain/node-pnpm"]
+default = false
+
+# Namespaced by layer id for the same reason the frontends are: a monorepo can
+# hold several backends, and two layers writing different values to one script
+# key is a hard merge error rather than a last-one-wins.
+[[merge]]
+strategy = "json-deep"
+target = "package.json"
+[merge.value.scripts]
+"dev:nestjs" = "nest start --watch"
+"build:nestjs" = "nest build"
+"start:nestjs" = "node dist/nestjs/main.js"
+
+[[merge]]
+strategy = "line-block"
+target = ".gitignore"
+lines = ["dist/"]
+
+# Sources sit under a directory named for the layer, so a second backend in the
+# same workspace has somewhere of its own to live.
+[[files]]
+from = "files/main.ts"
+to = "src/nestjs/main.ts"
+
+[[files]]
+from = "files/app.module.ts"
+to = "src/nestjs/app.module.ts"
+
+[[files]]
+from = "files/nest-cli.json"
+to = "nest-cli.json"
+
+# No HTTP platform adapter is installed here. Which server sits underneath is
+# the application's choice, and pinning one would bind this layer to a decision
+# that belongs to whoever selects it.
+[[install]]
+manager = "pnpm"
+dev = false
+packages = ["@nestjs/core", "@nestjs/common", "reflect-metadata", "rxjs"]
+
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["@nestjs/cli", "@nestjs/schematics", "typescript", "@types/node"]

@@ -1,0 +1,30 @@
+# Next.js, the React meta framework.
+
+id = "next"
+category = "frontend"
+requires = ["toolchain/node-pnpm"]
+default = false
+
+[[merge]]
+strategy = "json-deep"
+target = "package.json"
+[merge.value.scripts]
+"dev:next" = "next dev"
+"build:next" = "next build"
+"start:next" = "next start"
+"lint:next" = "next lint"
+
+[[merge]]
+strategy = "line-block"
+target = ".gitignore"
+lines = [".next/", "out/", "next-env.d.ts", ".vercel/"]
+
+[[install]]
+manager = "pnpm"
+dev = false
+packages = ["next", "react", "react-dom"]
+
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["@types/react", "@types/react-dom", "typescript"]

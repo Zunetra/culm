@@ -1,0 +1,16 @@
+# The Rust and Cargo toolchain, implied by any Rust app rather than asked for.
+#
+# Under `shape = none` there is no app to imply it, so it becomes the explicit
+# answer to "tooling for which ecosystem".
+
+id = "rust-cargo"
+category = "toolchain"
+default = false
+
+# No Cargo.toml contribution here. The workspace manifest depends on whether the
+# repository is one crate or many, which is the shape layer's business, and
+# guessing wrong would clobber a real manifest in an existing repository.
+[[merge]]
+strategy = "line-block"
+target = ".gitignore"
+lines = ["/target", "**/*.rs.bk", "*.pdb"]

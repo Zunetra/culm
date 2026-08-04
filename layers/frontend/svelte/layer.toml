@@ -1,0 +1,33 @@
+# SvelteKit, which drives Svelte through Vite.
+
+id = "svelte"
+category = "frontend"
+requires = ["toolchain/node-pnpm"]
+default = false
+
+[[merge]]
+strategy = "json-deep"
+target = "package.json"
+[merge.value.scripts]
+"dev:svelte" = "vite dev"
+"build:svelte" = "vite build"
+"preview:svelte" = "vite preview"
+"check:svelte" = "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
+
+[[merge]]
+strategy = "line-block"
+target = ".gitignore"
+lines = [".svelte-kit/", "build/", "dist/"]
+
+[[install]]
+manager = "pnpm"
+dev = true
+packages = [
+  "svelte",
+  "@sveltejs/kit",
+  "@sveltejs/adapter-auto",
+  "@sveltejs/vite-plugin-svelte",
+  "svelte-check",
+  "vite",
+  "typescript",
+]

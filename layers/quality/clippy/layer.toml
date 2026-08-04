@@ -1,0 +1,14 @@
+# Clippy linting.
+#
+# The config file is nearly empty on purpose. Clippy's defaults are the useful
+# ones, and a generated project that starts with a wall of overrides teaches the
+# wrong habit.
+
+id = "clippy"
+category = "quality"
+requires = ["toolchain/rust-cargo"]
+default = true
+
+[[files]]
+from = "files/clippy.toml"
+to = "clippy.toml"

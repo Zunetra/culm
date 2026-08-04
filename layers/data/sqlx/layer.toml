@@ -1,0 +1,28 @@
+# SQLx, compile time checked SQL for Rust.
+#
+# Nothing here touches package.json: a Rust only workspace has none, and
+# inventing one would leave a JavaScript project behind for nobody to run.
+# Nothing here touches Cargo.toml either. A workspace members array needs a
+# merge strategy that does not exist yet, so dependencies are declared as
+# installs and cargo writes the manifest, versions included.
+
+id = "sqlx"
+category = "data"
+requires = ["toolchain/rust-cargo"]
+default = false
+
+# The connection string is documented rather than defaulted. A committed file
+# holding a working credential is how a real one ends up in a repository.
+[[merge]]
+strategy = "line-block"
+target = ".env.example"
+lines = ["DATABASE_URL=postgresql://user:password@localhost:5432/app"]
+
+[[files]]
+from = "files/0001_init.sql"
+to = "migrations/0001_init.sql"
+
+[[install]]
+manager = "cargo"
+dev = false
+packages = ["sqlx"]

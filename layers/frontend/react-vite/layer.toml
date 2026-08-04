@@ -1,0 +1,35 @@
+# React on Vite, without a meta framework.
+
+id = "react-vite"
+category = "frontend"
+requires = ["toolchain/node-pnpm"]
+default = false
+
+[[merge]]
+strategy = "json-deep"
+target = "package.json"
+[merge.value.scripts]
+"dev:react-vite" = "vite"
+"build:react-vite" = "vite build"
+"preview:react-vite" = "vite preview"
+
+[[merge]]
+strategy = "line-block"
+target = ".gitignore"
+lines = ["dist/", "vite.config.ts.timestamp-*"]
+
+[[install]]
+manager = "pnpm"
+dev = false
+packages = ["react", "react-dom"]
+
+[[install]]
+manager = "pnpm"
+dev = true
+packages = [
+  "vite",
+  "@vitejs/plugin-react",
+  "@types/react",
+  "@types/react-dom",
+  "typescript",
+]

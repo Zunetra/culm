@@ -1,0 +1,39 @@
+# Prisma, the schema first Node ORM.
+
+id = "prisma"
+category = "data"
+requires = ["toolchain/node-pnpm"]
+default = false
+
+# Namespaced by layer id, like every other script a monorepo can hold more than
+# one of. Data is its own category precisely because it is chosen alongside a
+# backend rather than instead of one, so `generate` alone would have no single
+# owner.
+[[merge]]
+strategy = "json-deep"
+target = "package.json"
+[merge.value.scripts]
+"generate:prisma" = "prisma generate"
+"migrate:prisma" = "prisma migrate dev"
+"studio:prisma" = "prisma studio"
+
+# The connection string is documented rather than defaulted. A committed file
+# holding a working credential is how a real one ends up in a repository.
+[[merge]]
+strategy = "line-block"
+target = ".env.example"
+lines = ["DATABASE_URL=postgresql://user:password@localhost:5432/app"]
+
+[[files]]
+from = "files/schema.prisma"
+to = "prisma/schema.prisma"
+
+[[install]]
+manager = "pnpm"
+dev = false
+packages = ["@prisma/client"]
+
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["prisma"]

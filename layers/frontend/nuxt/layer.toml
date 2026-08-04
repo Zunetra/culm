@@ -1,0 +1,33 @@
+# Nuxt, the Vue meta framework.
+
+id = "nuxt"
+category = "frontend"
+requires = ["toolchain/node-pnpm"]
+default = false
+
+# `nuxt prepare` is deliberately not contributed as `postinstall`. That key has
+# to keep its literal name to work, so it cannot be namespaced, and a second
+# framework needing its own postinstall step would collide on it.
+[[merge]]
+strategy = "json-deep"
+target = "package.json"
+[merge.value.scripts]
+"dev:nuxt" = "nuxt dev"
+"build:nuxt" = "nuxt build"
+"preview:nuxt" = "nuxt preview"
+"generate:nuxt" = "nuxt generate"
+
+[[merge]]
+strategy = "line-block"
+target = ".gitignore"
+lines = [".nuxt/", ".output/", ".data/", "dist/"]
+
+[[install]]
+manager = "pnpm"
+dev = false
+packages = ["vue", "vue-router"]
+
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["nuxt", "typescript"]

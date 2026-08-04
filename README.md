@@ -76,7 +76,6 @@ See [docs/DECISIONS.md](docs/DECISIONS.md) decision 8.
 | [docs/02-runner.md](docs/02-runner.md) | The task graph and build cache. Higher risk, ships second. |
 | [docs/TELEMETRY.md](docs/TELEMETRY.md) | The exact payload sent, published verbatim. |
 | [docs/NAMING.md](docs/NAMING.md) | Why ipile, what was eliminated, what is reserved. |
-| [docs/prompt/GrainPrompt.md](docs/prompt/GrainPrompt.md) | Original raw working notes, preserved unedited. |
 
 ## Organisation
 

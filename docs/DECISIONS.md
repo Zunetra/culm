@@ -354,19 +354,164 @@ Two distinct things, easy to conflate:
 The second is what validates decision 6. A preset system nobody outside
 the binary ever uses is a configuration file with extra steps.
 
+## 18. All six frontend layers ship in v0.1, and Frontend is exactly-one `LOCKED`
+
+**Settles open decision 1**, which asked whether Vue and React both ship
+on day one. Both do, and so do their meta-frameworks.
+
+The first-party frontend set is `vue-vite`, `nuxt`, `react-vite`, `next`,
+`astro`, and `svelte`. Backend layers are deferred. Adding a member to an
+existing category is cheap: it shares the toolchain, quality, runner, and
+infra layers already paid for. Adding a category is what is expensive,
+and this adds none.
+
+**Cardinality depends on the workspace shape.** A flat per-category rule
+cannot express this, because "which framework does this app use" and "how
+many apps are there" are two different questions:
+
+| Shape | Frontend | Backend | Toolchain |
+| --- | --- | --- | --- |
+| `single-app` | zero or one | zero or one | zero or more |
+| `monorepo` | zero or more | zero or more | zero or more |
+| `tooling-only` | **none** | **none** | one or more |
+
+`tooling-only` is what its name says, for dropping ipile onto a repository
+that already exists. It takes no framework layers at all, because a framework layer
+scaffolds an app and an app implies a shape. Naming both is a
+contradiction, and it is rejected rather than half-scaffolded.
+
+The toolchain flips from implied to required under `none`. Everywhere
+else the framework choice implies the toolchain, per §2 of
+[01-scaffolder.md](01-scaffolder.md). With no framework there is nothing
+left to imply it, so the toolchain becomes the explicit answer to
+"tooling for which ecosystem", `node-pnpm` or `rust-cargo`. The quality
+layers then follow from it through their own `requires`.
+
+It is named `tooling-only` rather than `none` because a shape named for
+what it withholds tells the user nothing about what they get.
+
+**A layer's identity is `<category>/<id>`, not the bare id.** `none` is a
+legitimate answer for more than one category, and the merge engine keys
+line blocks by identity, so two layers called `none` would silently share
+a block. The stronger reason is decision 6: presets are distributed by
+git URL, so third-party layers will eventually ship an id we do not
+control, and a stranger's `nuxt` colliding with ours is a matter of time.
+`requires` and `conflicts` name qualified ids for the same reason.
+
+**Every workspace gets a `base` layer**, exactly one, whatever the shape.
+It carries the ignores that belong to no framework, the OS and editor
+noise every repository accumulates, plus a committed `.env.example`. Each
+framework layer still ignores only its own build output, which is what
+keeps layers independent. Without `base`, a Rust tooling-only selection
+would ship a `.gitignore` holding nothing but `/target`.
+
+Deliberately not one big comprehensive ignore file. That is what ipile's
+own `.gitignore` was on 2026-08-04, the Visual Studio .NET template,
+hundreds of lines of rules for tools this project does not use, and it
+was missing `/target`. A generated file full of irrelevance teaches
+people to stop reading it.
+
+One app runs on one framework, so a single app takes at most one of each.
+A monorepo is many apps, and a Nuxt marketing site beside a React admin
+panel, or a Rust service beside a Node BFF, is the reason someone reaches
+for a monorepo at all. Forbidding that would forbid the case ipile exists
+to serve.
+
+A single-app selection additionally needs at least one frontend or
+backend. That rule spans two categories, so it lives in validation rather
+than in a cardinality.
+
+**Cardinality is a property of the category, never pairwise `conflicts`
+entries between layers.** This matters more than the rule itself:
+
+- Changing a category is one edit in one place, with no manifest changes,
+  no format change, and no migration.
+- Adding a seventh frontend never touches the six that already exist.
+- The rule is stated once, so it cannot drift across manifests.
+- `conflicts` stays for what it is actually for, genuine
+  incompatibilities that cross categories.
+
+**What this costs** is the thing to watch. A monorepo can now select
+several frontends, so nightly CI cannot cover every reachable selection.
+Two things carry that weight instead: presets are what CI builds, and the
+merge engine turns a bad combination into a loud error naming both
+layers rather than a subtly wrong file. If a generated workspace ever
+fails to build in a way CI did not catch, that is the sharp kill
+criterion in [01-scaffolder.md](01-scaffolder.md) §10, and the answer is
+to narrow cardinality again rather than to patch around it.
+
+**A consequence for layer authors:** layers in a many-per-workspace
+category must not contribute colliding scalars. If every frontend wrote
+`scripts.dev`, two frontends in one monorepo would be an instant merge
+conflict. Scripts are namespaced per layer instead.
+
+**Revised 2026-08-04**, same day it was written. The first version made
+Frontend `exactly-one` outright, on CI-matrix grounds. That was wrong: it
+optimised for a green matrix at the cost of the polyglot monorepo, which
+is the product's whole reason to exist.
+
+## 19. Templates ship in the binary and are comprehensive `LOCKED`
+
+**Layers carry their own template files.** `layers/<category>/<id>/files/`
+is copied into the generated workspace at scaffold time, with
+`{{project_name}}` interpolation. ipile never fetches a template from a
+git URL at scaffold time.
+
+- Nightly CI can build what ships in the binary. It cannot build what is
+  downloaded from a repository we do not control. §8 of
+  [01-scaffolder.md](01-scaffolder.md) says untested templates are how
+  every scaffolder dies.
+- A scaffold that depends on a third-party repository being reachable and
+  unchanged is a scaffold that breaks silently, months later, for
+  somebody else.
+- The template that shipped with a given ipile version is the one that
+  version emits, forever.
+
+Git URLs remain the distribution path for **presets**, per decision 6. A
+preset is a list of layers. A layer is not fetched.
+
+**Templates are comprehensive, not toy.** A generated backend is expected
+to have configuration loading, error types, a health check, and an
+integration test. A `main.rs` that prints hello is not a starting point
+anybody keeps. The reference for the expected depth is
+`https://github.com/dev-davexoyinbo/actix-web-starter-template`, which
+was cloned into `docs/` on 2026-08-04 purely as a quality bar and is to
+be deleted once the layers reach it.
+
+**Comprehensiveness is composed, never copied wholesale.** That reference
+bundles a Dockerfile, a compose file, SeaORM entities and migrations, and
+a messaging crate. Copying it into one layer would recreate the
+combination-authoring trap decision 4 exists to prevent: infra would be
+duplicated against the `infra` layers, and `actix` would silently contain
+a data layer, making `actix + prisma` incoherent. So it is split along
+category lines:
+
+- `backend/actix` owns the app crates and its own tooling config
+- `data/sea-orm` owns entities and migrations
+- `infra/dockerfile` and `infra/docker-compose` own containers
+
+Cross-category dependencies are expressed with `requires`, not
+`conflicts`. `backend/actix` requiring `data/sea-orm` makes
+`actix + prisma` illegal automatically, because a single app takes at
+most one data layer. No pairwise rules to maintain.
+
+**The dividing line for any file:** if only one layer touches it, it is
+copied. If several might, it is merged, and copying it would let one
+layer clobber another.
+
 ---
 
 ## Open
 
 Decisions not yet made. Do not treat silence here as agreement.
 
-1. **Whether the scaffolder's first-party layer set includes Vue and
-   React on day one, or only one of them.** Fewer layers means a nightly
-   CI matrix that actually stays green.
-2. **Where the hosted remote cache runs, and what it costs**, which does
+1. **Where the hosted remote cache runs, and what it costs**, which does
    not matter until the runner reaches v0.4.
-3. **Whether `ipile.yaml` is the config filename.** It should probably be
+2. **Whether `ipile.yaml` is the config filename.** It should probably be
    settled before any file format is written, since renaming a config
    file after release is a migration.
-4. **Whether Klassivox's `docs/Projects/05-task-runner.md` becomes a stub
+3. **Whether Klassivox's `docs/Projects/05-task-runner.md` becomes a stub
    pointing here** once these docs are complete.
+
+Open decision 1, the first-party frontend set, was settled as decision 18
+on 2026-08-04.

@@ -1,0 +1,23 @@
+# Actix Web, the actor based Rust HTTP framework.
+#
+# Nothing here touches package.json: a Rust only workspace has none, and
+# inventing one would leave a JavaScript project behind for nobody to run.
+# Nothing here touches Cargo.toml either. A workspace members array needs a
+# merge strategy that does not exist yet, so dependencies are declared as
+# installs and cargo writes the manifest, versions included.
+
+id = "actix"
+category = "backend"
+requires = ["toolchain/rust-cargo"]
+default = false
+
+# A binary under src/bin, rather than src/main.rs, so a second Rust service in
+# the same workspace has a target of its own instead of a collision.
+[[files]]
+from = "files/main.rs"
+to = "src/bin/actix.rs"
+
+[[install]]
+manager = "cargo"
+dev = false
+packages = ["actix-web"]

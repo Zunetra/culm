@@ -6,8 +6,10 @@ use std::path::{Path, PathBuf};
 
 pub mod json_deep;
 pub mod line_block;
+pub mod toml_members;
 
 pub use json_deep::ValueKind;
+pub use toml_members::TomlMembersDoc;
 
 use json_deep::JsonDoc;
 use line_block::LineBlockDoc;
@@ -57,6 +59,7 @@ impl From<String> for LayerId {
 pub enum Strategy {
     JsonDeep,
     LineBlock,
+    TomlMembers,
 }
 
 impl fmt::Display for Strategy {
@@ -64,6 +67,7 @@ impl fmt::Display for Strategy {
         f.write_str(match self {
             Self::JsonDeep => "json-deep",
             Self::LineBlock => "line-block",
+            Self::TomlMembers => "toml-members",
         })
     }
 }
@@ -135,6 +139,8 @@ pub enum Contribution {
     JsonDeep(serde_json::Value),
     /// One `# layer:<id>` delimited block per layer, blocks sorted by layer id.
     LineBlock(Vec<String>),
+    /// Crates appended to a Cargo workspace's `members`, unioned then sorted.
+    TomlMembers(Vec<String>),
 }
 
 impl Contribution {
@@ -143,6 +149,7 @@ impl Contribution {
         match self {
             Self::JsonDeep(_) => Strategy::JsonDeep,
             Self::LineBlock(_) => Strategy::LineBlock,
+            Self::TomlMembers(_) => Strategy::TomlMembers,
         }
     }
 }
@@ -194,6 +201,7 @@ impl Layer {
 pub enum FileContent {
     JsonDeep(JsonDoc),
     LineBlock(LineBlockDoc),
+    TomlMembers(TomlMembersDoc),
 }
 
 impl FileContent {
@@ -202,6 +210,7 @@ impl FileContent {
         match self {
             Self::JsonDeep(_) => Strategy::JsonDeep,
             Self::LineBlock(_) => Strategy::LineBlock,
+            Self::TomlMembers(_) => Strategy::TomlMembers,
         }
     }
 
@@ -210,6 +219,7 @@ impl FileContent {
         match self {
             Self::JsonDeep(doc) => doc.render(),
             Self::LineBlock(doc) => doc.render(),
+            Self::TomlMembers(doc) => doc.render(),
         }
     }
 
@@ -218,6 +228,7 @@ impl FileContent {
         match self {
             Self::JsonDeep(doc) => doc.first_owner(),
             Self::LineBlock(doc) => doc.first_owner(),
+            Self::TomlMembers(doc) => doc.first_owner(),
         }
     }
 }
@@ -272,6 +283,9 @@ impl FileSet {
                     Contribution::LineBlock(lines) => {
                         FileContent::LineBlock(LineBlockDoc::seed(layer, lines))
                     }
+                    Contribution::TomlMembers(members) => {
+                        FileContent::TomlMembers(TomlMembersDoc::seed(layer, members))
+                    }
                 };
                 self.files.insert(target.to_path_buf(), content);
                 Ok(())
@@ -296,6 +310,19 @@ impl FileSet {
                     a: doc.first_owner(),
                     b: layer.clone(),
                     a_strategy: Strategy::LineBlock,
+                    b_strategy: other.strategy(),
+                }),
+            },
+            Some(FileContent::TomlMembers(doc)) => match contribution {
+                Contribution::TomlMembers(members) => {
+                    doc.add(members);
+                    Ok(())
+                }
+                other => Err(MergeError::StrategyMismatch {
+                    target: target.to_path_buf(),
+                    a: doc.first_owner(),
+                    b: layer.clone(),
+                    a_strategy: Strategy::TomlMembers,
                     b_strategy: other.strategy(),
                 }),
             },

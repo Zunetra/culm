@@ -44,14 +44,41 @@ how every scaffolder before this one died.
 
 | Category | Cardinality | Members |
 | --- | --- | --- |
-| Shape | exactly one | `monorepo`, `single-app` |
-| Frontend | zero or more | `nuxt`, `next`, `react-vite`, `vue-vite`, `astro`, `svelte` |
-| Backend | zero or more | `axum`, `actix`, `express`, `nestjs`, `fastify`, `go-chi` |
+| Base | exactly one | `base` |
+| Shape | exactly one | `monorepo`, `single-app`, `tooling-only` |
+| Frontend | shape dependent | `nuxt`, `next`, `react-vite`, `vue-vite`, `astro`, `svelte` |
+| Backend | shape dependent | `axum`, `actix`, `express`, `nestjs`, `fastify`, `go-chi` |
 | Toolchain | implied, never asked | `node-pnpm`, `rust-cargo`, `go-mod` |
 | Quality | defaults on, toggleable | `prettier`, `eslint`, `rustfmt`, `clippy`, `husky`, `commitlint`, `editorconfig` |
 | Runner | exactly one | `nx`, `turborepo`, `moon`, `ipile`, `none` |
 | Infra | zero or more | `docker-compose`, `dockerfile`, `github-actions` |
 | Editor | zero or more | `vscode`, `zed` |
+
+Cardinality is declared on the category, never as pairwise `conflicts`
+entries between layers, so changing a category is one edit rather than
+one per member.
+
+**Shape dependent** means what it says. A `single-app` workspace takes at
+most one frontend and one backend, because one app runs on one framework.
+A `monorepo` takes any number of each, because a Nuxt site beside a React
+admin panel is the reason someone reaches for a monorepo. `tooling-only` takes no
+framework layers at all and requires a toolchain instead, since it exists
+to drop tooling onto a repository that already exists. A single app
+additionally needs at least one of the two, a rule that spans categories
+and therefore lives in validation. See [DECISIONS.md](DECISIONS.md)
+decision 18.
+
+A layer's identity is `<category>/<id>`, not the bare id. `none` is a
+legitimate answer in more than one category, and the merge engine keys
+line blocks by identity, so two layers called `none` would silently share
+a block. The stronger reason is decision 6: presets travel by git URL, so
+a third party will eventually ship a `nuxt` layer of their own.
+`requires` and `conflicts` name qualified ids for the same reason.
+
+The **base** layer applies to every workspace whatever else is selected.
+It owns the ignores that belong to no framework, plus a committed
+`.env.example`. Framework layers still ignore only their own build
+output, which is what keeps them independent of one another.
 
 ### Why role, not language
 
@@ -277,8 +304,16 @@ byte-identical output.
 ## 9. Milestones
 
 **v0.1 (2 weeks).** Layer format, merge engine, `json-deep` and
-`line-block` strategies, three first-party presets, non-interactive flags
-only. No wizard yet. Scaffolds the Klassivox shape and the result builds.
+`line-block` strategies, all six frontend layers per decision 18, three
+first-party presets, non-interactive flags only. No wizard yet, and no
+backend layers yet beyond what the Klassivox shape needs. Scaffolds the
+Klassivox shape and the result builds.
+
+Built so far: the merge engine with both strategies and order
+independence proven by property test, and the layer format with
+categories, manifest parsing, and selection validation. Frontend layers
+are in progress. Not started: file copying, interpolation, presets, the
+CLI.
 
 **v0.2 (1 week).** Interactive wizard, plan preview and confirmation,
 `toml-members` and `hook-script` and `yaml-steps` strategies.

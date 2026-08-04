@@ -1,0 +1,13 @@
+# rustfmt formatting.
+#
+# Contributes a config file rather than a script, because Cargo already ships the
+# command and there is no package.json in a Rust-only repository to hang one on.
+
+id = "rustfmt"
+category = "quality"
+requires = ["toolchain/rust-cargo"]
+default = true
+
+[[files]]
+from = "files/rustfmt.toml"
+to = "rustfmt.toml"

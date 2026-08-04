@@ -1,0 +1,30 @@
+# Astro, content first, islands for the interactive parts.
+
+id = "astro"
+category = "frontend"
+requires = ["toolchain/node-pnpm"]
+default = false
+
+[[merge]]
+strategy = "json-deep"
+target = "package.json"
+[merge.value.scripts]
+"dev:astro" = "astro dev"
+"build:astro" = "astro build"
+"preview:astro" = "astro preview"
+"check:astro" = "astro check"
+
+[[merge]]
+strategy = "line-block"
+target = ".gitignore"
+lines = ["dist/", ".astro/"]
+
+[[install]]
+manager = "pnpm"
+dev = false
+packages = ["astro"]
+
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["@astrojs/check", "typescript"]

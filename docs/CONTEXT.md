@@ -101,6 +101,38 @@ Other Rust conventions:
 
 ---
 
+## Modularity and separation of concerns
+
+**A module is a directory with a `mod.rs`, not one long file.** Single
+crate does not mean single file. `src/merge/` and `src/layer/` are both
+directories, and anything of comparable size that comes later is too.
+
+**One concern per file.** The test is whether the file has one reason to
+change. `src/layer/` splits into `category.rs`, `manifest.rs`,
+`validate.rs`, and `error.rs` because what a category is, what a manifest
+holds, whether a selection is legal, and how failure is reported are four
+separate questions. Only the third depends on the other two.
+
+**`mod.rs` declares and re-exports, and holds no logic of its own.**
+Callers import from the module root, so internal reorganisation does not
+break them. A `mod.rs` that has grown its own functions is a file that
+should have been a submodule.
+
+**Errors live in their own `error.rs`** once a module has more than a
+couple of variants. The error type is the module's public contract for
+failure and reads badly buried under the code that happens to raise it.
+
+**Tests sit beside the code they test**, in a `#[cfg(test)] mod tests`
+under a `// === Tests` heading. Cross-module behaviour goes in `tests/`
+instead, because that is where the crate is exercised the way a caller
+would use it.
+
+**Split when a file earns it, not preemptively.** A 40 line module does
+not need a directory. The same abstract-later reasoning that keeps ipile
+a single crate applies one level down.
+
+---
+
 ## Safety and allocation
 
 **No unsafe code.** `#![forbid(unsafe_code)]` sits at the top of both
@@ -198,6 +230,52 @@ Why ipile, and what was eliminated on the way, is in
 
 ---
 
+## What is being built, and in what order
+
+Written 2026-08-04 so a session picking this up cold does not have to
+reconstruct the plan. The reasoning behind each item is in
+[DECISIONS.md](DECISIONS.md); this is the shape of the work.
+
+**The goal.** A user picks a stack and gets a workspace they would have
+been happy to write themselves. Not a hello-world. The quality bar is the
+actix reference in decision 19: configuration loading, error types, a
+health check, an integration test, real tooling config.
+
+**What exists.** The merge engine with `json-deep`, `line-block`, and
+`toml-members`. The layer format with categories, shape-dependent
+cardinality, manifest parsing, and selection validation. The scaffold
+module: interpolation, the copy plan, and disk writing. Seventeen plus
+layers across base, shape, frontend, backend, data, toolchain, quality,
+and runner.
+
+**What does not exist yet.** The CLI. The wizard. Presets. The
+`hook-script` and `yaml-steps` strategies. Nightly CI. Installs are
+parsed and validated but nothing runs a package manager.
+
+**The order from here.**
+
+1. Bring each layer up to the quality bar, composed by category per
+   decision 19. Start with `backend/actix`, since the reference exists
+   for it, then `backend/axum`, then the Node backends, then the
+   frontends.
+2. Non-interactive flags, so a selection can be made without a wizard.
+3. The install step, running `pnpm add` and `cargo add` after scaffolding.
+4. Presets, then the wizard. The wizard is deliberately last: it is the
+   part everyone builds first and the part that matters least, and flags
+   have to work anyway.
+
+**Two rules that shape every layer authored from here.**
+
+- Scripts in a many-per-workspace category are namespaced by layer id
+  (`dev:nuxt`, `dev:nestjs`). A monorepo can select several frontends and
+  several backends, and two layers writing different values to the same
+  `package.json` key is a hard merge error. Quality layers are not
+  namespaced, because at most one of each is selected and `format` has a
+  single owner.
+- A layer never names another layer in its content. Not in a package
+  name, not in a script, not in an ignore rule. There is a test that
+  fails if one does.
+
 ## Traps already identified, do not rediscover
 
 - **Never author a combination of layers.** The moment a special case
@@ -227,3 +305,17 @@ Why ipile, and what was eliminated on the way, is in
   `cas` is built inside ipile and stays unpublished.
 - `Projects/Mine` was renamed to `Projects/Zunetra` on 2026-08-04, and
   the org repository is `handbook`, not `zunetra`.
+- `docs/prompt/` held the original working notes and was a locked
+  directory. The owner deleted it on 2026-08-04 and asked for the lock to
+  be removed with it. Do not restore it.
+- `docs/actix-web-starter-template/` is a third-party MIT clone, kept
+  only as the quality bar described in decision 19. Its copyright is
+  `2025 Oyinbo David Bayode`. Anything derived from it owes attribution,
+  and the clone itself is to be deleted once the layers reach its
+  standard.
+- **Unverified as of 2026-08-04:** the `toml-members` wiring through
+  `Strategy`, `Contribution`, `FileContent`, and `MergeSpec` was written
+  but never compiled, at the owner's request to stop running tests. Run
+  `cargo test`, `cargo clippy --all-targets -- -D warnings`, and
+  `cargo fmt --check` before building on it. Everything before it was
+  green at 74 tests.
