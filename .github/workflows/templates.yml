@@ -1,0 +1,185 @@
+# Proves the shipped templates still describe the frameworks they name.
+#
+# No template carries a version, per decision 5, so `pnpm add` and `cargo add`
+# resolve whatever is current on the day this runs. That makes the build itself
+# the version check: there is nothing to bump and nothing for a dependency bot
+# to act on. What this catches is a framework changing shape underneath a
+# template, which is the only kind of upstream change that can invalidate one.
+#
+# A red run is the signal to re-harvest that one layer by hand. Nothing here
+# rewrites a template: those files are the quality bar, and a bot committing
+# framework bytes nobody read would mean the first person to notice a
+# regression is a user.
+
+name: templates
+
+on:
+  schedule:
+    # Weekly. A framework does not restructure itself overnight, and a nightly
+    # run would buy noise rather than warning.
+    - cron: "0 4 * * 1"
+  # The manual verification gate. A newly harvested layer is run through this
+  # before it is committed, because `cargo test` cannot reach a network and so
+  # can never prove a template builds.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: templates
+  cancel-in-progress: true
+
+jobs:
+  scaffold:
+    name: ${{ matrix.layer }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    strategy:
+      # Every layer is reported, so one framework restructuring does not hide
+      # the state of the other five.
+      fail-fast: false
+      matrix:
+        include:
+          # Only layers that emit an application belong here. A manifest-only
+          # layer would fail for a reason that has nothing to do with upstream,
+          # which would make a red run mean nothing. Add each frontend to this
+          # list as it reaches the decision 19 bar.
+          - layer: frontend/nuxt
+            toolchain: node
+            scripts: build:nuxt test:nuxt
+
+          - layer: backend/express
+            toolchain: node
+            scripts: test:express
+
+          - layer: backend/fastify
+            toolchain: node
+            scripts: test:fastify
+
+          - layer: backend/nestjs
+            toolchain: node
+            scripts: build:nestjs test:nestjs
+
+          - layer: backend/axum
+            toolchain: rust
+
+          - layer: backend/actix
+            toolchain: rust
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: pnpm/action-setup@v4
+        if: matrix.toolchain == 'node'
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        if: matrix.toolchain == 'node'
+        with:
+          node-version: 22
+
+      # Release rather than debug: this is the binary a user would have, and
+      # the layer tree is compiled into it, so a debug build would be testing a
+      # different artefact for no reason.
+      - name: Build culm
+        run: cargo build --release
+
+      # Scaffolded outside the checkout on purpose. A workspace written inside
+      # this repository would sit under its Cargo workspace and its .gitignore,
+      # and would stop being the thing a user gets.
+      - name: Scaffold
+        run: |
+          mkdir -p "$RUNNER_TEMP/scaffold"
+          cd "$RUNNER_TEMP/scaffold"
+          "$GITHUB_WORKSPACE/target/release/culm" new demo \
+            --layer "${{ matrix.layer }}" \
+            --yes
+
+      # `culm new` runs the installs itself, so this only reports what landed.
+      # A missing manifest here means the scaffold half broke, not the upstream
+      # framework, and the two are worth telling apart before the build runs.
+      - name: Show what was written
+        run: |
+          cd "$RUNNER_TEMP/scaffold/demo"
+          find . -path ./node_modules -prune -o -type f -print | sort
+
+      - name: Build and test
+        if: matrix.toolchain == 'node'
+        run: |
+          cd "$RUNNER_TEMP/scaffold/demo"
+          for script in ${{ matrix.scripts }}; do
+            echo "::group::pnpm run $script"
+            pnpm run "$script"
+            echo "::endgroup::"
+          done
+
+      - name: Build and test
+        if: matrix.toolchain == 'rust'
+        run: |
+          cd "$RUNNER_TEMP/scaffold/demo"
+          cargo build --locked --workspace
+          cargo test --workspace
+
+  report:
+    name: report drift
+    runs-on: ubuntu-latest
+    needs: scaffold
+    # Only on a scheduled run. A manual run is somebody watching the logs, and
+    # filing an issue at them would be noise.
+    if: failure() && github.event_name == 'schedule'
+
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "Template drift: a shipped layer no longer builds";
+            const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              "The weekly template run failed, so at least one shipped layer no",
+              "longer matches the framework it names.",
+              "",
+              `Run: ${url}`,
+              "",
+              "Nothing here needs a version bump: no template carries a version.",
+              "Find the failing layer in the matrix, re-run that framework's own",
+              "generator by hand, re-harvest the changed files into",
+              "`layers/<category>/<id>/files/`, strip any version the generator",
+              "wrote, and push.",
+            ].join("\n");
+
+            /* One issue per outage, not one per week. A second failure while
+             * the first is still open is the same problem, and a fresh issue
+             * every Monday would train everyone to ignore the label. */
+            const open = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "template-drift",
+            });
+
+            const existing = open.data.find((issue) => issue.title === title);
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body: `Still failing. Run: ${url}`,
+              });
+              return;
+            }
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ["template-drift"],
+            });

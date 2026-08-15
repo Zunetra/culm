@@ -1,9 +1,10 @@
-const express = require("express");
+// === Entry point
 
-const app = express();
+import { createApp } from "./app.js";
+import { loadConfig } from "./config.js";
 
-app.get("/health", (_request, response) => {
-  response.json({ status: "ok" });
+const config = loadConfig();
+
+createApp().listen(config.port, config.host, () => {
+  console.log(`listening on http://${config.host}:${config.port}`);
 });
-
-app.listen(Number(process.env.PORT || 3000));

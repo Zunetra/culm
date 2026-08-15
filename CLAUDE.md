@@ -1,4 +1,4 @@
-# ipile - Claude Instructions
+# culm - Claude Instructions
 
 Project-specific additions to the global instructions.
 
@@ -6,7 +6,7 @@ Project-specific additions to the global instructions.
 
 ## Before doing anything
 
-Read [docs/DECISIONS.md](docs/DECISIONS.md) first. Its `LOCKED` entries
+Read [docs/CONTEXT.md](docs/CONTEXT.md#decisions) first. Its `LOCKED` entries
 are settled and closed. Do not re-litigate or work around any of them.
 Its `Open` section is the only place where a decision is genuinely still
 available.
@@ -24,8 +24,8 @@ The two design documents that follow from it:
 
 ## The name
 
-The written brand is **Ìpìlẹ̀**. Everything a machine reads is plain
-ASCII `ipile`: folder, repository, binary, npm package, crate, domain,
+This project is **culm**, the stalk of a grain plant. Plain ASCII
+everywhere: folder, repository, binary, npm package, crate, domain,
 environment variables. Never introduce a diacritic into a path, an
 identifier, a package name, or a command.
 
@@ -52,10 +52,10 @@ commit, and the thiserror and anyhow split.
 ## The two rules that outrank convenience
 
 1. **The scaffolder must be able to emit Nx, Turborepo, Moon, or
-   nothing.** Never emit configuration only ipile's runner can consume.
-   [docs/DECISIONS.md](docs/DECISIONS.md) decision 3.
+   nothing.** Never emit configuration only culm's runner can consume.
+   [docs/CONTEXT.md](docs/CONTEXT.md#decisions) decision 3.
 2. **No version numbers in layer template files.** Package managers write
-   versions. [docs/DECISIONS.md](docs/DECISIONS.md) decision 5.
+   versions. [docs/CONTEXT.md](docs/CONTEXT.md#decisions) decision 5.
 
 ## Klassivox
 
@@ -64,4 +64,4 @@ separate repository and **is not modified by work in this one unless the
 owner explicitly asks for a Klassivox change**, naming it. Keeping
 documentation in sync is not a reason. A generic instruction that merely
 sounds repository-wide does not authorise it. See
-[docs/DECISIONS.md](docs/DECISIONS.md) decision 13.
+[docs/CONTEXT.md](docs/CONTEXT.md#decisions) decision 13.

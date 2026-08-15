@@ -7,9 +7,10 @@ id = "rust-cargo"
 category = "toolchain"
 default = false
 
-# No Cargo.toml contribution here. The workspace manifest depends on whether the
-# repository is one crate or many, which is the shape layer's business, and
-# guessing wrong would clobber a real manifest in an existing repository.
+# No Cargo.toml contribution here. Only a layer that adds a crate can name a
+# workspace member, so the root manifest is assembled by the app layers through
+# the toml-members strategy. A toolchain seeding it would emit an empty
+# workspace when this layer is dropped onto a repository that already has one.
 [[merge]]
 strategy = "line-block"
 target = ".gitignore"

@@ -1,7 +1,7 @@
 # 01 - The Scaffolder
 
 The v0.1 product. Ships first. See
-[DECISIONS.md](DECISIONS.md) decisions 2, 3, 4, 5, and 6 for why the
+[CONTEXT.md](CONTEXT.md#decisions) decisions 2, 3, 4, 5, and 6 for why the
 shape below is what it is.
 
 ---
@@ -50,7 +50,7 @@ how every scaffolder before this one died.
 | Backend | shape dependent | `axum`, `actix`, `express`, `nestjs`, `fastify`, `go-chi` |
 | Toolchain | implied, never asked | `node-pnpm`, `rust-cargo`, `go-mod` |
 | Quality | defaults on, toggleable | `prettier`, `eslint`, `rustfmt`, `clippy`, `husky`, `commitlint`, `editorconfig` |
-| Runner | exactly one | `nx`, `turborepo`, `moon`, `ipile`, `none` |
+| Runner | exactly one | `nx`, `turborepo`, `moon`, `culm`, `none` |
 | Infra | zero or more | `docker-compose`, `dockerfile`, `github-actions` |
 | Editor | zero or more | `vscode`, `zed` |
 
@@ -65,7 +65,7 @@ admin panel is the reason someone reaches for a monorepo. `tooling-only` takes n
 framework layers at all and requires a toolchain instead, since it exists
 to drop tooling onto a repository that already exists. A single app
 additionally needs at least one of the two, a rule that spans categories
-and therefore lives in validation. See [DECISIONS.md](DECISIONS.md)
+and therefore lives in validation. See [CONTEXT.md](CONTEXT.md#decisions)
 decision 18.
 
 A layer's identity is `<category>/<id>`, not the bare id. `none` is a
@@ -209,27 +209,27 @@ pub enum MergeError {
 3. **Frontend apps**, if any.
 4. **Backend apps**, if any.
 5. **Quality tooling**, defaults pre-selected.
-6. **Runner**, defaulting to `nx` until ipile's own runner passes its
+6. **Runner**, defaulting to `nx` until culm's own runner passes its
    v0.2 check.
 7. **Infra and editor.**
 
 ### Two hard rules
 
 - **Every question has a flag equivalent.**
-  `ipile new myapp --preset backend --yes` must work with zero prompts.
+  `culm new myapp --preset backend --yes` must work with zero prompts.
   Interactive-only scaffolders are unusable in CI, in documentation, and
   in exactly the places a tool spreads from.
 - **Print the resolved plan and confirm before writing anything.** "Here
   are the 14 files I will create and the 6 commands I will run." This
   costs nothing and matches the honesty posture in
-  [DECISIONS.md](DECISIONS.md) decision 9.
+  [CONTEXT.md](CONTEXT.md#decisions) decision 9.
 
 ## 6. Presets
 
 A preset is a name, a layer list, and pre-answered questions.
 
 ```yaml
-# ipile.preset.yaml
+# culm.preset.yaml
 name: polyglot-monorepo
 description: Nuxt frontend, Axum backend, one workspace, full quality gate.
 shape: monorepo
@@ -251,11 +251,11 @@ answers:
 ```
 
 - **Shipped in the binary:** `monorepo`, `frontend`, `backend`.
-- **From a git URL:** `ipile new myapp --preset github:user/repo`.
+- **From a git URL:** `culm new myapp --preset github:user/repo`.
 - **Saved locally after a run:** written to
-  `~/.config/ipile/presets/<name>.yaml`.
+  `~/.config/culm/presets/<name>.yaml`.
 - No hosted registry before v2. See
-  [DECISIONS.md](DECISIONS.md) decision 6.
+  [CONTEXT.md](CONTEXT.md#decisions) decision 6.
 
 The `monorepo` preset is derived from Klassivox's real configuration,
 which is the point: it is the one workspace we have perfect information
@@ -263,7 +263,7 @@ about.
 
 ## 7. Version resolution
 
-Restating [DECISIONS.md](DECISIONS.md) decision 5 as behaviour:
+Restating [CONTEXT.md](CONTEXT.md#decisions) decision 5 as behaviour:
 
 1. Layers contain no version numbers.
 2. After files are written, run `pnpm add -D <packages>` and
@@ -288,7 +288,7 @@ strategy:
     preset: [monorepo, frontend, backend]
     os: [ubuntu-latest, macos-latest]
 steps:
-  - run: ipile new fixture --preset ${{ matrix.preset }} --yes
+  - run: culm new fixture --preset ${{ matrix.preset }} --yes
   - run: cd fixture && pnpm install --frozen-lockfile=false
   - run: cd fixture && pnpm build
   - run: cd fixture && pnpm lint
@@ -326,7 +326,7 @@ independence, npm launcher package with platform binaries, install
 script.
 
 **v1.0.** Go layers, documentation site, and the number that matters:
-how many people ran `ipile new` and what they selected.
+how many people ran `culm new` and what they selected.
 
 ## 10. Kill criteria
 

@@ -1,0 +1,4 @@
+{
+  "//": "Nuxt writes the real compiler options into .nuxt/tsconfig.json when it prepares the project. Extending them keeps this file from restating paths that the framework already knows.",
+  "extends": "../../.nuxt/tsconfig.json"
+}

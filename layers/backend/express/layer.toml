@@ -14,13 +14,31 @@ target = "package.json"
 [merge.value.scripts]
 "dev:express" = "node --watch src/express/server.js"
 "start:express" = "node src/express/server.js"
+"test:express" = "node --test test/express.test.js"
 
-# CommonJS, so the layer needs no `type` key at the package root. That key is a
-# whole-workspace switch, and one app's module system is not a decision this
-# layer gets to make for every other app beside it.
+# ESM, per decision 21. This layer still sets no `type` key: that remains a
+# whole-workspace switch that one app has no business making for every app
+# beside it, which is why toolchain/node-pnpm owns it instead.
 [[files]]
 from = "files/server.js"
 to = "src/express/server.js"
+
+[[files]]
+from = "files/app.js"
+to = "src/express/app.js"
+
+[[files]]
+from = "files/config.js"
+to = "src/express/config.js"
+
+[[files]]
+from = "files/errors.js"
+to = "src/express/errors.js"
+
+# Node's own test runner, so a comprehensive template costs no test dependency.
+[[files]]
+from = "files/health.test.js"
+to = "test/express.test.js"
 
 [[install]]
 manager = "pnpm"

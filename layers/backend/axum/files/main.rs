@@ -1,17 +1,15 @@
-// === A minimal HTTP service
+// === Binary entry point
 
-use axum::{Router, routing::get};
+use axum_service::config::Config;
+use axum_service::error::AppError;
+use axum_service::app;
 
 #[tokio::main]
-async fn main() {
-    let app = Router::new().route("/health", get(health));
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
-        .await
-        .expect("port 3000 is free");
-    axum::serve(listener, app).await.expect("the server runs");
-}
-
-/// Answers the liveness probe.
-async fn health() -> &'static str {
-    "ok"
+async fn main() -> Result<(), AppError> {
+    let config = Config::from_env()?;
+    let address = config.address();
+    let listener = tokio::net::TcpListener::bind(&address).await?;
+    println!("listening on http://{address}");
+    axum::serve(listener, app()).await?;
+    Ok(())
 }

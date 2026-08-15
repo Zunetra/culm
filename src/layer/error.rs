@@ -43,4 +43,25 @@ pub enum LayerError {
 
     #[error("a single-app workspace needs at least one frontend or backend layer")]
     SingleAppHasNoApp,
+
+    #[error("`{id}` is not a layer in the catalog")]
+    UnknownLayer { id: LayerId },
+
+    #[error("layer `{layer}` requires `{requires}`, which nothing in the selection provides")]
+    MissingRequirement { layer: LayerId, requires: LayerId },
+
+    #[error("layers `{a}` and `{b}` conflict and cannot be selected together")]
+    Conflicting { a: LayerId, b: LayerId },
+
+    #[error(
+        "layer `{layer}` names `{id}` in `{field}`, which is not a qualified `<category>/<id>`"
+    )]
+    UnqualifiedReference {
+        layer: LayerId,
+        field: &'static str,
+        id: String,
+    },
+
+    #[error("{}: {message}", .path.display())]
+    Unreadable { path: PathBuf, message: String },
 }

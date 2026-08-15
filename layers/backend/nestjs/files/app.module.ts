@@ -1,12 +1,8 @@
-import { Controller, Get, Module } from "@nestjs/common";
+// === The application module
 
-@Controller()
-export class AppController {
-  @Get()
-  health(): { status: string } {
-    return { status: "ok" };
-  }
-}
+import { Module } from "@nestjs/common";
+
+import { AppController } from "./app.controller.js";
 
 @Module({
   controllers: [AppController],

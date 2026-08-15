@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use super::category::{ALL_CATEGORIES, Cardinality, Category, Shape};
 use super::error::LayerError;
 use super::manifest::Manifest;
+use super::selection::{count_in, names_in, shape_of};
 use crate::merge::LayerId;
 
 /// Checks a selection against every category's cardinality.
@@ -12,17 +13,16 @@ use crate::merge::LayerId;
 pub fn validate_selection(selection: &[Manifest]) -> Result<(), LayerError> {
     reject_duplicates(selection)?;
 
-    let by_category = group_by_category(selection);
-    let shape = resolve_shape(by_category.get(&Category::Shape))?;
+    let shape = shape_of(selection)?;
 
     for category in ALL_CATEGORIES {
-        let chosen = by_category.get(&category).map_or(0, Vec::len);
+        let chosen = count_in(selection, category);
         match category.cardinality(shape) {
             Cardinality::None if chosen > 0 => {
                 return Err(LayerError::CategoryForbidden {
                     category,
                     shape,
-                    names: sorted_names(&by_category, category),
+                    names: names_in(selection, category),
                 });
             }
             Cardinality::ExactlyOne | Cardinality::OneOrMore if chosen == 0 => {
@@ -32,7 +32,7 @@ pub fn validate_selection(selection: &[Manifest]) -> Result<(), LayerError> {
                 return Err(LayerError::CategoryOverfull {
                     category,
                     chosen,
-                    names: sorted_names(&by_category, category),
+                    names: names_in(selection, category),
                 });
             }
             _ => {}
@@ -43,8 +43,7 @@ pub fn validate_selection(selection: &[Manifest]) -> Result<(), LayerError> {
      * it is a bare toolchain. Cardinality alone cannot express this, because
      * the rule spans two categories. */
     if shape == Shape::SingleApp {
-        let apps = by_category.get(&Category::Frontend).map_or(0, Vec::len)
-            + by_category.get(&Category::Backend).map_or(0, Vec::len);
+        let apps = count_in(selection, Category::Frontend) + count_in(selection, Category::Backend);
         if apps == 0 {
             return Err(LayerError::SingleAppHasNoApp);
         }
@@ -66,38 +65,6 @@ fn reject_duplicates(selection: &[Manifest]) -> Result<(), LayerError> {
         }
     }
     Ok(())
-}
-
-fn sorted_names(grouped: &BTreeMap<Category, Vec<String>>, category: Category) -> Vec<String> {
-    let mut names = grouped.get(&category).cloned().unwrap_or_default();
-    names.sort();
-    names
-}
-
-fn group_by_category(selection: &[Manifest]) -> BTreeMap<Category, Vec<String>> {
-    let mut grouped: BTreeMap<Category, Vec<String>> = BTreeMap::new();
-    for manifest in selection {
-        grouped
-            .entry(manifest.category)
-            .or_default()
-            .push(manifest.id.clone());
-    }
-    grouped
-}
-
-fn resolve_shape(chosen: Option<&Vec<String>>) -> Result<Shape, LayerError> {
-    let names = chosen.ok_or(LayerError::ShapeMissing)?;
-    if names.len() > 1 {
-        let mut names = names.clone();
-        names.sort();
-        return Err(LayerError::CategoryOverfull {
-            category: Category::Shape,
-            chosen: names.len(),
-            names,
-        });
-    }
-    let id = names.first().ok_or(LayerError::ShapeMissing)?;
-    Shape::from_id(id).ok_or_else(|| LayerError::UnknownShape { id: id.clone() })
 }
 
 // === Tests

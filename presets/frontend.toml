@@ -1,0 +1,3 @@
+name = "frontend"
+description = "A single Nuxt application. No container, CI or hook layers yet."
+layers = ["shape/single-app", "frontend/nuxt"]

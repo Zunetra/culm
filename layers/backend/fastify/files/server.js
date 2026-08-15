@@ -1,5 +1,13 @@
-const fastify = require("fastify")();
+// === Entry point
 
-fastify.get("/health", async () => ({ status: "ok" }));
+import { createApp } from "./app.js";
+import { loadConfig } from "./config.js";
 
-fastify.listen({ port: Number(process.env.PORT || 3000) });
+const config = loadConfig();
+
+createApp({ logger: true })
+  .listen({ host: config.host, port: config.port })
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });

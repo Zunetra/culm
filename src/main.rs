@@ -1,5 +1,43 @@
+// === culm
+
 #![forbid(unsafe_code)]
 
-fn main() {
-    println!("Hello, world!");
+use std::process::ExitCode;
+
+use clap::{Parser, Subcommand};
+use culm::cli::{NewArgs, run_new};
+
+#[derive(Parser)]
+#[command(name = "culm", version, about = "Scaffold a workspace from layers")]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Create a new workspace.
+    New(NewArgs),
+}
+
+/* An `ExitCode` rather than `Result`, because the `Termination` impl for
+ * `Result` prints the error with `Debug`, which shows a struct where the user
+ * needs a sentence. */
+fn main() -> ExitCode {
+    let cli = Cli::parse();
+
+    let result = match &cli.command {
+        Command::New(args) => match std::env::current_dir() {
+            Ok(cwd) => run_new(args, &cwd),
+            Err(e) => Err(anyhow::Error::new(e).context("cannot read the working directory")),
+        },
+    };
+
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: {e:#}");
+            ExitCode::FAILURE
+        }
+    }
 }

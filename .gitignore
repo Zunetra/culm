@@ -432,3 +432,6 @@ FodyWeavers.xsd
 # === Rust
 
 /target
+
+# === Ignored File Paths
+docs/Screens/

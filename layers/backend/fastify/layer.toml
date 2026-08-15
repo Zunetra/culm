@@ -14,13 +14,31 @@ target = "package.json"
 [merge.value.scripts]
 "dev:fastify" = "node --watch src/fastify/server.js"
 "start:fastify" = "node src/fastify/server.js"
+"test:fastify" = "node --test test/fastify.test.js"
 
-# CommonJS, so the layer needs no `type` key at the package root. That key is a
+# ESM, per decision 21. This layer still sets no `type` key: that key is a
 # whole-workspace switch, and one app's module system is not a decision this
 # layer gets to make for every other app beside it.
 [[files]]
 from = "files/server.js"
 to = "src/fastify/server.js"
+
+[[files]]
+from = "files/app.js"
+to = "src/fastify/app.js"
+
+[[files]]
+from = "files/config.js"
+to = "src/fastify/config.js"
+
+[[files]]
+from = "files/errors.js"
+to = "src/fastify/errors.js"
+
+# Node's own test runner, so a comprehensive template costs no test dependency.
+[[files]]
+from = "files/health.test.js"
+to = "test/fastify.test.js"
 
 [[install]]
 manager = "pnpm"

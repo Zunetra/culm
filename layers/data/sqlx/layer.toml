@@ -2,9 +2,9 @@
 #
 # Nothing here touches package.json: a Rust only workspace has none, and
 # inventing one would leave a JavaScript project behind for nobody to run.
-# Nothing here touches Cargo.toml either. A workspace members array needs a
-# merge strategy that does not exist yet, so dependencies are declared as
-# installs and cargo writes the manifest, versions included.
+# Nothing here touches Cargo.toml either. sqlx adds no crate of its own, and
+# only a layer that adds one can name a workspace member. The migrations sit at
+# the root, where the sqlx CLI looks for them.
 
 id = "sqlx"
 category = "data"

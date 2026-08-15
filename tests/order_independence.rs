@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use ipile::merge::{Contribution, FileSet, Layer};
+use culm::merge::{Contribution, FileSet, Layer};
 use proptest::prelude::*;
 use serde_json::{Map, Value};
 

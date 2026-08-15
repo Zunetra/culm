@@ -57,7 +57,7 @@ pub enum Cardinality {
 pub enum Shape {
     SingleApp,
     Monorepo,
-    /// No app scaffolding, for dropping ipile onto a repository that already exists.
+    /// No app scaffolding, for dropping culm onto a repository that already exists.
     /// Named for what it gives you rather than for what it withholds, and it avoids reading as `Option::None` at every match site.
     ToolingOnly,
 }
@@ -104,7 +104,7 @@ impl Category {
              * beside a React admin panel, or a Rust service beside a Node BFF, is
              * the reason someone reaches for a monorepo at all.
              * Forbidding that
-             * would forbid the case ipile exists to serve. */
+             * would forbid the case culm exists to serve. */
             Self::Frontend | Self::Backend | Self::Data => match shape {
                 Shape::SingleApp => Cardinality::ZeroOrOne,
                 Shape::Monorepo => Cardinality::ZeroOrMore,
@@ -125,6 +125,11 @@ impl Category {
             Self::Infra => Cardinality::ZeroOrMore,
             Self::Editor => Cardinality::ZeroOrMore,
         }
+    }
+
+    /// The category a qualified id names, or `None` if no category is spelled that way.
+    pub fn from_id(name: &str) -> Option<Self> {
+        ALL_CATEGORIES.into_iter().find(|c| c.as_str() == name)
     }
 
     pub fn as_str(self) -> &'static str {

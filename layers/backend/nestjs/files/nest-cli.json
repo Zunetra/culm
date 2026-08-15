@@ -3,6 +3,7 @@
   "sourceRoot": "src",
   "entryFile": "nestjs/main",
   "compilerOptions": {
-    "deleteOutDir": true
+    "deleteOutDir": true,
+    "tsConfigPath": "tsconfig.nestjs.json"
   }
 }

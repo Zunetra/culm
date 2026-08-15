@@ -1,10 +1,9 @@
 // === The shipped layers
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
-use ipile::layer::{Manifest, validate_selection};
-use ipile::merge::FileSet;
+use culm::layer::{Catalog, CatalogEntry, Manifest, validate_selection};
+use culm::merge::{FileSet, LayerId};
 
 // == Discovery
 
@@ -13,76 +12,62 @@ fn layers_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("layers")
 }
 
-/// Every `layer.toml` under `layers/`, found by walking the tree.
+/// Every shipped layer, discovered by walking the tree.
 /// Walking rather than listing is the point: a layer added tomorrow is covered by these tests without anybody remembering to register it.
-fn discover_manifest_paths() -> Vec<PathBuf> {
-    let mut found = Vec::new();
-    collect(&layers_root(), &mut found);
-    found.sort();
-    found
+fn shipped() -> Catalog {
+    Catalog::load(&layers_root()).unwrap_or_else(|e| panic!("the shipped layers do not load: {e}"))
 }
 
-fn collect(dir: &Path, found: &mut Vec<PathBuf>) {
-    let entries =
-        fs::read_dir(dir).unwrap_or_else(|e| panic!("cannot read {}: {e}", dir.display()));
-    for entry in entries {
-        let path = entry.expect("cannot read directory entry").path();
-        if path.is_dir() {
-            collect(&path, found);
-        } else if path.file_name().is_some_and(|name| name == "layer.toml") {
-            found.push(path);
-        }
-    }
-}
-
-/// Loads one manifest, failing the test with the offending path rather than a bare parse error.
-fn load(path: &Path) -> Manifest {
-    let source =
-        fs::read_to_string(path).unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()));
-    Manifest::parse(&path.display().to_string(), &source)
-        .unwrap_or_else(|e| panic!("{} does not parse: {e}", path.display()))
+/// Every entry, owned, so a test can iterate without holding the catalog open.
+fn entries() -> Vec<CatalogEntry> {
+    shipped().entries().cloned().collect()
 }
 
 /// Loads a manifest by its category and id, for the tests that need a named layer.
 fn load_layer(category: &str, id: &str) -> Manifest {
-    load(&layers_root().join(category).join(id).join("layer.toml"))
+    let id = LayerId::new(format!("{category}/{id}"));
+    shipped()
+        .get(&id)
+        .unwrap_or_else(|| panic!("{id} is not a shipped layer"))
+        .manifest
+        .clone()
 }
 
 // == Every shipped manifest is well formed
 
 #[test]
 fn every_shipped_manifest_parses() {
-    let paths = discover_manifest_paths();
+    let shipped = entries();
     assert!(
-        !paths.is_empty(),
+        !shipped.is_empty(),
         "no layer.toml found under {}",
         layers_root().display()
     );
-    for path in &paths {
-        let manifest = load(path);
+    for entry in &shipped {
+        let manifest = &entry.manifest;
         /* to_layer is where a json-deep value with a non-table root is caught,
          * so parsing alone would not prove the manifest is usable. */
-        manifest
-            .to_layer()
-            .unwrap_or_else(|e| panic!("{} does not convert to a layer: {e}", path.display()));
+        manifest.to_layer().unwrap_or_else(|e| {
+            panic!("{} does not convert to a layer: {e}", entry.dir().display())
+        });
     }
 }
 
 #[test]
 fn every_manifest_id_matches_its_directory_name() {
-    for path in discover_manifest_paths() {
-        let directory = path
-            .parent()
-            .and_then(Path::file_name)
+    for entry in entries() {
+        let directory = entry
+            .dir()
+            .file_name()
             .expect("a layer.toml always sits inside its layer directory")
             .to_string_lossy()
             .into_owned();
-        let manifest = load(&path);
+        let manifest = &entry.manifest;
         assert_eq!(
             manifest.id,
             directory,
             "{} declares id '{}' but lives in '{directory}'",
-            path.display(),
+            entry.dir().display(),
             manifest.id
         );
     }
@@ -90,20 +75,20 @@ fn every_manifest_id_matches_its_directory_name() {
 
 #[test]
 fn every_manifest_sits_in_its_category_directory() {
-    for path in discover_manifest_paths() {
-        let category = path
+    for entry in entries() {
+        let category = entry
+            .dir()
             .parent()
-            .and_then(Path::parent)
             .and_then(Path::file_name)
             .expect("a layer directory always sits inside a category directory")
             .to_string_lossy()
             .into_owned();
-        let manifest = load(&path);
+        let manifest = &entry.manifest;
         assert_eq!(
             manifest.category.as_str(),
             category,
             "{} declares category '{}' but lives under '{category}'",
-            path.display(),
+            entry.dir().display(),
             manifest.category
         );
     }
@@ -124,13 +109,13 @@ fn carries_a_version(package: &str) -> bool {
 
 #[test]
 fn no_shipped_package_carries_a_version() {
-    for path in discover_manifest_paths() {
-        for install in load(&path).installs {
-            for package in install.packages {
+    for entry in entries() {
+        for install in &entry.manifest.installs {
+            for package in &install.packages {
                 assert!(
-                    !carries_a_version(&package),
+                    !carries_a_version(package),
                     "{} pins '{package}', but package managers write versions, not layers",
-                    path.display()
+                    entry.dir().display()
                 );
             }
         }
@@ -247,17 +232,13 @@ fn a_none_shape_yields_rust_tooling() {
 /// A manifest naming a file nobody wrote fails at scaffold time, in front of a user, rather than here.
 #[test]
 fn every_declared_template_file_exists() {
-    for path in discover_manifest_paths() {
-        let manifest = load(&path);
-        let dir = path
-            .parent()
-            .expect("a manifest always sits in a directory");
+    for entry in entries() {
+        let manifest = &entry.manifest;
         for spec in &manifest.files {
-            let template = dir.join(&spec.from);
             assert!(
-                template.is_file(),
+                entry.source.read(&spec.from).is_some(),
                 "{} declares {} which does not exist",
-                path.display(),
+                entry.dir().display(),
                 spec.from.display()
             );
         }
@@ -267,8 +248,8 @@ fn every_declared_template_file_exists() {
 /// Every quality layer must require a toolchain, since a linter with no ecosystem is meaningless.
 #[test]
 fn every_quality_layer_requires_a_toolchain() {
-    for path in discover_manifest_paths() {
-        let manifest = load(&path);
+    for entry in entries() {
+        let manifest = &entry.manifest;
         if manifest.category.as_str() != "quality" {
             continue;
         }
@@ -278,7 +259,7 @@ fn every_quality_layer_requires_a_toolchain() {
                 .iter()
                 .any(|r| r.starts_with("toolchain/")),
             "{} is a quality layer and must require a toolchain",
-            path.display()
+            entry.dir().display()
         );
     }
 }
@@ -286,9 +267,9 @@ fn every_quality_layer_requires_a_toolchain() {
 /// Every shipped frontend against every other, so a newly added one cannot quietly collide with an existing one.
 #[test]
 fn every_pair_of_frontends_merges_cleanly() {
-    let frontends: Vec<Manifest> = discover_manifest_paths()
-        .iter()
-        .map(|path| load(path))
+    let frontends: Vec<Manifest> = entries()
+        .into_iter()
+        .map(|entry| entry.manifest)
         .filter(|manifest| manifest.category.as_str() == "frontend")
         .collect();
     assert!(frontends.len() >= 2, "expected several frontend layers");
@@ -327,9 +308,9 @@ fn every_pair_of_frontends_merges_cleanly() {
 /// Both toolchains are selected because a pair can straddle the two ecosystems, which is the case a monorepo exists to serve.
 #[test]
 fn every_pair_of_backends_merges_cleanly() {
-    let backends: Vec<Manifest> = discover_manifest_paths()
-        .iter()
-        .map(|path| load(path))
+    let backends: Vec<Manifest> = entries()
+        .into_iter()
+        .map(|entry| entry.manifest)
         .filter(|manifest| manifest.category.as_str() == "backend")
         .collect();
     assert!(backends.len() >= 2, "expected several backend layers");
@@ -439,8 +420,8 @@ fn a_rust_service_selection_produces_no_package_json() {
 #[test]
 fn every_backend_and_data_layer_requires_a_toolchain() {
     let mut checked = 0;
-    for path in discover_manifest_paths() {
-        let manifest = load(&path);
+    for entry in entries() {
+        let manifest = &entry.manifest;
         let category = manifest.category.as_str();
         if category != "backend" && category != "data" {
             continue;
@@ -451,12 +432,12 @@ fn every_backend_and_data_layer_requires_a_toolchain() {
                 .iter()
                 .any(|r| r.starts_with("toolchain/")),
             "{} is a {category} layer and must require a toolchain",
-            path.display()
+            entry.dir().display()
         );
         assert!(
             !manifest.installs.is_empty(),
             "{} installs nothing, so it cannot produce a working app",
-            path.display()
+            entry.dir().display()
         );
         checked += 1;
     }
@@ -553,13 +534,13 @@ fn every_frontend_declares_the_node_toolchain_and_the_two_shared_files() {
 /// No layer may name another layer outside its own `requires`, which is where combination authoring would start.
 #[test]
 fn no_layer_special_cases_a_sibling() {
-    let ids: Vec<String> = discover_manifest_paths()
-        .iter()
-        .map(|path| load(path).id)
+    let ids: Vec<String> = entries()
+        .into_iter()
+        .map(|entry| entry.manifest.id)
         .collect();
 
-    for path in discover_manifest_paths() {
-        let manifest = load(&path);
+    for entry in entries() {
+        let manifest = &entry.manifest;
         /* Only the merge and install payloads are searched, because those are
          * the parts that reach the generated workspace. `requires` naming
          * another layer is the mechanism working, not a special case, and a
@@ -572,13 +553,13 @@ fn no_layer_special_cases_a_sibling() {
             assert!(
                 !payload.contains(other.as_str()),
                 "{} mentions the sibling layer '{other}' in its payload",
-                path.display()
+                entry.dir().display()
             );
         }
         assert!(
-            !payload.to_lowercase().contains("ipile"),
-            "{} emits a reference to ipile, but a generated workspace must run without it",
-            path.display()
+            !payload.to_lowercase().contains("culm"),
+            "{} emits a reference to culm, but a generated workspace must run without it",
+            entry.dir().display()
         );
     }
 }

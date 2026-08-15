@@ -1,0 +1,19 @@
+# The crate manifest. Dependencies are added by cargo, not written here, so no
+# version ever goes stale in a template.
+
+[package]
+name = "{{project_name}}-actix"
+version = "0.1.0"
+edition = "2024"
+
+# A library beside the binary, so the integration tests drive the same routes
+# the binary serves. A test cannot import from a binary target.
+[lib]
+name = "actix_service"
+path = "src/lib.rs"
+
+[[bin]]
+name = "{{project_name}}-actix"
+path = "src/main.rs"
+
+[dependencies]

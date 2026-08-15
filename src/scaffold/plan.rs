@@ -1,12 +1,11 @@
 // === The copy plan
 
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 use super::error::ScaffoldError;
 use super::interpolate::Variables;
-use crate::layer::Manifest;
+use crate::layer::{LayerSource, Manifest};
 use crate::merge::LayerId;
 
 /// One file to be written into the generated workspace.
@@ -31,14 +30,14 @@ impl CopyPlan {
     }
 
     /// Plans every `[[files]]` entry of every manifest.
-    /// `root_of` resolves a manifest to the directory its `layer.toml` lives in, since `from` paths are relative to it.
+    /// Each manifest arrives with the source its `from` paths resolve against, which is what lets the same plan be built from the compiled-in tree or from a directory on disk.
     pub fn build<'a, I>(manifests: I, variables: &Variables) -> Result<Self, ScaffoldError>
     where
-        I: IntoIterator<Item = (&'a Manifest, PathBuf)>,
+        I: IntoIterator<Item = (&'a Manifest, &'a LayerSource)>,
     {
         let mut plan = Self::new();
-        for (manifest, layer_dir) in manifests {
-            plan.add(manifest, &layer_dir, variables)?;
+        for (manifest, source) in manifests {
+            plan.add(manifest, source, variables)?;
         }
         Ok(plan)
     }
@@ -46,17 +45,18 @@ impl CopyPlan {
     fn add(
         &mut self,
         manifest: &Manifest,
-        layer_dir: &Path,
+        source: &LayerSource,
         variables: &Variables,
     ) -> Result<(), ScaffoldError> {
         let owner = manifest.qualified_id();
 
         for spec in &manifest.files {
-            let source = layer_dir.join(&spec.from);
-            let raw = fs::read_to_string(&source).map_err(|_| ScaffoldError::TemplateMissing {
-                layer: owner.clone(),
-                from: spec.from.clone(),
-            })?;
+            let raw = source
+                .read(&spec.from)
+                .ok_or_else(|| ScaffoldError::TemplateMissing {
+                    layer: owner.clone(),
+                    from: spec.from.clone(),
+                })?;
 
             let to = normalise(&spec.to).ok_or_else(|| ScaffoldError::EscapesRoot {
                 layer: owner.clone(),

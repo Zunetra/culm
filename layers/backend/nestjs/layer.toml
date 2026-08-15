@@ -8,6 +8,12 @@ default = false
 # Namespaced by layer id for the same reason the frontends are: a monorepo can
 # hold several backends, and two layers writing different values to one script
 # key is a hard merge error rather than a last-one-wins.
+#
+# `test:nestjs` invokes jest through node rather than through its own binary
+# because ESM support in jest still sits behind --experimental-vm-modules, and
+# the flag cannot be passed through the wrapper. Decision 21 makes the workspace
+# ESM, so this is the cost of keeping jest as this layer's runner. If it stops
+# being worth paying, switching this layer to vitest is the alternative.
 [[merge]]
 strategy = "json-deep"
 target = "package.json"
@@ -15,6 +21,7 @@ target = "package.json"
 "dev:nestjs" = "nest start --watch"
 "build:nestjs" = "nest build"
 "start:nestjs" = "node dist/nestjs/main.js"
+"test:nestjs" = "node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.nestjs.config.js"
 
 [[merge]]
 strategy = "line-block"
@@ -32,8 +39,35 @@ from = "files/app.module.ts"
 to = "src/nestjs/app.module.ts"
 
 [[files]]
+from = "files/app.controller.ts"
+to = "src/nestjs/app.controller.ts"
+
+[[files]]
+from = "files/config.ts"
+to = "src/nestjs/config.ts"
+
+[[files]]
+from = "files/all-exceptions.filter.ts"
+to = "src/nestjs/all-exceptions.filter.ts"
+
+[[files]]
 from = "files/nest-cli.json"
 to = "nest-cli.json"
+
+# Namespaced rather than claiming the root tsconfig.json, which is a
+# whole-workspace file this layer has no business owning. nest-cli.json points
+# the compiler at it.
+[[files]]
+from = "files/tsconfig.nestjs.json"
+to = "tsconfig.nestjs.json"
+
+[[files]]
+from = "files/jest.nestjs.config.js"
+to = "jest.nestjs.config.js"
+
+[[files]]
+from = "files/nestjs.e2e-spec.ts"
+to = "test/nestjs.e2e-spec.ts"
 
 # No HTTP platform adapter is installed here. Which server sits underneath is
 # the application's choice, and pinning one would bind this layer to a decision
@@ -46,4 +80,15 @@ packages = ["@nestjs/core", "@nestjs/common", "reflect-metadata", "rxjs"]
 [[install]]
 manager = "pnpm"
 dev = true
-packages = ["@nestjs/cli", "@nestjs/schematics", "typescript", "@types/node"]
+packages = [
+  "@nestjs/cli",
+  "@nestjs/schematics",
+  "@nestjs/testing",
+  "typescript",
+  "@types/node",
+  "jest",
+  "@types/jest",
+  "ts-jest",
+  "supertest",
+  "@types/supertest",
+]

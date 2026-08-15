@@ -67,6 +67,13 @@ pub struct InstallSpec {
     #[serde(default)]
     pub dev: bool,
     pub packages: Vec<String>,
+    /* A feature is not a version. `cargo add tokio` without `--features full`
+     * installs a crate that cannot run a `#[tokio::main]`, so a template that
+     * cannot name features cannot be comprehensive, which decision 19 requires.
+     * Applies to every package in the entry, so a set needing different
+     * features is a separate entry. */
+    #[serde(default)]
+    pub features: Vec<String>,
 }
 
 impl Manifest {
@@ -79,10 +86,33 @@ impl Manifest {
     /// Parses one `layer.toml`.
     /// `path` is only used to name the file in error messages.
     pub fn parse(path: &str, source: &str) -> Result<Self, LayerError> {
-        toml::from_str(source).map_err(|error| LayerError::Malformed {
+        let manifest: Self = toml::from_str(source).map_err(|error| LayerError::Malformed {
             path: path.to_owned(),
             message: error.to_string(),
-        })
+        })?;
+        manifest.check_references()?;
+        Ok(manifest)
+    }
+
+    /* A bare `node-pnpm` looks like it works and does not, because identity is
+     * qualified and `none` exists in two categories. Caught at parse time, so
+     * the resolver never has to guess which category a reference meant. */
+    fn check_references(&self) -> Result<(), LayerError> {
+        for (field, ids) in [("requires", &self.requires), ("conflicts", &self.conflicts)] {
+            for id in ids {
+                let qualified = id.split_once('/').is_some_and(|(category, rest)| {
+                    Category::from_id(category).is_some() && !rest.is_empty()
+                });
+                if !qualified {
+                    return Err(LayerError::UnqualifiedReference {
+                        layer: self.qualified_id(),
+                        field,
+                        id: id.clone(),
+                    });
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Converts to the shape the merge engine consumes.
@@ -131,7 +161,7 @@ mod tests {
         let source = r#"
 id = "nuxt"
 category = "frontend"
-requires = ["node-pnpm"]
+requires = ["toolchain/node-pnpm"]
 default = false
 
 [[files]]
@@ -158,10 +188,35 @@ packages = ["nuxt"]
         assert_eq!(parsed.category, Category::Frontend);
         assert_eq!(parsed.merges.len(), 2);
         assert_eq!(parsed.installs[0].packages, vec!["nuxt"]);
+        assert!(parsed.installs[0].features.is_empty());
 
         let layer = parsed.to_layer().unwrap();
-        assert_eq!(layer.requires, vec![LayerId::new("node-pnpm")]);
+        assert_eq!(layer.requires, vec![LayerId::new("toolchain/node-pnpm")]);
         assert_eq!(layer.merges.len(), 2);
+    }
+
+    /* Bare ids are not unique, so one that slipped into a manifest would
+     * resolve to whichever category happened to be looked at first. */
+    #[test]
+    fn an_unqualified_reference_is_rejected_at_parse_time() {
+        let source = "id = \"nuxt\"\ncategory = \"frontend\"\nrequires = [\"node-pnpm\"]\n";
+        assert_eq!(
+            Manifest::parse("nuxt/layer.toml", source),
+            Err(LayerError::UnqualifiedReference {
+                layer: LayerId::new("frontend/nuxt"),
+                field: "requires",
+                id: "node-pnpm".to_owned(),
+            })
+        );
+    }
+
+    #[test]
+    fn a_reference_to_a_category_that_does_not_exist_is_rejected() {
+        let source = "id = \"nuxt\"\ncategory = \"frontend\"\nconflicts = [\"platform/deno\"]\n";
+        assert!(matches!(
+            Manifest::parse("nuxt/layer.toml", source),
+            Err(LayerError::UnqualifiedReference { .. })
+        ));
     }
 
     #[test]
