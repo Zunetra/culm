@@ -32,7 +32,9 @@ export class ErrorBoundary extends Component<Props, State> {
     return (
       <section>
         <h1>Something went wrong</h1>
-        <p>{import.meta.env.DEV ? error.message : "The page failed to load."}</p>
+        <p>
+          {import.meta.env.DEV ? error.message : "The page failed to load."}
+        </p>
         <button type="button" onClick={() => this.setState({ error: null })}>
           Try again
         </button>

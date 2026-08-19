@@ -6,7 +6,11 @@ import tseslint from "typescript-eslint";
  * frontmatter, and typescript-eslint cannot parse a component file. */
 export default [
   ...tseslint.config({
-    files: ["src/astro/**/*.ts", "test/astro/**/*.ts", "vitest.astro.config.ts"],
+    files: [
+      "src/astro/**/*.ts",
+      "test/astro/**/*.ts",
+      "vitest.astro.config.ts",
+    ],
     extends: [...tseslint.configs.recommended],
   }),
   ...pluginAstro.configs["flat/recommended"].map((entry) => ({

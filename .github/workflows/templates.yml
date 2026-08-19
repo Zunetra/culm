@@ -135,22 +135,50 @@ jobs:
           cd "$RUNNER_TEMP/scaffold/demo"
           find . -path ./node_modules -prune -o -type f -print | sort
 
+      # Every script runs even after one fails, and the failures are reported
+      # together at the end. The default `set -e` would stop at the first, so a
+      # layer with a broken build would report nothing about its linter or its
+      # formatter and each bug would cost a separate round trip. Reaching a
+      # network is the expensive part of this job, so one run has to be worth
+      # a complete list rather than a first symptom.
       - name: Build and test
         if: matrix.toolchain == 'node'
         run: |
           cd "$RUNNER_TEMP/scaffold/demo"
+          failed=""
           for script in ${{ matrix.scripts }}; do
             echo "::group::pnpm run $script"
-            pnpm run "$script"
+            if pnpm run "$script"; then
+              echo "PASS $script"
+            else
+              echo "::error title=${{ matrix.layer }}::$script failed"
+              failed="$failed $script"
+            fi
             echo "::endgroup::"
           done
+
+          echo "### ${{ matrix.layer }}" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$failed" ]; then
+            echo "Failed:$failed" >> "$GITHUB_STEP_SUMMARY"
+            echo "Failed:$failed"
+            exit 1
+          fi
+          echo "All scripts passed." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build and test
         if: matrix.toolchain == 'rust'
         run: |
           cd "$RUNNER_TEMP/scaffold/demo"
-          cargo build --locked --workspace
-          cargo test --workspace
+          failed=""
+          cargo build --locked --workspace || failed="$failed build"
+          cargo test --workspace || failed="$failed test"
+
+          echo "### ${{ matrix.layer }}" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$failed" ]; then
+            echo "Failed:$failed" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "All steps passed." >> "$GITHUB_STEP_SUMMARY"
 
   report:
     name: report drift

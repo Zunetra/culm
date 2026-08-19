@@ -12,7 +12,6 @@ target = "package.json"
 "dev:next" = "next dev"
 "build:next" = "next build"
 "start:next" = "next start"
-"lint:next" = "next lint"
 "typecheck:next" = "tsc -p src/app/tsconfig.json"
 "test:next" = "vitest run --config vitest.next.config.ts"
 
@@ -37,6 +36,7 @@ packages = [
   "@vitejs/plugin-react",
   "@testing-library/react",
   "jsdom",
+  "@types/node",
 ]
 
 # The app directory is the one path Next will not let a project move, so this

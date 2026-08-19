@@ -18,5 +18,5 @@ createRoot(container).render(
     <ErrorBoundary>
       <App />
     </ErrorBoundary>
-  </StrictMode>,
+  </StrictMode>
 );

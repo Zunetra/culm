@@ -288,6 +288,32 @@ Not yet decided. Do not treat silence as agreement.
    decided a different file.
 3. **Whether Klassivox's `docs/Projects/05-task-runner.md` becomes a stub
    pointing here.**
+4. **Whether the JavaScript half of a monorepo becomes real workspace
+   packages.** Raised 2026-08-19. Today `shape/monorepo` changes
+   cardinality and contributes nothing, so a JS monorepo is one root
+   `package.json` holding every app under `src/<layer-id>/`, with
+   scripts namespaced `build:nuxt`, `build:next`. The Rust half is not
+   symmetric: `toml-members` produces a real Cargo workspace with the
+   backend in `crates/<id>/`.
+
+   This blocks decision 3. Nx, Turborepo and Moon all orchestrate tasks
+   across projects, and the JS half has exactly one project, which is
+   why `runner/nx` emits no `nx.json` and installs a package that
+   organises nothing. `turborepo` and `moon` layers cannot be written
+   against the current output shape, so the constraint that culm must be
+   able to emit three runners is presently unmet and cannot be met by
+   authoring two more layers.
+
+   It is also the same question as the solo-scaffold ergonomics: real
+   packages would let a single app sit at the root with a plain `dev`
+   script, and a monorepo put each app in `apps/<id>/` with its own
+   `package.json` and unnamespaced scripts, which removes the reason
+   namespacing exists. Keyed on `Shape`, which is an explicit choice, so
+   it is not sibling-sniffing.
+
+   Cost: every JS layer changes, and `pnpm-workspace.yaml` needs a merge
+   strategy that does not exist. Not to be started before section 9a of
+   [01-scaffolder.md](01-scaffolder.md) is closed.
 
 ---
 
@@ -593,7 +619,7 @@ upstream, which would make a red run mean nothing.
 - **Never modify Klassivox unless explicitly told to**, naming it.
   Decision 13.
 - **The runner is expected to possibly die at r0.2.** Planned, not
-  failure. [02-runner.md](02-runner.md) §10.
+  failure. [02-runner.md](02-runner.md), section 10.
 
 ---
 

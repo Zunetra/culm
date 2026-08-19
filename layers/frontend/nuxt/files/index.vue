@@ -14,6 +14,8 @@ useHead({ title: appName });
     <!-- Shown rather than defaulted, so an unset NUXT_PUBLIC_API_BASE is
          something the first person to open the page notices. -->
     <p v-if="apiBase">Talking to <code>{{ apiBase }}</code></p>
-    <p v-else>No API base is configured. Set <code>NUXT_PUBLIC_API_BASE</code>.</p>
+    <p v-else>
+      No API base is configured. Set <code>NUXT_PUBLIC_API_BASE</code>.
+    </p>
   </section>
 </template>

@@ -30,7 +30,8 @@ for (const entry of readdirSync(here).sort()) {
   if (!/^eslint\..+\.config\.mjs$/.test(entry)) {
     continue;
   }
-  const { default: config } = await import(pathToFileURL(join(here, entry)).href);
+  const fragment = pathToFileURL(join(here, entry)).href;
+  const { default: config } = await import(fragment);
   fragments.push(...config);
 }
 

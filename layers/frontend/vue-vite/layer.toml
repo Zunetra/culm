@@ -74,6 +74,13 @@ to = "src/vue-vite/config.ts"
 from = "files/tsconfig.json"
 to = "src/vue-vite/tsconfig.json"
 
+# Without a shim TypeScript cannot resolve a .vue import at all, so the entry
+# point and everything it reaches is untyped. A meta framework generates this
+# during prepare; with no meta framework the layer ships it.
+[[files]]
+from = "files/env.d.ts"
+to = "src/vue-vite/env.d.ts"
+
 [[files]]
 from = "files/vitest.vue-vite.config.ts"
 to = "vitest.vue-vite.config.ts"

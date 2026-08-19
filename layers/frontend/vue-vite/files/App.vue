@@ -28,7 +28,9 @@ onErrorCaptured((error): boolean => {
 
     <!-- Shown rather than defaulted, so an unset VITE_API_BASE is something
          the first person to open the page notices. -->
-    <p v-if="apiBase">Talking to <code>{{ apiBase }}</code></p>
+    <p v-if="apiBase">
+      Talking to <code>{{ apiBase }}</code>
+    </p>
     <p v-else>No API base is configured. Set <code>VITE_API_BASE</code>.</p>
   </section>
 </template>

@@ -759,3 +759,307 @@ fn every_layer_that_emits_an_application_is_in_the_template_workflow() {
         );
     }
 }
+
+// == What a script promises, checked without a network
+
+/// Every `scripts` entry a layer contributes to `package.json`, as name and command.
+fn scripts_of(manifest: &Manifest) -> Vec<(String, String)> {
+    let mut found = Vec::new();
+    for merge in &manifest.merges {
+        let culm::layer::MergeSpec::JsonDeep { target, value } = merge else {
+            continue;
+        };
+        if target != Path::new("package.json") {
+            continue;
+        }
+        let Some(scripts) = value.get("scripts").and_then(|v| v.as_table()) else {
+            continue;
+        };
+        for (name, command) in scripts {
+            if let Some(command) = command.as_str() {
+                found.push((name.clone(), command.to_owned()));
+            }
+        }
+    }
+    found
+}
+
+/// Every path any shipped layer writes, whether copied or merged into.
+fn every_written_path() -> Vec<String> {
+    let mut paths = Vec::new();
+    for entry in entries() {
+        for spec in &entry.manifest.files {
+            paths.push(spec.to.to_string_lossy().into_owned());
+        }
+        for merge in &entry.manifest.merges {
+            let target = match merge {
+                culm::layer::MergeSpec::JsonDeep { target, .. }
+                | culm::layer::MergeSpec::LineBlock { target, .. }
+                | culm::layer::MergeSpec::TomlMembers { target, .. } => target,
+            };
+            paths.push(target.to_string_lossy().into_owned());
+        }
+    }
+    paths.sort();
+    paths.dedup();
+    paths
+}
+
+/// Every directory some layer declares as generated, taken from its `.gitignore` block.
+/// A script may legitimately name a path inside one: `start:nestjs` runs `dist/nestjs/main.js`, which the build produces rather than the scaffold.
+fn generated_roots() -> Vec<String> {
+    let mut roots = Vec::new();
+    for entry in entries() {
+        for merge in &entry.manifest.merges {
+            let culm::layer::MergeSpec::LineBlock { target, lines } = merge else {
+                continue;
+            };
+            if target != Path::new(".gitignore") {
+                continue;
+            }
+            for line in lines {
+                let root = line.trim_start_matches('/').trim_end_matches('/');
+                if !root.is_empty() && !root.contains('*') {
+                    roots.push(root.to_owned());
+                }
+            }
+        }
+    }
+    roots.sort();
+    roots.dedup();
+    roots
+}
+
+/// A script naming a file nothing writes fails the moment it is run.
+/// `tsc -p src/react-vite/tsconfig.json` is correct only while that tsconfig stays where it is, and moving one is exactly the kind of edit that looks safe. Catching it here costs nothing; catching it after an install costs a network round trip per bug.
+#[test]
+fn every_file_a_script_names_is_actually_written() {
+    let written = every_written_path();
+    let generated = generated_roots();
+
+    for entry in entries() {
+        for (name, command) in scripts_of(&entry.manifest) {
+            for token in command.split_whitespace() {
+                /* A path argument, as opposed to a flag or a subcommand. The
+                 * bare `.` that prettier and eslint take is the workspace
+                 * root and is not a file anybody writes. */
+                let looks_like_a_path = token.contains('/')
+                    || token.ends_with(".json")
+                    || token.ends_with(".ts")
+                    || token.ends_with(".mjs");
+                if !looks_like_a_path || token.starts_with('-') {
+                    continue;
+                }
+                let token = token.trim_start_matches("./");
+                let first = token.split('/').next().unwrap_or(token);
+                let known = written.iter().any(|path| path == token)
+                    || generated.iter().any(|root| root == first);
+                assert!(
+                    known,
+                    "'{}' script '{name}' names '{token}', which no layer writes and no layer generates",
+                    entry.manifest.id
+                );
+            }
+        }
+    }
+}
+
+/// The package that provides each binary a script invokes.
+/// Spelled out rather than derived, because a package name and the binary it installs agree only by convention and the exceptions are the ones worth catching.
+fn provider_of(binary: &str) -> Option<String> {
+    match binary {
+        "node" => None,
+        "tsc" => Some("typescript".to_owned()),
+        "svelte-kit" => Some("@sveltejs/kit".to_owned()),
+        "nest" => Some("@nestjs/cli".to_owned()),
+        "astro" | "next" | "nuxt" | "vite" | "vitest" | "eslint" | "prettier" | "vue-tsc"
+        | "drizzle-kit" | "prisma" => Some(binary.to_owned()),
+        _ => None,
+    }
+}
+
+/// A script may only invoke a tool its own layer installs.
+/// `typecheck:vue-vite` invoking `vue-tsc` is only meaningful because that layer declares it; a script reaching for a binary nobody installed fails with `command not found` after a full install, which is the most expensive possible moment to learn it.
+#[test]
+fn every_tool_a_script_invokes_is_installed() {
+    for entry in entries() {
+        let declared: Vec<&str> = entry
+            .manifest
+            .installs
+            .iter()
+            .flat_map(|install| install.packages.iter().map(String::as_str))
+            .collect();
+
+        for (name, command) in scripts_of(&entry.manifest) {
+            let Some(binary) = command.split_whitespace().next() else {
+                continue;
+            };
+            let Some(provider) = provider_of(binary) else {
+                continue;
+            };
+            assert!(
+                declared.contains(&provider.as_str()),
+                "'{}' script '{name}' runs '{binary}' but the layer never installs '{provider}'",
+                entry.manifest.id
+            );
+        }
+    }
+}
+
+// == The template fixes of 2026-08-19, so they cannot quietly regress
+
+/// Every template a layer ships, as destination and body, with placeholders resolved.
+fn templates_of(entry: &CatalogEntry) -> Vec<(String, String)> {
+    entry
+        .manifest
+        .files
+        .iter()
+        .filter_map(|spec| {
+            let body = entry.source.read(&spec.from)?;
+            Some((spec.to.to_string_lossy().into_owned(), body))
+        })
+        .collect()
+}
+
+/// TypeScript cannot resolve a `.vue` import without a module declaration.
+/// A meta framework generates one during its prepare step; a layer without a meta framework has to ship it, or the entry point and everything it reaches is untyped while `tsc` reports `TS2307`.
+#[test]
+fn a_layer_shipping_vue_components_ships_a_type_shim() {
+    for entry in entries() {
+        let ships_components = entry
+            .manifest
+            .files
+            .iter()
+            .any(|spec| spec.to.to_string_lossy().ends_with(".vue"));
+        if !ships_components {
+            continue;
+        }
+        let has_a_shim = templates_of(&entry)
+            .iter()
+            .any(|(_, body)| body.contains(r#"declare module "*.vue""#));
+        let has_a_meta_framework = entry
+            .manifest
+            .installs
+            .iter()
+            .any(|install| install.packages.iter().any(|p| p == "nuxt"));
+        assert!(
+            has_a_shim || has_a_meta_framework,
+            "'{}' ships .vue components with neither a type shim nor a meta framework to generate one",
+            entry.manifest.id
+        );
+    }
+}
+
+/// Testing Library registers its cleanup on a global `afterEach`, which `globals: false` removes.
+/// Without an explicit call every render accumulates into the same document, so the second test in a file matches twice and fails. It is invisible in a file holding one test, which is exactly how it shipped.
+#[test]
+fn a_spec_using_testing_library_cleans_up_between_tests() {
+    for entry in entries() {
+        let templates = templates_of(&entry);
+        let disables_globals = templates
+            .iter()
+            .any(|(to, body)| to.contains("vitest.") && body.contains("globals: false"));
+        if !disables_globals {
+            continue;
+        }
+        for (to, body) in &templates {
+            if !body.contains("@testing-library/react") {
+                continue;
+            }
+            assert!(
+                body.contains("cleanup"),
+                "'{}' ships {to} using Testing Library with globals: false but never calls cleanup, so renders leak between tests",
+                entry.manifest.id
+            );
+        }
+    }
+}
+
+/// A spec file outside every tsconfig is type checked by nothing.
+/// The include globs resolve against the tsconfig's own directory, so a tsconfig scoped to `src/<id>/` cannot see the sibling `test/<id>/` tree unless it names it.
+#[test]
+fn a_scoped_tsconfig_covers_its_own_tests() {
+    for entry in entries() {
+        let templates = templates_of(&entry);
+        let ships_specs = entry
+            .manifest
+            .files
+            .iter()
+            .any(|spec| spec.to.to_string_lossy().starts_with("test/"));
+        if !ships_specs {
+            continue;
+        }
+        for (to, body) in &templates {
+            if !to.ends_with("tsconfig.json") || !body.contains("\"include\"") {
+                continue;
+            }
+            assert!(
+                body.contains("test/"),
+                "'{}' ships specs under test/ but {to} declares an include that never names them",
+                entry.manifest.id
+            );
+        }
+    }
+}
+
+/// A placeholder nothing substitutes reaches the user's workspace as literal text.
+/// Interpolation deliberately leaves an unknown placeholder alone rather than blanking it, so a typo survives all the way into a generated file rather than failing the scaffold.
+#[test]
+fn every_placeholder_in_a_template_is_a_variable_that_exists() {
+    let known = ["project_name"];
+
+    for entry in entries() {
+        for (to, body) in templates_of(&entry) {
+            /* Vue, Astro and Svelte all use moustaches for their own runtime
+             * interpolation, and culm shares the syntax. That collision is
+             * survivable because interpolation leaves an unknown placeholder
+             * exactly as written, so `{{ appName }}` reaches the framework
+             * untouched. It does mean a typo cannot be told from a component
+             * binding in those files, so they are not checked here. */
+            let framework_moustaches = [".vue", ".astro", ".svelte", ".html"]
+                .iter()
+                .any(|ext| to.ends_with(ext));
+            if framework_moustaches {
+                continue;
+            }
+            let mut rest = body.as_str();
+            while let Some(start) = rest.find("{{") {
+                let after = &rest[start + 2..];
+                let Some(end) = after.find("}}") else {
+                    break;
+                };
+                let name = after[..end].trim();
+                let is_an_identifier =
+                    !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+                if is_an_identifier {
+                    assert!(
+                        known.contains(&name),
+                        "'{}' template {to} uses '{{{{{name}}}}}', which nothing substitutes",
+                        entry.manifest.id
+                    );
+                }
+                rest = &after[end + 2..];
+            }
+        }
+    }
+}
+
+/// Every JSON a layer ships is valid JSON once its placeholders are resolved.
+/// A malformed tsconfig is not caught by any merge, because a copied file is never parsed on the way through; the first thing that reads it is the user's toolchain, after an install.
+#[test]
+fn every_json_template_parses() {
+    for entry in entries() {
+        for (to, body) in templates_of(&entry) {
+            if !to.ends_with(".json") {
+                continue;
+            }
+            let resolved = body.replace("{{project_name}}", "demo");
+            serde_json::from_str::<serde_json::Value>(&resolved).unwrap_or_else(|e| {
+                panic!(
+                    "'{}' ships {to}, which is not valid JSON: {e}",
+                    entry.manifest.id
+                )
+            });
+        }
+    }
+}

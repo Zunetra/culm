@@ -346,6 +346,133 @@ script.
 **v1.0.** Go layers, documentation site, and the number that matters:
 how many people ran `culm new` and what they selected.
 
+## 9a. Known broken
+
+Found on 2026-08-19 by installing and building generated workspaces for
+the first time, three layers deep before the run was stopped. Everything
+here passes `cargo test`, which is the point: the suite proves the
+scaffolder assembles what the manifests describe, and cannot prove that
+what they describe is true of the framework.
+
+Nothing in this list is a design problem. Each is a small fix, and each
+is listed with the layer it belongs to so it can be taken one at a time.
+
+**Fixed on 2026-08-19, but never executed.** Each was fixed from a real
+error message rather than from reading, so the diagnosis is sound; the
+fix is not yet proven.
+
+- Testing Library leaked DOM between tests because a vitest config sets
+  `globals: false`, which removes the global `afterEach` it registers
+  its cleanup on. `frontend/next` and `frontend/react-vite` now call
+  `afterEach(cleanup)` explicitly, which keeps the deliberate choice of
+  no setup file.
+- `lint:next` ran `next lint`, removed in Next 15 and read as a
+  directory name by Next 16. Script dropped.
+- `frontend/next` did not declare `@types/node`, so `next build`
+  installed it mid-build and rewrote the lockfile while compiling. Now
+  declared.
+- `frontend/vue-vite` shipped no `.vue` type shim, so every component
+  import was `TS2307`. Now ships `src/vue-vite/env.d.ts`.
+- `test/<layer-id>/` fell outside every tsconfig, because include globs
+  resolve against the tsconfig's own directory. The include lists now
+  name the sibling test tree.
+- `format:check` failed on templates the scaffolder emits. Six were
+  reflowed to the `printWidth` and `trailingComma` the shipped
+  `.prettierrc` actually sets.
+
+**Still open, and expected to fail the first real run.**
+
+- `baseUrl` was removed in TypeScript 7. `frontend/next` and
+  `backend/nestjs` both declare it and `tsc` refuses with `TS5102`.
+  Deliberately left in place until the owner sees it fail firsthand.
+- `vue-tsc` reaches for `typescript/lib/tsc`, a subpath TypeScript 7 no
+  longer exports, so `typecheck:vue-vite` cannot run at all. This one
+  has no fix inside culm: it is an upstream version pair that decision 5
+  deliberately does not pin.
+- The eight ESLint fragments added on 2026-08-19 have never been
+  executed. `tseslint.config` is the well-known part; the Vue, Svelte and
+  Astro plugin config shapes are not.
+- Next rewrites `src/app/tsconfig.json` on every build, forcing `jsx` to
+  `react-jsx` and appending two `include` globs that resolve to a
+  directory that does not exist. Inert, but the file is permanently
+  dirty in git afterwards.
+- A long enough project name can push an interpolated line past
+  `printWidth` and fail `format:check` on a workspace nobody has edited.
+  `{{project_name}}` is sixteen characters and most real names are
+  shorter, so the templates are formatted against the rendered width,
+  not the template width.
+
+**Never exercised at all.** `frontend/nuxt`, `frontend/svelte` and
+`frontend/astro` were never reached. `frontend/nuxt` matters most,
+because it is the layer the other five were modelled on and because it
+omits `nuxt prepare` deliberately, which nothing has tested.
+
+**How this list gets closed.** Not by reading. The workflow in section 8 is the only
+thing that can prove any of it, which is why that section calls itself
+not optional. The list shrinks by dispatching that workflow and fixing
+what it prints.
+
+## 9b. The Klassivox gap
+
+v0.1's acceptance criterion is "scaffolds the Klassivox shape and the
+result builds". This is the first half of that, measured on 2026-08-19 by
+scaffolding the closest selection culm can express
+(`shape/monorepo + frontend/nuxt + backend/axum + data/sqlx + runner/nx`,
+twelve layers, 25 files) and diffing it against the real repository.
+
+Klassivox is read-only here, per decision 13. Nothing in this section
+proposes a change to it.
+
+**The structural gap.** Klassivox is seven JavaScript projects plus one
+Rust crate. culm emits one JavaScript project plus one Rust crate.
+
+| | Klassivox | culm today |
+| --- | --- | --- |
+| JS layout | `apps/*`, `libs/*`, `libs/shared/*`, `packages/*` | everything under `src/<layer-id>/` |
+| JS projects | seven, each with its own `package.json` | one, at the root |
+| Scripts | plain `build`, `dev` inside each project | `build:nuxt`, `dev:nuxt` at the root |
+| Rust layout | `apps/klassivox-backend` | `crates/axum` |
+
+The Rust half already agrees in shape and differs only in directory
+name. The JavaScript half does not, and that is open decision 4 in
+[CONTEXT.md](CONTEXT.md).
+
+**Files culm should emit and does not.** Everything below is authoring
+rather than verification, so none of it is blocked on an install.
+
+- `pnpm-workspace.yaml`. The workspace definition itself, plus the four
+  things section 1 names as the first hand-wiring anybody does:
+  `catalog`, `saveExact`, `minimumReleaseAge`, `onlyBuiltDependencies`.
+  Needs the `yaml-list` strategy that section 4 documents and nothing
+  implements.
+- `nx.json`. `runner/nx` installs the package and configures nothing,
+  because with one project there is nothing to configure. Blocked behind
+  the same decision.
+- `tsconfig.base.json` and a root `tsconfig.json`. Cross-project path
+  mapping, which only means something once there are several projects.
+- `vitest.workspace.ts`. Test orchestration across projects, same
+  dependency.
+- `docker-compose.yml`, `.dockerignore`, and a `docker/` directory. The
+  `infra` category has no members at all.
+- `.husky/pre-commit`, `.husky/pre-push`, `.lintstagedrc`. The `husky`
+  and `commitlint` layers are named in section 2 and do not exist. This
+  is also the only consumer of the `hook-script` strategy, which is
+  likewise unimplemented.
+- `.nvmrc` and `packageManager` in `package.json`.
+
+**A collision worth deciding before the last one is written.** `.nvmrc`
+contains `22` and `packageManager` contains `pnpm@11.10.0`. Both are
+version pins, and decision 5 forbids a template carrying a version. The
+difference from the case decision 5 was written about is that here the
+version *is* the entire content: there is nothing else in an `.nvmrc`.
+Either decision 5 gains a narrow exception for toolchain pins, or culm
+emits neither and the user pins by hand. Left open rather than guessed.
+
+**Not culm's job.** `README.md`, `CLAUDE.md`, `CONTRIBUTING.md`,
+`LICENSE`, `docs/`, and `tools/` are project content. `Cargo.lock`,
+`pnpm-lock.yaml`, and `audit.json` are generated by tools, which is
+decision 5 working as intended.
+
 ## 10. Kill criteria
 
 Separate from the runner's, which stay exactly as written in
