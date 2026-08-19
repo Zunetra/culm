@@ -1,9 +1,9 @@
 # Telemetry
 
-ipile sends anonymous usage data. This page is the complete specification,
+culm sends anonymous usage data. This page is the complete specification,
 not a summary. If something is not listed here, it is not sent.
 
-**Opt out:** set `IPILE_TELEMETRY=0`, or run `ipile config set
+**Opt out:** set `CULM_TELEMETRY=0`, or run `culm config set
 telemetry false`. No feature is degraded when telemetry is off.
 
 ---
@@ -41,12 +41,12 @@ because growing it means editing this file.
 | --- | --- |
 | `schema` | Payload version. Incremented when this document changes. |
 | `anonymous_id` | Random UUID v4, generated once, stored in the config directory. |
-| `version` | ipile's own version. |
+| `version` | culm's own version. |
 | `os`, `arch` | Platform only. Not a kernel version, not a hostname. |
 | `command` | The subcommand name alone. `new`, `run`, `graph`, `cache`. |
 | `duration_ms` | Wall-clock time of the invocation. |
 | `exit` | `ok`, `error`, or `cancelled`. Never an error message. |
-| `scaffold` | Present only for `ipile new`. Which layers were chosen. |
+| `scaffold` | Present only for `culm new`. Which layers were chosen. |
 
 The `scaffold` block is the only field with genuine product value. Which
 layers people actually select decides what gets maintained and what gets
@@ -58,14 +58,14 @@ This list is binding.
 
 - Repository names, directory names, or any filesystem path
 - File contents of any kind
-- Task names, target names, or command strings from `ipile.yaml`
+- Task names, target names, or command strings from `culm.yaml`
 - Environment variable names or values
 - Git remotes, branch names, commit hashes, or author information
 - IP addresses beyond what the transport unavoidably exposes, which is
   not stored
 - Anything derived from hostname, MAC address, username, or serial number
 
-`ipile.yaml` contains user-authored shell commands. Sending them "to
+`culm.yaml` contains user-authored shell commands. Sending them "to
 debug failures" would be the obvious next request, and it is refused here
 in advance so it does not get added quietly later.
 
@@ -73,7 +73,7 @@ in advance so it does not get added quietly later.
 
 - UUID v4 from a cryptographic RNG. Not derived from any machine
   property, so it cannot be reversed to a machine.
-- Written once to `$XDG_CONFIG_HOME/ipile/id` or the platform
+- Written once to `$XDG_CONFIG_HOME/culm/id` or the platform
   equivalent.
 - Deleting that file produces a new, unlinkable id. Deleting it is
   supported, not a workaround.
@@ -85,12 +85,12 @@ in advance so it does not get added quietly later.
 Printed once, before the first payload is ever sent:
 
 ```
-ipile sends anonymous usage data: a random id, the version, your OS and
+culm sends anonymous usage data: a random id, the version, your OS and
 architecture, which subcommand ran, and which layers you selected. It
 never sends paths, file contents, environment variables, or commands.
 
-Full payload: https://ipile.dev/telemetry
-Opt out:      IPILE_TELEMETRY=0
+Full payload: https://culm.dev/telemetry
+Opt out:      CULM_TELEMETRY=0
 ```
 
 ## Transport
@@ -98,13 +98,13 @@ Opt out:      IPILE_TELEMETRY=0
 - Sent after the command completes, never blocking it.
 - Failure is silent and never retried. Telemetry must not be able to slow
   down or break a scaffold.
-- Disabled automatically when `CI` is set, unless `IPILE_TELEMETRY=1` is
+- Disabled automatically when `CI` is set, unless `CULM_TELEMETRY=1` is
   explicit. CI runs would otherwise dominate the numbers and make them
   meaningless.
 
 ## What this does and does not measure
 
-**Does:** how many machines run ipile, which layers matter, which
+**Does:** how many machines run culm, which layers matter, which
 commands are used, and which platforms need binaries.
 
 **Does not:** how many humans, how many companies, or anything about
@@ -114,4 +114,4 @@ mirrors undercount them.
 The number that matters commercially comes from accounts on the hosted
 remote cache, which are exact and non-inferred. Telemetry measures the
 free top of the funnel. Accounts measure the business. See
-[DECISIONS.md](DECISIONS.md) decision 9.
+[CONTEXT.md](CONTEXT.md#decisions) decision 9.

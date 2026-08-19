@@ -1,0 +1,14 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+// Astro serves this for any route it cannot match. It is a page rather than a
+// boundary component because a static build has no server left to catch a throw.
+---
+
+<Layout title="Not found">
+  <section>
+    <h1>404</h1>
+    <p>That page does not exist.</p>
+    <a href="/">Back to the start</a>
+  </section>
+</Layout>

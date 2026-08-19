@@ -1,0 +1,98 @@
+# SvelteKit, which drives Svelte through Vite.
+
+id = "svelte"
+category = "frontend"
+requires = ["toolchain/node-pnpm", "quality/eslint"]
+default = false
+
+[[merge]]
+strategy = "json-deep"
+target = "package.json"
+[merge.value.scripts]
+"dev:svelte" = "vite dev --config vite.svelte.config.ts"
+"build:svelte" = "vite build --config vite.svelte.config.ts"
+"preview:svelte" = "vite preview --config vite.svelte.config.ts"
+"test:svelte" = "vitest run --config vitest.svelte.config.ts"
+"check:svelte" = "svelte-kit sync && svelte-check --tsconfig ./src/svelte/tsconfig.json"
+
+[[merge]]
+strategy = "line-block"
+target = ".gitignore"
+lines = [".svelte-kit/", "build/", "dist/"]
+
+[[install]]
+manager = "pnpm"
+dev = true
+packages = [
+  "svelte",
+  "@sveltejs/kit",
+  "@sveltejs/adapter-auto",
+  "@sveltejs/vite-plugin-svelte",
+  "svelte-check",
+  "vite",
+  "typescript",
+  "vitest",
+  "@testing-library/svelte",
+  "jsdom",
+]
+
+# Everything SvelteKit discovers by convention sits under src/svelte, which
+# svelte.config.js names in `kit.files`. A second frontend in the same workspace
+# gets its own directory rather than fighting over the root.
+[[files]]
+from = "files/svelte.config.js"
+to = "svelte.config.js"
+
+[[files]]
+from = "files/vite.config.ts"
+to = "vite.svelte.config.ts"
+
+[[files]]
+from = "files/app.html"
+to = "src/svelte/app.html"
+
+[[files]]
+from = "files/+page.svelte"
+to = "src/svelte/routes/+page.svelte"
+
+# SvelteKit renders this in place of the route that failed, so it sits beside
+# the page rather than under it.
+[[files]]
+from = "files/+error.svelte"
+to = "src/svelte/routes/+error.svelte"
+
+# Under lib rather than beside the routes, so a component reaches it by the
+# $lib alias instead of a relative path that changes with nesting.
+[[files]]
+from = "files/config.ts"
+to = "src/svelte/lib/config.ts"
+
+# Scoped to the layer's own directory rather than claiming the root
+# tsconfig.json, which is a whole-workspace file this layer has no business
+# owning.
+[[files]]
+from = "files/tsconfig.json"
+to = "src/svelte/tsconfig.json"
+
+[[files]]
+from = "files/vitest.svelte.config.ts"
+to = "vitest.svelte.config.ts"
+
+[[files]]
+from = "files/page.spec.ts"
+to = "test/svelte/page.spec.ts"
+
+# ESLint's default match covers .js, .mjs and .cjs only, so this layer's sources
+# would be silently unlinted. The root config finds this file by its name rather
+# than by importing it, so neither layer names the other.
+[[files]]
+from = "files/eslint.config.mjs"
+to = "eslint.svelte.config.mjs"
+
+# The parsers and rules ESLint needs for this layer's file types. Declared here
+# rather than by the eslint layer, which has no way to know what languages a
+# workspace ended up holding.
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["typescript-eslint", "eslint-plugin-svelte"]

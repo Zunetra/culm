@@ -1,0 +1,5 @@
+# One app in the workspace.
+
+id = "single-app"
+category = "shape"
+default = true

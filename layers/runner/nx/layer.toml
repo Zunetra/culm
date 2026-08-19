@@ -1,0 +1,18 @@
+# Nx as the task runner.
+# One runner among several, per decision 3: nothing here is specific to culm,
+# and swapping this layer for another runner changes no other layer.
+
+id = "nx"
+category = "runner"
+requires = ["toolchain/node-pnpm"]
+default = false
+
+[[merge]]
+strategy = "line-block"
+target = ".gitignore"
+lines = [".nx/cache", ".nx/workspace-data"]
+
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["nx"]

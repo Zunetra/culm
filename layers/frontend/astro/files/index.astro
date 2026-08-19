@@ -1,0 +1,25 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { apiBase, appName } from "../config";
+---
+
+<Layout>
+  <section>
+    <h1>{appName}</h1>
+    <p>The Astro application is running.</p>
+
+    <!-- Shown rather than defaulted, so an unset PUBLIC_API_BASE is something
+         the first person to open the page notices. -->
+    {
+      apiBase ? (
+        <p>
+          Talking to <code>{apiBase}</code>
+        </p>
+      ) : (
+        <p>
+          No API base is configured. Set <code>PUBLIC_API_BASE</code>.
+        </p>
+      )
+    }
+  </section>
+</Layout>

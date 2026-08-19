@@ -1,7 +1,7 @@
 # 01 - The Scaffolder
 
 The v0.1 product. Ships first. See
-[DECISIONS.md](DECISIONS.md) decisions 2, 3, 4, 5, and 6 for why the
+[CONTEXT.md](CONTEXT.md#decisions) decisions 2, 3, 4, 5, and 6 for why the
 shape below is what it is.
 
 ---
@@ -44,14 +44,41 @@ how every scaffolder before this one died.
 
 | Category | Cardinality | Members |
 | --- | --- | --- |
-| Shape | exactly one | `monorepo`, `single-app` |
-| Frontend | zero or more | `nuxt`, `next`, `react-vite`, `vue-vite`, `astro`, `svelte` |
-| Backend | zero or more | `axum`, `actix`, `express`, `nestjs`, `fastify`, `go-chi` |
+| Base | exactly one | `base` |
+| Shape | exactly one | `monorepo`, `single-app`, `tooling-only` |
+| Frontend | shape dependent | `nuxt`, `next`, `react-vite`, `vue-vite`, `astro`, `svelte` |
+| Backend | shape dependent | `axum`, `actix`, `express`, `nestjs`, `fastify`, `go-chi` |
 | Toolchain | implied, never asked | `node-pnpm`, `rust-cargo`, `go-mod` |
 | Quality | defaults on, toggleable | `prettier`, `eslint`, `rustfmt`, `clippy`, `husky`, `commitlint`, `editorconfig` |
-| Runner | exactly one | `nx`, `turborepo`, `moon`, `ipile`, `none` |
+| Runner | exactly one | `nx`, `turborepo`, `moon`, `culm`, `none` |
 | Infra | zero or more | `docker-compose`, `dockerfile`, `github-actions` |
 | Editor | zero or more | `vscode`, `zed` |
+
+Cardinality is declared on the category, never as pairwise `conflicts`
+entries between layers, so changing a category is one edit rather than
+one per member.
+
+**Shape dependent** means what it says. A `single-app` workspace takes at
+most one frontend and one backend, because one app runs on one framework.
+A `monorepo` takes any number of each, because a Nuxt site beside a React
+admin panel is the reason someone reaches for a monorepo. `tooling-only` takes no
+framework layers at all and requires a toolchain instead, since it exists
+to drop tooling onto a repository that already exists. A single app
+additionally needs at least one of the two, a rule that spans categories
+and therefore lives in validation. See [CONTEXT.md](CONTEXT.md#decisions)
+decision 18.
+
+A layer's identity is `<category>/<id>`, not the bare id. `none` is a
+legitimate answer in more than one category, and the merge engine keys
+line blocks by identity, so two layers called `none` would silently share
+a block. The stronger reason is decision 6: presets travel by git URL, so
+a third party will eventually ship a `nuxt` layer of their own.
+`requires` and `conflicts` name qualified ids for the same reason.
+
+The **base** layer applies to every workspace whatever else is selected.
+It owns the ignores that belong to no framework, plus a committed
+`.env.example`. Framework layers still ignore only their own build
+output, which is what keeps them independent of one another.
 
 ### Why role, not language
 
@@ -182,53 +209,56 @@ pub enum MergeError {
 3. **Frontend apps**, if any.
 4. **Backend apps**, if any.
 5. **Quality tooling**, defaults pre-selected.
-6. **Runner**, defaulting to `nx` until ipile's own runner passes its
-   v0.2 check.
+6. **Runner**, defaulting to `none`. Corrected 2026-08-18: this said
+   `nx`, and the resolver derived `nx` from the presence of the Node
+   toolchain, so every single-app JavaScript workspace shipped a task
+   runner with nothing to orchestrate across. No runner is implied by
+   anything else in a selection, culm's own included.
 7. **Infra and editor.**
 
 ### Two hard rules
 
 - **Every question has a flag equivalent.**
-  `ipile new myapp --preset backend --yes` must work with zero prompts.
+  `culm new myapp --preset backend --yes` must work with zero prompts.
   Interactive-only scaffolders are unusable in CI, in documentation, and
   in exactly the places a tool spreads from.
 - **Print the resolved plan and confirm before writing anything.** "Here
   are the 14 files I will create and the 6 commands I will run." This
   costs nothing and matches the honesty posture in
-  [DECISIONS.md](DECISIONS.md) decision 9.
+  [CONTEXT.md](CONTEXT.md#decisions) decision 9.
 
 ## 6. Presets
 
-A preset is a name, a layer list, and pre-answered questions.
+A preset is a name, a description, and a layer list.
 
-```yaml
-# ipile.preset.yaml
-name: polyglot-monorepo
-description: Nuxt frontend, Axum backend, one workspace, full quality gate.
-shape: monorepo
-layers:
-  - nuxt
-  - axum
-  - prettier
-  - eslint
-  - rustfmt
-  - clippy
-  - husky
-  - commitlint
-  - docker-compose
-  - github-actions
-  - vscode
-runner: nx
-answers:
-  database: postgres
+```toml
+# presets/monorepo.toml
+name = "monorepo"
+description = "A Nuxt front end and an Axum service backed by SQLx, in one workspace. No container, CI or hook layers yet."
+layers = ["shape/monorepo", "frontend/nuxt", "backend/axum", "data/sqlx"]
 ```
 
-- **Shipped in the binary:** `monorepo`, `frontend`, `backend`.
-- **From a git URL:** `ipile new myapp --preset github:user/repo`.
+TOML rather than the YAML this section first sketched, per decision 20:
+layers are already TOML, the crate already parses it, and `serde_yaml` is
+archived.
+
+Layers are named by qualified id, `<category>/<id>`, because a bare `none`
+is a legal answer for both shape and runner and the catalog is keyed by
+the qualified form.
+
+A preset carries no `shape` or `runner` key of its own. Both are layers,
+so both go in the list, and resolution fills in whichever is missing.
+Pre-answered questions wait for the wizard, since nothing asks a question
+yet.
+
+- **Shipped in the binary:** `monorepo`, `frontend`, `backend`. Built.
+- **From a git URL:** `culm new myapp --preset github:user/repo`. Not
+  built yet.
 - **Saved locally after a run:** written to
-  `~/.config/ipile/presets/<name>.yaml`.
+  `~/.config/culm/presets/<name>.toml`. Not built yet, and it waits on
+  the wizard, since offering to save is a prompt.
 - No hosted registry before v2. See
-  [DECISIONS.md](DECISIONS.md) decision 6.
+  [CONTEXT.md](CONTEXT.md#decisions) decision 6.
 
 The `monorepo` preset is derived from Klassivox's real configuration,
 which is the point: it is the one workspace we have perfect information
@@ -236,7 +266,7 @@ about.
 
 ## 7. Version resolution
 
-Restating [DECISIONS.md](DECISIONS.md) decision 5 as behaviour:
+Restating [CONTEXT.md](CONTEXT.md#decisions) decision 5 as behaviour:
 
 1. Layers contain no version numbers.
 2. After files are written, run `pnpm add -D <packages>` and
@@ -261,7 +291,7 @@ strategy:
     preset: [monorepo, frontend, backend]
     os: [ubuntu-latest, macos-latest]
 steps:
-  - run: ipile new fixture --preset ${{ matrix.preset }} --yes
+  - run: culm new fixture --preset ${{ matrix.preset }} --yes
   - run: cd fixture && pnpm install --frozen-lockfile=false
   - run: cd fixture && pnpm build
   - run: cd fixture && pnpm lint
@@ -277,8 +307,31 @@ byte-identical output.
 ## 9. Milestones
 
 **v0.1 (2 weeks).** Layer format, merge engine, `json-deep` and
-`line-block` strategies, three first-party presets, non-interactive flags
-only. No wizard yet. Scaffolds the Klassivox shape and the result builds.
+`line-block` strategies, all six frontend layers per decision 18, three
+first-party presets, non-interactive flags only. No wizard yet, and no
+backend layers yet beyond what the Klassivox shape needs. Scaffolds the
+Klassivox shape and the result builds.
+
+Built so far, as of 2026-08-18: the merge engine with `json-deep`,
+`line-block`, and `toml-members`, order independence proven by property
+test. The layer format with categories, manifest parsing, and selection
+validation. File copying and `{{project_name}}` interpolation. The
+twenty six layers, compiled into the binary by `include_dir`, with
+`Catalog::load` kept as the `--layers-dir` escape hatch. `culm new` with
+non-interactive flags. The install step, running `pnpm add` and
+`cargo add` with `--no-install` to print the plan instead. The three
+first-party presets.
+
+All six frontends reached the bar on 2026-08-18: `nuxt`, `next`, `astro`,
+`react-vite`, `vue-vite`, `svelte`. Each ships an entry page reading its
+framework's public environment variables, an error boundary, a tsconfig
+scoped to its own directory rather than the workspace root, a vitest
+config named for the layer, and one component test. All six compose into
+a single monorepo with no file collision and no script collision.
+
+Left for v0.1: nothing generated has been installed and built yet. The
+templates are correct as far as the merge engine and a careful reading
+can tell, which is not the same as correct.
 
 **v0.2 (1 week).** Interactive wizard, plan preview and confirmation,
 `toml-members` and `hook-script` and `yaml-steps` strategies.
@@ -291,7 +344,134 @@ independence, npm launcher package with platform binaries, install
 script.
 
 **v1.0.** Go layers, documentation site, and the number that matters:
-how many people ran `ipile new` and what they selected.
+how many people ran `culm new` and what they selected.
+
+## 9a. Known broken
+
+Found on 2026-08-19 by installing and building generated workspaces for
+the first time, three layers deep before the run was stopped. Everything
+here passes `cargo test`, which is the point: the suite proves the
+scaffolder assembles what the manifests describe, and cannot prove that
+what they describe is true of the framework.
+
+Nothing in this list is a design problem. Each is a small fix, and each
+is listed with the layer it belongs to so it can be taken one at a time.
+
+**Fixed on 2026-08-19, but never executed.** Each was fixed from a real
+error message rather than from reading, so the diagnosis is sound; the
+fix is not yet proven.
+
+- Testing Library leaked DOM between tests because a vitest config sets
+  `globals: false`, which removes the global `afterEach` it registers
+  its cleanup on. `frontend/next` and `frontend/react-vite` now call
+  `afterEach(cleanup)` explicitly, which keeps the deliberate choice of
+  no setup file.
+- `lint:next` ran `next lint`, removed in Next 15 and read as a
+  directory name by Next 16. Script dropped.
+- `frontend/next` did not declare `@types/node`, so `next build`
+  installed it mid-build and rewrote the lockfile while compiling. Now
+  declared.
+- `frontend/vue-vite` shipped no `.vue` type shim, so every component
+  import was `TS2307`. Now ships `src/vue-vite/env.d.ts`.
+- `test/<layer-id>/` fell outside every tsconfig, because include globs
+  resolve against the tsconfig's own directory. The include lists now
+  name the sibling test tree.
+- `format:check` failed on templates the scaffolder emits. Six were
+  reflowed to the `printWidth` and `trailingComma` the shipped
+  `.prettierrc` actually sets.
+
+**Still open, and expected to fail the first real run.**
+
+- `baseUrl` was removed in TypeScript 7. `frontend/next` and
+  `backend/nestjs` both declare it and `tsc` refuses with `TS5102`.
+  Deliberately left in place until the owner sees it fail firsthand.
+- `vue-tsc` reaches for `typescript/lib/tsc`, a subpath TypeScript 7 no
+  longer exports, so `typecheck:vue-vite` cannot run at all. This one
+  has no fix inside culm: it is an upstream version pair that decision 5
+  deliberately does not pin.
+- The eight ESLint fragments added on 2026-08-19 have never been
+  executed. `tseslint.config` is the well-known part; the Vue, Svelte and
+  Astro plugin config shapes are not.
+- Next rewrites `src/app/tsconfig.json` on every build, forcing `jsx` to
+  `react-jsx` and appending two `include` globs that resolve to a
+  directory that does not exist. Inert, but the file is permanently
+  dirty in git afterwards.
+- A long enough project name can push an interpolated line past
+  `printWidth` and fail `format:check` on a workspace nobody has edited.
+  `{{project_name}}` is sixteen characters and most real names are
+  shorter, so the templates are formatted against the rendered width,
+  not the template width.
+
+**Never exercised at all.** `frontend/nuxt`, `frontend/svelte` and
+`frontend/astro` were never reached. `frontend/nuxt` matters most,
+because it is the layer the other five were modelled on and because it
+omits `nuxt prepare` deliberately, which nothing has tested.
+
+**How this list gets closed.** Not by reading. The workflow in section 8 is the only
+thing that can prove any of it, which is why that section calls itself
+not optional. The list shrinks by dispatching that workflow and fixing
+what it prints.
+
+## 9b. The Klassivox gap
+
+v0.1's acceptance criterion is "scaffolds the Klassivox shape and the
+result builds". This is the first half of that, measured on 2026-08-19 by
+scaffolding the closest selection culm can express
+(`shape/monorepo + frontend/nuxt + backend/axum + data/sqlx + runner/nx`,
+twelve layers, 25 files) and diffing it against the real repository.
+
+Klassivox is read-only here, per decision 13. Nothing in this section
+proposes a change to it.
+
+**The structural gap.** Klassivox is seven JavaScript projects plus one
+Rust crate. culm emits one JavaScript project plus one Rust crate.
+
+| | Klassivox | culm today |
+| --- | --- | --- |
+| JS layout | `apps/*`, `libs/*`, `libs/shared/*`, `packages/*` | everything under `src/<layer-id>/` |
+| JS projects | seven, each with its own `package.json` | one, at the root |
+| Scripts | plain `build`, `dev` inside each project | `build:nuxt`, `dev:nuxt` at the root |
+| Rust layout | `apps/klassivox-backend` | `crates/axum` |
+
+The Rust half already agrees in shape and differs only in directory
+name. The JavaScript half does not, and that is open decision 4 in
+[CONTEXT.md](CONTEXT.md).
+
+**Files culm should emit and does not.** Everything below is authoring
+rather than verification, so none of it is blocked on an install.
+
+- `pnpm-workspace.yaml`. The workspace definition itself, plus the four
+  things section 1 names as the first hand-wiring anybody does:
+  `catalog`, `saveExact`, `minimumReleaseAge`, `onlyBuiltDependencies`.
+  Needs the `yaml-list` strategy that section 4 documents and nothing
+  implements.
+- `nx.json`. `runner/nx` installs the package and configures nothing,
+  because with one project there is nothing to configure. Blocked behind
+  the same decision.
+- `tsconfig.base.json` and a root `tsconfig.json`. Cross-project path
+  mapping, which only means something once there are several projects.
+- `vitest.workspace.ts`. Test orchestration across projects, same
+  dependency.
+- `docker-compose.yml`, `.dockerignore`, and a `docker/` directory. The
+  `infra` category has no members at all.
+- `.husky/pre-commit`, `.husky/pre-push`, `.lintstagedrc`. The `husky`
+  and `commitlint` layers are named in section 2 and do not exist. This
+  is also the only consumer of the `hook-script` strategy, which is
+  likewise unimplemented.
+- `.nvmrc` and `packageManager` in `package.json`.
+
+**A collision worth deciding before the last one is written.** `.nvmrc`
+contains `22` and `packageManager` contains `pnpm@11.10.0`. Both are
+version pins, and decision 5 forbids a template carrying a version. The
+difference from the case decision 5 was written about is that here the
+version *is* the entire content: there is nothing else in an `.nvmrc`.
+Either decision 5 gains a narrow exception for toolchain pins, or culm
+emits neither and the user pins by hand. Left open rather than guessed.
+
+**Not culm's job.** `README.md`, `CLAUDE.md`, `CONTRIBUTING.md`,
+`LICENSE`, `docs/`, and `tools/` are project content. `Cargo.lock`,
+`pnpm-lock.yaml`, and `audit.json` are generated by tools, which is
+decision 5 working as intended.
 
 ## 10. Kill criteria
 

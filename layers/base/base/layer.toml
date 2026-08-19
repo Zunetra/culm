@@ -1,0 +1,42 @@
+# The ignores that belong to no framework.
+#
+# Always applied, whatever else is selected, so a workspace is never left
+# without the OS and editor noise covered. Deliberately does NOT list any
+# framework's build output: each framework layer ignores its own, which is what
+# keeps layers independent of each other.
+#
+# Kept short on purpose. A generated .gitignore full of rules for tools the
+# project does not use teaches people to stop reading it.
+
+id = "base"
+category = "base"
+default = true
+
+# Every workspace gets one, committed, while `.env` itself is ignored above.
+# A repository whose required variables are undocumented is one nobody new can
+# run. Layers that need a variable add their own line to their own block.
+[[merge]]
+strategy = "line-block"
+target = ".env.example"
+lines = [
+  "# Copy this file to .env and fill in the values.",
+  "# .env is gitignored. This file is not, and is the documentation.",
+  "APP_ENV=development",
+]
+
+[[merge]]
+strategy = "line-block"
+target = ".gitignore"
+lines = [
+  ".DS_Store",
+  "Thumbs.db",
+  ".idea/",
+  ".vscode/*",
+  "!.vscode/settings.json",
+  "!.vscode/extensions.json",
+  "*.swp",
+  "*~",
+  ".env",
+  ".env.local",
+  "*.log",
+]

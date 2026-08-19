@@ -408,12 +408,12 @@ MigrationBackup/
 FodyWeavers.xsd
 
 # VS Code files for those working on multiple tools
-.vscode/*
+!.vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
-!.vscode/*.code-snippets
+.vscode/*.code-snippets
 
 # Local History for Visual Studio Code
 .history/
@@ -427,3 +427,79 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+
+# === Rust
+
+/target
+
+# === Ignored File Paths
+docs/Screens/
+
+## AI coding tools
+
+.claude/
+.cursor/
+.kiro/
+.windsurf/
+.aider*
+.continue/
+.codeium/
+.github/copilot-instructions.md
+.cody/
+.tabnine/
+.sourcegraph/
+.gemini/
+.qodo/
+.pearai/
+.zencoder/
+
+## Editors and IDEs
+
+.zed/
+.vscode-test/
+.history/            # VS Code Local History extension
+.idea/               # all JetBrains: WebStorm, RustRover, IntelliJ, CLion
+*.iml
+*.ipr
+*.iws
+.fleet/              # JetBrains Fleet
+.nova/
+.helix/
+.vim/
+.nvim/
+*.swp
+*.swo
+*~
+.netrwhist
+.sublime-project
+.sublime-workspace
+.brackets.json
+.settings/           # Eclipse
+.project
+.classpath
+.metadata/
+nbproject/           # NetBeans
+.c9/                 # Cloud9
+.theia/
+.gitpod.yml          # only if not intentionally shared
+.devcontainer/       # usually committed on purpose
+
+
+## OS cruft, worth having if you don't already
+
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+.directory
+.Trash-*
+.fuse_hidden*
+.nfs*
+
+
+

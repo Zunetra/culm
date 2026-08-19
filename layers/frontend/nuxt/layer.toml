@@ -1,0 +1,98 @@
+# Nuxt, the Vue meta framework.
+
+id = "nuxt"
+category = "frontend"
+requires = ["toolchain/node-pnpm", "quality/eslint"]
+default = false
+
+# `nuxt prepare` is deliberately not contributed as `postinstall`. That key has
+# to keep its literal name to work, so it cannot be namespaced, and a second
+# framework needing its own postinstall step would collide on it.
+[[merge]]
+strategy = "json-deep"
+target = "package.json"
+[merge.value.scripts]
+"dev:nuxt" = "nuxt dev"
+"build:nuxt" = "nuxt build"
+"preview:nuxt" = "nuxt preview"
+"generate:nuxt" = "nuxt generate"
+"typecheck:nuxt" = "nuxt typecheck"
+"test:nuxt" = "vitest run --config vitest.nuxt.config.ts"
+
+[[merge]]
+strategy = "line-block"
+target = ".gitignore"
+lines = [".nuxt/", ".output/", ".data/", "dist/"]
+
+# Everything Nuxt discovers by convention sits under src/nuxt, which
+# nuxt.config.ts names as srcDir. A second frontend in the same workspace gets
+# its own directory rather than fighting over the root.
+[[files]]
+from = "files/nuxt.config.ts"
+to = "nuxt.config.ts"
+
+[[files]]
+from = "files/app.vue"
+to = "src/nuxt/app.vue"
+
+[[files]]
+from = "files/default.vue"
+to = "src/nuxt/layouts/default.vue"
+
+[[files]]
+from = "files/index.vue"
+to = "src/nuxt/pages/index.vue"
+
+# Nuxt renders this in place of the whole application, so it lives beside
+# app.vue rather than under pages.
+[[files]]
+from = "files/error.vue"
+to = "src/nuxt/error.vue"
+
+# Scoped to srcDir rather than claiming the root tsconfig.json, which is a
+# whole-workspace file this layer has no business owning.
+[[files]]
+from = "files/tsconfig.json"
+to = "src/nuxt/tsconfig.json"
+
+[[files]]
+from = "files/vitest.nuxt.config.ts"
+to = "vitest.nuxt.config.ts"
+
+[[files]]
+from = "files/index.spec.ts"
+to = "test/nuxt/index.spec.ts"
+
+[[install]]
+manager = "pnpm"
+dev = false
+packages = ["vue", "vue-router"]
+
+# happy-dom is what @nuxt/test-utils runs the Nuxt test environment on, so a
+# component test needs it even though nothing imports it directly.
+[[install]]
+manager = "pnpm"
+dev = true
+packages = [
+  "nuxt",
+  "typescript",
+  "vitest",
+  "@nuxt/test-utils",
+  "@vue/test-utils",
+  "happy-dom",
+]
+
+# ESLint's default match covers .js, .mjs and .cjs only, so this layer's sources
+# would be silently unlinted. The root config finds this file by its name rather
+# than by importing it, so neither layer names the other.
+[[files]]
+from = "files/eslint.config.mjs"
+to = "eslint.nuxt.config.mjs"
+
+# The parsers and rules ESLint needs for this layer's file types. Declared here
+# rather than by the eslint layer, which has no way to know what languages a
+# workspace ended up holding.
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["typescript-eslint", "eslint-plugin-vue"]

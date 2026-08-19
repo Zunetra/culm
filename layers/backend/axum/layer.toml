@@ -1,0 +1,62 @@
+# Axum, the Tower based Rust HTTP framework.
+#
+# Nothing here touches package.json: a Rust only workspace has none, and
+# inventing one would leave a JavaScript project behind for nobody to run.
+# The crate is a workspace member under crates/axum, so the root Cargo.toml is
+# a [workspace] several layers contribute members to rather than a file one
+# layer owns. A single Rust app is a one member workspace, which keeps the
+# layout identical whatever the shape. Dependencies stay installs, so cargo
+# writes the versions.
+
+id = "axum"
+category = "backend"
+requires = ["toolchain/rust-cargo"]
+default = false
+
+[[merge]]
+strategy = "toml-members"
+target = "Cargo.toml"
+members = ["crates/axum"]
+
+[[files]]
+from = "files/Cargo.toml"
+to = "crates/axum/Cargo.toml"
+
+[[files]]
+from = "files/lib.rs"
+to = "crates/axum/src/lib.rs"
+
+[[files]]
+from = "files/main.rs"
+to = "crates/axum/src/main.rs"
+
+[[files]]
+from = "files/config.rs"
+to = "crates/axum/src/config.rs"
+
+[[files]]
+from = "files/error.rs"
+to = "crates/axum/src/error.rs"
+
+[[files]]
+from = "files/health_test.rs"
+to = "crates/axum/tests/health.rs"
+
+[[install]]
+manager = "cargo"
+dev = false
+packages = ["axum", "serde_json", "thiserror"]
+
+# The runtime needs its macros and a multi threaded scheduler, neither of which
+# is in the default feature set.
+[[install]]
+manager = "cargo"
+dev = false
+packages = ["tokio"]
+features = ["full"]
+
+# Driving the router in process, so the integration test needs no port.
+[[install]]
+manager = "cargo"
+dev = true
+packages = ["tower", "http-body-util"]

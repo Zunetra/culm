@@ -1,0 +1,86 @@
+# culm's own gate: formatting, lints, and the test suite.
+#
+# Distinct from templates.yml, and the distinction is the point. This job never
+# reaches a network beyond the crate registry, so it proves only that culm
+# assembles what the manifests describe. Whether what they describe is true of
+# the framework is templates.yml's job, and nothing here can stand in for it.
+#
+# Fast enough to run on every push, which templates.yml deliberately is not.
+
+name: ci
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  gate:
+    name: fmt, clippy, tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Each step reports rather than stopping the job, so one run gives the
+      # whole picture. A formatting slip hiding a clippy finding would mean two
+      # round trips for what is one push.
+      - name: Formatting
+        id: fmt
+        continue-on-error: true
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        id: clippy
+        continue-on-error: true
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Tests
+        id: tests
+        continue-on-error: true
+        run: cargo test --all-targets
+
+      # The layer tree is compiled into the binary, so a template that exists on
+      # disk but was never declared is only caught by building the real artefact.
+      - name: Release build
+        id: build
+        continue-on-error: true
+        run: cargo build --release
+
+      - name: Report
+        run: |
+          fail=0
+          for step in fmt clippy tests build; do
+            case "$step" in
+              fmt)    outcome="${{ steps.fmt.outcome }}" ;;
+              clippy) outcome="${{ steps.clippy.outcome }}" ;;
+              tests)  outcome="${{ steps.tests.outcome }}" ;;
+              build)  outcome="${{ steps.build.outcome }}" ;;
+            esac
+            if [ "$outcome" = "success" ]; then
+              echo "PASS $step" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "FAIL $step" >> "$GITHUB_STEP_SUMMARY"
+              echo "::error title=gate::$step failed"
+              fail=1
+            fi
+          done
+          exit "$fail"

@@ -1,0 +1,17 @@
+# The Rust and Cargo toolchain, implied by any Rust app rather than asked for.
+#
+# Under `shape = none` there is no app to imply it, so it becomes the explicit
+# answer to "tooling for which ecosystem".
+
+id = "rust-cargo"
+category = "toolchain"
+default = false
+
+# No Cargo.toml contribution here. Only a layer that adds a crate can name a
+# workspace member, so the root manifest is assembled by the app layers through
+# the toml-members strategy. A toolchain seeding it would emit an empty
+# workspace when this layer is dropped onto a repository that already has one.
+[[merge]]
+strategy = "line-block"
+target = ".gitignore"
+lines = ["/target", "**/*.rs.bk", "*.pdb"]

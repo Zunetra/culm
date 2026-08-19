@@ -1,0 +1,8 @@
+# Generic build output only. Naming a specific framework's directory here would
+# make this layer aware of another layer, which is the combination-authoring
+# trap. Each framework layer ignores its own output in .gitignore instead.
+node_modules/
+dist/
+build/
+coverage/
+pnpm-lock.yaml

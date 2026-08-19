@@ -1,0 +1,6 @@
+{
+  "//": "Scoped to srcDir rather than claiming the workspace's root tsconfig.json, which a second frontend would collide with.",
+  "extends": "astro/tsconfigs/strict",
+  "include": [".astro/types.d.ts", "**/*", "../../test/astro/**/*.ts"],
+  "exclude": ["dist"]
+}

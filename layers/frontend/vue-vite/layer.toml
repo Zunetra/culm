@@ -1,0 +1,105 @@
+# Vue on Vite, without a meta framework.
+
+id = "vue-vite"
+category = "frontend"
+requires = ["toolchain/node-pnpm", "quality/eslint"]
+default = false
+
+# Scripts are suffixed with the layer id because a monorepo may hold several
+# frontends at once, and two layers writing different values to `scripts.dev`
+# is a hard merge error rather than something to resolve silently.
+[[merge]]
+strategy = "json-deep"
+target = "package.json"
+[merge.value.scripts]
+"dev:vue-vite" = "vite --config vite.vue-vite.config.ts"
+"build:vue-vite" = "vite build --config vite.vue-vite.config.ts"
+"preview:vue-vite" = "vite preview --config vite.vue-vite.config.ts"
+"typecheck:vue-vite" = "vue-tsc -p src/vue-vite/tsconfig.json"
+"test:vue-vite" = "vitest run --config vitest.vue-vite.config.ts"
+
+[[merge]]
+strategy = "line-block"
+target = ".gitignore"
+lines = ["dist/", "vite.config.ts.timestamp-*"]
+
+[[install]]
+manager = "pnpm"
+dev = false
+packages = ["vue"]
+
+[[install]]
+manager = "pnpm"
+dev = true
+packages = [
+  "vite",
+  "@vitejs/plugin-vue",
+  "vue-tsc",
+  "typescript",
+  "vitest",
+  "@vue/test-utils",
+  "jsdom",
+]
+
+# Every source file sits under src/vue-vite, which the config names as the Vite
+# root. A second Vite frontend in the same workspace gets its own directory and
+# its own config file rather than fighting over vite.config.ts.
+[[files]]
+from = "files/vite.config.ts"
+to = "vite.vue-vite.config.ts"
+
+# The Vite root is the directory holding index.html, so the entry document lives
+# beside the sources rather than at the workspace root.
+[[files]]
+from = "files/index.html"
+to = "src/vue-vite/index.html"
+
+[[files]]
+from = "files/main.ts"
+to = "src/vue-vite/main.ts"
+
+# The error boundary is in the root component rather than a separate one,
+# because onErrorCaptured only sees what is below it.
+[[files]]
+from = "files/App.vue"
+to = "src/vue-vite/App.vue"
+
+# The environment is read in one module so a component cannot reach for a
+# variable nothing documents.
+[[files]]
+from = "files/config.ts"
+to = "src/vue-vite/config.ts"
+
+[[files]]
+from = "files/tsconfig.json"
+to = "src/vue-vite/tsconfig.json"
+
+# Without a shim TypeScript cannot resolve a .vue import at all, so the entry
+# point and everything it reaches is untyped. A meta framework generates this
+# during prepare; with no meta framework the layer ships it.
+[[files]]
+from = "files/env.d.ts"
+to = "src/vue-vite/env.d.ts"
+
+[[files]]
+from = "files/vitest.vue-vite.config.ts"
+to = "vitest.vue-vite.config.ts"
+
+[[files]]
+from = "files/App.spec.ts"
+to = "test/vue-vite/App.spec.ts"
+
+# ESLint's default match covers .js, .mjs and .cjs only, so this layer's sources
+# would be silently unlinted. The root config finds this file by its name rather
+# than by importing it, so neither layer names the other.
+[[files]]
+from = "files/eslint.config.mjs"
+to = "eslint.vue-vite.config.mjs"
+
+# The parsers and rules ESLint needs for this layer's file types. Declared here
+# rather than by the eslint layer, which has no way to know what languages a
+# workspace ended up holding.
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["typescript-eslint", "eslint-plugin-vue"]

@@ -1,0 +1,18 @@
+{
+  "//": "Scoped to this layer's source directory rather than claiming the workspace's root tsconfig.json, which a second frontend would collide with.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "ES2022"],
+    "jsx": "preserve",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["vite/client"],
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true
+  },
+  "include": ["**/*.ts", "**/*.vue", "../../test/vue-vite/**/*.ts"]
+}

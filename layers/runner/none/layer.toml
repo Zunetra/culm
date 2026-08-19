@@ -1,0 +1,9 @@
+# No task runner.
+#
+# Contributes nothing, and that is the point. Decision 3 says the scaffolder
+# must be able to emit Nx, Turborepo, Moon, or nothing, so "nothing" has to be a
+# real selectable answer rather than an absence the validator rejects.
+
+id = "none"
+category = "runner"
+default = false

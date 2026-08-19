@@ -1,0 +1,10 @@
+# No app scaffolding. Tooling only, for a repository that already exists.
+#
+# This layer contributes nothing on purpose. Its whole job is to be selectable,
+# so that "I already have a repo, just add the tooling" is a valid answer rather
+# than a missing shape. What the user actually gets is decided by the toolchain
+# and quality layers they pick alongside it.
+
+id = "tooling-only"
+category = "shape"
+default = false

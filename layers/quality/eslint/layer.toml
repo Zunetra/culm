@@ -1,0 +1,31 @@
+# ESLint linting.
+
+id = "eslint"
+category = "quality"
+requires = ["toolchain/node-pnpm"]
+default = true
+
+# `lint` rather than `lint:eslint`, for the same reason prettier uses `format`:
+# at most one linter is selected, so the plain name has a single owner.
+[[merge]]
+strategy = "json-deep"
+target = "package.json"
+[merge.value.scripts]
+lint = "eslint ."
+"lint:fix" = "eslint . --fix"
+
+[[merge]]
+strategy = "line-block"
+target = ".gitignore"
+lines = [".eslintcache"]
+
+# Flat config only. `.eslintignore` was removed in flat config, so ignores live
+# inside eslint.config.mjs rather than in a sibling file.
+[[files]]
+from = "files/eslint.config.mjs"
+to = "eslint.config.mjs"
+
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["eslint", "@eslint/js", "@eslint/compat"]

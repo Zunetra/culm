@@ -1,0 +1,58 @@
+# Drizzle, the TypeScript first Node ORM.
+
+id = "drizzle"
+category = "data"
+requires = ["toolchain/node-pnpm", "quality/eslint"]
+default = false
+
+# Namespaced by layer id, like every other script a monorepo can hold more than
+# one of. Data is its own category precisely because it is chosen alongside a
+# backend rather than instead of one, so `generate` alone would have no single
+# owner.
+[[merge]]
+strategy = "json-deep"
+target = "package.json"
+[merge.value.scripts]
+"generate:drizzle" = "drizzle-kit generate"
+"migrate:drizzle" = "drizzle-kit migrate"
+"studio:drizzle" = "drizzle-kit studio"
+
+# The connection string is documented rather than defaulted. A committed file
+# holding a working credential is how a real one ends up in a repository.
+[[merge]]
+strategy = "line-block"
+target = ".env.example"
+lines = ["DATABASE_URL=postgresql://user:password@localhost:5432/app"]
+
+[[files]]
+from = "files/drizzle.config.ts"
+to = "drizzle.config.ts"
+
+[[files]]
+from = "files/schema.ts"
+to = "src/drizzle/schema.ts"
+
+[[install]]
+manager = "pnpm"
+dev = false
+packages = ["drizzle-orm", "postgres"]
+
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["drizzle-kit"]
+
+# ESLint's default match covers .js, .mjs and .cjs only, so this layer's sources
+# would be silently unlinted. The root config finds this file by its name rather
+# than by importing it, so neither layer names the other.
+[[files]]
+from = "files/eslint.config.mjs"
+to = "eslint.drizzle.config.mjs"
+
+# The parsers and rules ESLint needs for this layer's file types. Declared here
+# rather than by the eslint layer, which has no way to know what languages a
+# workspace ended up holding.
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["typescript-eslint"]

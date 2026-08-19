@@ -6,7 +6,7 @@ else in this repository, deliberately documented as such.
 
 Derived from `Klassivox/docs/Projects/05-task-runner.md`. The kill
 criteria in section 10 are preserved from that document unchanged, per
-[DECISIONS.md](DECISIONS.md) decision 13.
+[CONTEXT.md](CONTEXT.md#decisions) decision 13.
 
 ---
 
@@ -36,7 +36,7 @@ stay in view rather than be argued away.
 - **Turborepo.** Same shape, smaller plugin surface, same JS-first centre
   of gravity.
 - **Bazel.** Correct, enormous, and not a fair fight on correctness. The
-  gap ipile could occupy is "Bazel's guarantees without Bazel's
+  gap culm could occupy is "Bazel's guarantees without Bazel's
   operational weight," which is exactly the gap Moon and Pants already
   chase with more resources.
 - **Moon.** Rust-based, explicitly polyglot, explicitly positioned as
@@ -61,10 +61,10 @@ Nx."
 ## 3. Interface
 
 ```
-ipile run <task>               run a task, respecting the dependency graph
-ipile run <task> --affected    only tasks touched by changes since a ref
-ipile cache stats|clear        inspect or clear the local cache
-ipile graph                    print or visualize the task graph
+culm run <task>               run a task, respecting the dependency graph
+culm run <task> --affected    only tasks touched by changes since a ref
+culm cache stats|clear        inspect or clear the local cache
+culm graph                    print or visualize the task graph
 ```
 
 Configuration is a plain file describing tasks and their inputs and
@@ -72,7 +72,7 @@ outputs, not a plugin system that has to understand every build tool in
 existence.
 
 ```yaml
-# ipile.yaml, one per project in the workspace
+# culm.yaml, one per project in the workspace
 tasks:
   build:
     command: cargo build --release
@@ -86,7 +86,7 @@ tasks:
     cache: true
 ```
 
-**ipile does not know what `cargo` or `pnpm` or `vite` are.** It knows a
+**culm does not know what `cargo` or `pnpm` or `vite` are.** It knows a
 command, a set of input globs, and a set of output paths. Correctness
 comes from that narrowness, not from plugins that have to keep up with
 every build tool's own changes.
@@ -95,7 +95,7 @@ every build tool's own changes.
 
 ```
 ┌────────────────────────────────────────────┐
-│  ipile.yaml (per project) + workspace root │
+│  culm.yaml (per project) + workspace root │
 │    parsed into a task graph                │
 │  Task graph (petgraph)                     │
 │    topological order + change detection    │
@@ -178,19 +178,19 @@ pub struct CacheEntry {
 }
 ```
 
-`crates/cas` lives inside this repository, unpublished. Per
-[DECISIONS.md](DECISIONS.md) decision 11, it is extracted only if a
-second project genuinely needs it.
+`cas` lives inside this repository as a module, unpublished. Per
+[CONTEXT.md](CONTEXT.md#decisions) decision 11, it is extracted to its own
+crate only if a second project genuinely needs it.
 
 ## 6. Milestones
 
 Numbered from the runner's own start, which follows the scaffolder's
 v1.0.
 
-**r0.1 (2 weeks).** `ipile run <task>`, sequential execution respecting
+**r0.1 (2 weeks).** `culm run <task>`, sequential execution respecting
 `depends_on`, no caching. Just the graph and correct ordering.
 
-**r0.2 (2 weeks).** Content-based hashing, local cache via `crates/cas`,
+**r0.2 (2 weeks).** Content-based hashing, local cache via `cas`,
 hit and miss reporting. **This milestone either proves or kills the
 premise.** Run it against a real subset of the Klassivox workspace and
 check every cache hit by hand against a fresh build for at least two
@@ -204,7 +204,7 @@ dependency graph.
 bucket, so CI and every developer share hits.
 
 **r1.0 (3 weeks, only if r0.2's honest check passed).** Multi-platform
-binaries, `ipile graph --format dot`, and a real side-by-side benchmark
+binaries, `culm graph --format dot`, and a real side-by-side benchmark
 against Nx on the actual Klassivox workspace, published with methodology
 rather than a claimed number.
 
@@ -238,7 +238,7 @@ serde       = { version = "1", features = ["derive"] }
 serde_yaml  = "0.9"
 globset     = "0.4"          # input glob matching
 ignore      = "0.4"          # gitignore-aware walking, the ripgrep crate
-blake3      = "1"            # fast content hashing, feeds crates/cas
+blake3      = "1"            # fast content hashing, feeds the cas module
 git2        = "0.19"         # --affected: diff against a base ref
 thiserror   = "2"
 anyhow      = "1"
@@ -260,13 +260,13 @@ proptest    = "1"            # property-test cache key determinism directly
 - run: cargo nextest run
 - run: cargo audit
 - run: cargo deny check licenses advisories
-# Runs ipile twice against fixture workspaces and asserts the second
+# Runs culm twice against fixture workspaces and asserts the second
 # run's outputs are byte-identical to the first, rather than trusting
 # that it reported a cache hit.
 - run: cargo test --test cache_correctness -- --test-threads=1
 ```
 
-The `cache_correctness` job does not trust ipile's own "cache hit" log
+The `cache_correctness` job does not trust culm's own "cache hit" log
 line. It re-runs the task for real on a miss path and diffs the actual
 output bytes against what the cache served, because the failure mode
 named throughout this document is exactly a tool that reports a hit while
@@ -294,7 +294,7 @@ Preserved from the original document. Do not soften these.
 - **The r1.0 benchmark shows no meaningful win over Nx** on the real
   Klassivox workspace, not a synthetic one. "Roughly the same speed, but
   self-built" is not a reason for anyone else to adopt it.
-- **Any point before r0.2 where writing `ipile.yaml` feels like more work
+- **Any point before r0.2 where writing `culm.yaml` feels like more work
   than the Nx configuration already in place.** If the replacement is not
   obviously less annoying than the incumbent on day one, on the one
   workspace with perfect information, it will not be less annoying

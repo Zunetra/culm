@@ -1,0 +1,29 @@
+# Prettier formatting.
+
+id = "prettier"
+category = "quality"
+requires = ["toolchain/node-pnpm"]
+default = true
+
+# Not namespaced by layer id, unlike the frontend scripts. Quality is one of each
+# at most, so `format` has a single owner and cannot collide the way `dev` would
+# across several frontends.
+[[merge]]
+strategy = "json-deep"
+target = "package.json"
+[merge.value.scripts]
+format = "prettier --write . --ignore-path .gitignore --ignore-path .prettierignore"
+"format:check" = "prettier --check . --ignore-path .gitignore --ignore-path .prettierignore"
+
+[[files]]
+from = "files/.prettierrc"
+to = ".prettierrc"
+
+[[files]]
+from = "files/.prettierignore"
+to = ".prettierignore"
+
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["prettier"]

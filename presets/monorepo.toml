@@ -1,0 +1,3 @@
+name = "monorepo"
+description = "A Nuxt front end and an Axum service backed by SQLx, in one workspace. No container, CI or hook layers yet."
+layers = ["shape/monorepo", "frontend/nuxt", "backend/axum", "data/sqlx"]

@@ -1,0 +1,99 @@
+# Next.js, the React meta framework.
+
+id = "next"
+category = "frontend"
+requires = ["toolchain/node-pnpm", "quality/eslint"]
+default = false
+
+[[merge]]
+strategy = "json-deep"
+target = "package.json"
+[merge.value.scripts]
+"dev:next" = "next dev"
+"build:next" = "next build"
+"start:next" = "next start"
+"typecheck:next" = "tsc -p src/app/tsconfig.json"
+"test:next" = "vitest run --config vitest.next.config.ts"
+
+[[merge]]
+strategy = "line-block"
+target = ".gitignore"
+lines = [".next/", "out/", "next-env.d.ts", ".vercel/"]
+
+[[install]]
+manager = "pnpm"
+dev = false
+packages = ["next", "react", "react-dom"]
+
+[[install]]
+manager = "pnpm"
+dev = true
+packages = [
+  "@types/react",
+  "@types/react-dom",
+  "typescript",
+  "vitest",
+  "@vitejs/plugin-react",
+  "@testing-library/react",
+  "jsdom",
+  "@types/node",
+]
+
+# The app directory is the one path Next will not let a project move, so this
+# layer claims src/app. A second frontend gets a directory named for its own
+# layer, and the two never overlap.
+[[files]]
+from = "files/next.config.ts"
+to = "next.config.ts"
+
+[[files]]
+from = "files/layout.tsx"
+to = "src/app/layout.tsx"
+
+[[files]]
+from = "files/page.tsx"
+to = "src/app/page.tsx"
+
+# Next renders this in place of the route that threw, so it sits beside the page
+# rather than under it.
+[[files]]
+from = "files/error.tsx"
+to = "src/app/error.tsx"
+
+# The environment is read in one module so a page cannot reach for a variable
+# nothing documents.
+[[files]]
+from = "files/config.ts"
+to = "src/app/config.ts"
+
+# Inside src/app, matching every other frontend layer. The root tsconfig.json is
+# a whole-workspace file this layer has no business owning, and a root file under
+# any other name is worse than useless: an editor finds a project only by walking
+# up to a file called tsconfig.json, so these sources would get no configuration
+# at all. next.config.ts points the compiler here.
+[[files]]
+from = "files/tsconfig.json"
+to = "src/app/tsconfig.json"
+
+[[files]]
+from = "files/vitest.next.config.ts"
+to = "vitest.next.config.ts"
+
+[[files]]
+from = "files/page.spec.tsx"
+to = "test/next/page.spec.tsx"
+
+# ESLint's default match covers .js, .mjs and .cjs only, so this layer's sources
+# would be silently unlinted. The root config finds this file by its name rather
+# than by importing it, so neither layer names the other.
+[[files]]
+from = "files/eslint.config.mjs"
+to = "eslint.next.config.mjs"
+
+# The parsers and rules ESLint needs for this layer's file types. Declared here
+# rather than by the eslint layer, which has no way to know what languages a
+# workspace ended up holding.
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["typescript-eslint"]

@@ -1,0 +1,87 @@
+# Astro, content first, islands for the interactive parts.
+
+id = "astro"
+category = "frontend"
+requires = ["toolchain/node-pnpm", "quality/eslint"]
+default = false
+
+[[merge]]
+strategy = "json-deep"
+target = "package.json"
+[merge.value.scripts]
+"dev:astro" = "astro dev"
+"build:astro" = "astro build"
+"preview:astro" = "astro preview"
+"check:astro" = "astro check"
+"test:astro" = "vitest run --config vitest.astro.config.ts"
+
+[[merge]]
+strategy = "line-block"
+target = ".gitignore"
+lines = ["dist/", ".astro/"]
+
+[[install]]
+manager = "pnpm"
+dev = false
+packages = ["astro"]
+
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["@astrojs/check", "typescript", "vitest"]
+
+# Everything Astro discovers by convention sits under src/astro, which
+# astro.config.mjs names as srcDir. A second frontend in the same workspace gets
+# its own directory rather than fighting over the root.
+[[files]]
+from = "files/astro.config.mjs"
+to = "astro.config.mjs"
+
+[[files]]
+from = "files/Layout.astro"
+to = "src/astro/layouts/Layout.astro"
+
+[[files]]
+from = "files/index.astro"
+to = "src/astro/pages/index.astro"
+
+# A page rather than an error boundary: a static build has no server left to
+# catch a throw, so the unmatched route is the case worth handling.
+[[files]]
+from = "files/404.astro"
+to = "src/astro/pages/404.astro"
+
+# The environment is read in one module so a page cannot reach for a variable
+# nothing documents.
+[[files]]
+from = "files/config.ts"
+to = "src/astro/config.ts"
+
+# Scoped to srcDir rather than claiming the root tsconfig.json, which is a
+# whole-workspace file this layer has no business owning.
+[[files]]
+from = "files/tsconfig.json"
+to = "src/astro/tsconfig.json"
+
+[[files]]
+from = "files/vitest.astro.config.ts"
+to = "vitest.astro.config.ts"
+
+[[files]]
+from = "files/index.spec.ts"
+to = "test/astro/index.spec.ts"
+
+# ESLint's default match covers .js, .mjs and .cjs only, so this layer's sources
+# would be silently unlinted. The root config finds this file by its name rather
+# than by importing it, so neither layer names the other.
+[[files]]
+from = "files/eslint.config.mjs"
+to = "eslint.astro.config.mjs"
+
+# The parsers and rules ESLint needs for this layer's file types. Declared here
+# rather than by the eslint layer, which has no way to know what languages a
+# workspace ended up holding.
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["typescript-eslint", "eslint-plugin-astro"]

@@ -1,0 +1,77 @@
+{
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.expand": false,
+  "explorer.fileNesting.patterns": {
+    "Cargo.toml": "Cargo.lock, rustfmt.toml, clippy.toml, rust-toolchain.toml, .rustfmt.toml, deny.toml",
+    "package.json": "package-lock.json, pnpm-lock.yaml, pnpm-workspace.yaml, yarn.lock, bun.lockb, .npmrc, .nvmrc, .node-version, node_modules",
+    "eslint.config.mjs": "eslint.*.config.mjs, .eslintrc*, .eslintignore, .eslintcache",
+    ".prettierrc": ".prettierignore, .prettierrc.*, .editorconfig",
+    "tsconfig.json": "tsconfig.*.json, next-env.d.ts, env.d.ts, *.d.ts",
+    "vite.config.ts": "vite.*.config.ts, vitest.*.config.ts, vitest.config.ts",
+    "next.config.ts": "next.config.*, next-env.d.ts",
+    "nuxt.config.ts": "nuxt.config.*, .nuxtrc",
+    "astro.config.mjs": "astro.config.*",
+    "svelte.config.js": "svelte.config.*, vite.svelte.config.ts",
+    "README.md": "LICENSE, LICENSE.*, CLAUDE.md, CONTRIBUTING.md, CHANGELOG.md, CODE_OF_CONDUCT.md, AUTHORS, NOTICE, SECURITY.md",
+    ".gitignore": ".gitattributes, .dockerignore",
+    ".env.example": ".env, .env.*, .envrc, env.d.ts",
+    "*.ts": "${capture}.js, ${capture}.d.ts, ${capture}.js.map",
+    "*.tsx": "${capture}.test.tsx, ${capture}.spec.tsx, ${capture}.module.css",
+    "*.vue": "${capture}.spec.ts, ${capture}.module.css",
+    "docker-compose.yml": "docker-compose.*.yml, Dockerfile, Dockerfile.*, .dockerignore"
+  },
+
+  "files.exclude": {
+    "**/.git": true,
+    "**/.DS_Store": true,
+    "**/node_modules": true,
+    "target": true
+  },
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/node_modules/**": true,
+    "**/target/**": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "target": true,
+    "Cargo.lock": true
+  },
+
+  "files.eol": "\n",
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": true,
+
+  "editor.formatOnSave": true,
+  "editor.rulers": [80],
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "editor.detectIndentation": false,
+
+  "[rust]": {
+    "editor.defaultFormatter": "rust-lang.rust-analyzer",
+    "editor.tabSize": 4
+  },
+  "rust-analyzer.checkOnSave": true,
+  "rust-analyzer.check.command": "clippy",
+
+  "[toml]": { "editor.defaultFormatter": "tamasfe.even-better-toml" },
+  "[markdown]": { "editor.wordWrap": "on" },
+
+  "cSpell.words": [
+    "astro",
+    "clippy",
+    "culm",
+    "Klassivox",
+    "nextest",
+    "petgraph",
+    "pnpm",
+    "rustfmt",
+    "scaffolder",
+    "sveltejs",
+    "tseslint",
+    "vitest",
+    "Zunetra"
+  ]
+}

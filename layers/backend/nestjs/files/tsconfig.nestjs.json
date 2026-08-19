@@ -1,0 +1,18 @@
+{
+  "//": "NodeNext rather than commonjs, because decision 21 makes the workspace ESM. It is also why every relative import in this layer carries a .js extension: under NodeNext the emitted specifier is used verbatim at runtime, so TypeScript wants the path the output will actually resolve.",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "target": "ES2023",
+    "moduleResolution": "NodeNext",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "strictPropertyInitialization": false,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "sourceMap": true
+  },
+  "include": ["src/nestjs/**/*", "test/nestjs.e2e-spec.ts"]
+}

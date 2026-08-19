@@ -1,0 +1,7 @@
+# Many apps in one workspace.
+# The shape carries no merges of its own: what a monorepo means to the merge
+# engine is the cardinality it selects, which category.rs decides from the id.
+
+id = "monorepo"
+category = "shape"
+default = false
