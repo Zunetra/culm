@@ -532,11 +532,26 @@ change.
 
 **Two rules that shape every layer authored from here.**
 
-- Scripts in a many-per-workspace category are namespaced by layer id
-  (`dev:nuxt`, `dev:nestjs`), because two layers writing different values
-  to the same `package.json` key is a hard merge error. Quality layers
-  are not namespaced, since at most one of each is selected and `format`
-  has a single owner.
+- **An app layer never hardcodes its own layout.** It names
+  `{{app_dir}}`, `{{test_dir}}`, `{{script_suffix}}` and
+  `{{config_suffix}}`, and `src/scaffold/layout.rs` fills them in from
+  the selection: a workspace holding exactly one application gets `src`,
+  `test`, `dev` and `vitest.config.ts`, and a workspace holding two or
+  more gets `src/<id>`, `test/<id>`, `dev:<id>` and
+  `vitest.<id>.config.ts` each. Two layers writing different values to
+  the same `package.json` key is a hard merge error, so the namespaced
+  form is not optional once there is company; hardcoding it when there is
+  none makes every single-app workspace look like a monorepo, which is
+  the common case paying for the rare one. **The count of application
+  layers decides, never the shape**: a `single-app` workspace still takes
+  one frontend beside one backend, which is two layers wanting `dev`.
+  Quality layers take no suffix at all, since at most one of each is
+  selected and `format` has a single owner.
+- **The ESLint fragment is the one filename that stays namespaced
+  always.** `quality/eslint` owns the root `eslint.config.mjs` and
+  discovers fragments by the pattern `eslint.<something>.config.mjs`, so
+  a fragment collapsing to `eslint.config.mjs` in a one-app workspace
+  would both collide with the root config and stop being found.
 - A layer never names another layer in its content. Not in a package
   name, not in a script, not in an ignore rule. A test fails if one does.
 
