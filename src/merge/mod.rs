@@ -4,12 +4,18 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+pub mod hook_script;
 pub mod json_deep;
 pub mod line_block;
 pub mod toml_members;
+pub mod yaml_list;
+pub mod yaml_steps;
 
+pub use hook_script::{HOOK_MODE, HookScriptDoc};
 pub use json_deep::ValueKind;
 pub use toml_members::TomlMembersDoc;
+pub use yaml_list::YamlListDoc;
+pub use yaml_steps::{Step, YamlStepsDoc};
 
 use json_deep::JsonDoc;
 use line_block::LineBlockDoc;
@@ -60,6 +66,9 @@ pub enum Strategy {
     JsonDeep,
     LineBlock,
     TomlMembers,
+    YamlList,
+    HookScript,
+    YamlSteps,
 }
 
 impl fmt::Display for Strategy {
@@ -68,6 +77,9 @@ impl fmt::Display for Strategy {
             Self::JsonDeep => "json-deep",
             Self::LineBlock => "line-block",
             Self::TomlMembers => "toml-members",
+            Self::YamlList => "yaml-list",
+            Self::HookScript => "hook-script",
+            Self::YamlSteps => "yaml-steps",
         })
     }
 }
@@ -141,6 +153,16 @@ pub enum Contribution {
     LineBlock(Vec<String>),
     /// Crates appended to a Cargo workspace's `members`, unioned then sorted.
     TomlMembers(Vec<String>),
+    /// Named YAML sequences, each unioned then sorted. The workspace globs in `pnpm-workspace.yaml`.
+    YamlList(BTreeMap<String, Vec<String>>),
+    /// A shell hook body placed at a declared order. Sequence is observable here, so it is declared rather than inferred.
+    HookScript { order: u32, body: Vec<String> },
+    /// CI steps placed in a named job at a declared order.
+    YamlSteps {
+        job: String,
+        order: u32,
+        steps: Vec<Step>,
+    },
 }
 
 impl Contribution {
@@ -150,6 +172,9 @@ impl Contribution {
             Self::JsonDeep(_) => Strategy::JsonDeep,
             Self::LineBlock(_) => Strategy::LineBlock,
             Self::TomlMembers(_) => Strategy::TomlMembers,
+            Self::YamlList(_) => Strategy::YamlList,
+            Self::HookScript { .. } => Strategy::HookScript,
+            Self::YamlSteps { .. } => Strategy::YamlSteps,
         }
     }
 }
@@ -202,6 +227,9 @@ pub enum FileContent {
     JsonDeep(JsonDoc),
     LineBlock(LineBlockDoc),
     TomlMembers(TomlMembersDoc),
+    YamlList(YamlListDoc),
+    HookScript(HookScriptDoc),
+    YamlSteps(YamlStepsDoc),
 }
 
 impl FileContent {
@@ -211,6 +239,18 @@ impl FileContent {
             Self::JsonDeep(_) => Strategy::JsonDeep,
             Self::LineBlock(_) => Strategy::LineBlock,
             Self::TomlMembers(_) => Strategy::TomlMembers,
+            Self::YamlList(_) => Strategy::YamlList,
+            Self::HookScript(_) => Strategy::HookScript,
+            Self::YamlSteps(_) => Strategy::YamlSteps,
+        }
+    }
+
+    /// The mode this file must be written with, if it needs one.
+    /// Only hooks do: a git hook without the executable bit is skipped in silence, so the bit travels with the content rather than being a layer's responsibility to remember.
+    pub fn mode(&self) -> Option<u32> {
+        match self {
+            Self::HookScript(doc) => Some(doc.mode()),
+            _ => None,
         }
     }
 
@@ -220,6 +260,9 @@ impl FileContent {
             Self::JsonDeep(doc) => doc.render(),
             Self::LineBlock(doc) => doc.render(),
             Self::TomlMembers(doc) => doc.render(),
+            Self::YamlList(doc) => doc.render(),
+            Self::HookScript(doc) => doc.render(),
+            Self::YamlSteps(doc) => doc.render(),
         }
     }
 
@@ -229,6 +272,9 @@ impl FileContent {
             Self::JsonDeep(doc) => doc.first_owner(),
             Self::LineBlock(doc) => doc.first_owner(),
             Self::TomlMembers(doc) => doc.first_owner(),
+            Self::YamlList(doc) => doc.first_owner(),
+            Self::HookScript(doc) => doc.first_owner(),
+            Self::YamlSteps(doc) => doc.first_owner(),
         }
     }
 }
@@ -286,6 +332,15 @@ impl FileSet {
                     Contribution::TomlMembers(members) => {
                         FileContent::TomlMembers(TomlMembersDoc::seed(layer, members))
                     }
+                    Contribution::YamlList(lists) => {
+                        FileContent::YamlList(YamlListDoc::seed(layer, lists))
+                    }
+                    Contribution::HookScript { order, body } => {
+                        FileContent::HookScript(HookScriptDoc::seed(layer, *order, body))
+                    }
+                    Contribution::YamlSteps { job, order, steps } => FileContent::YamlSteps(
+                        YamlStepsDoc::seed(target, layer, job, *order, steps),
+                    ),
                 };
                 self.files.insert(target.to_path_buf(), content);
                 Ok(())
@@ -326,6 +381,45 @@ impl FileSet {
                     b_strategy: other.strategy(),
                 }),
             },
+            Some(FileContent::YamlList(doc)) => match contribution {
+                Contribution::YamlList(lists) => {
+                    doc.add(lists);
+                    Ok(())
+                }
+                other => Err(MergeError::StrategyMismatch {
+                    target: target.to_path_buf(),
+                    a: doc.first_owner(),
+                    b: layer.clone(),
+                    a_strategy: Strategy::YamlList,
+                    b_strategy: other.strategy(),
+                }),
+            },
+            Some(FileContent::HookScript(doc)) => match contribution {
+                Contribution::HookScript { order, body } => {
+                    doc.add(layer, *order, body);
+                    Ok(())
+                }
+                other => Err(MergeError::StrategyMismatch {
+                    target: target.to_path_buf(),
+                    a: doc.first_owner(),
+                    b: layer.clone(),
+                    a_strategy: Strategy::HookScript,
+                    b_strategy: other.strategy(),
+                }),
+            },
+            Some(FileContent::YamlSteps(doc)) => match contribution {
+                Contribution::YamlSteps { job, order, steps } => {
+                    doc.add(layer, job, *order, steps);
+                    Ok(())
+                }
+                other => Err(MergeError::StrategyMismatch {
+                    target: target.to_path_buf(),
+                    a: doc.first_owner(),
+                    b: layer.clone(),
+                    a_strategy: Strategy::YamlSteps,
+                    b_strategy: other.strategy(),
+                }),
+            },
         }
     }
 
@@ -340,6 +434,15 @@ impl FileSet {
         self.files
             .iter()
             .map(|(path, content)| (path.clone(), content.render()))
+            .collect()
+    }
+
+    /// The mode each merged file must be written with, for the files that need one.
+    /// Separate from `render` so the rendered text can go through interpolation without a mode having to survive that trip untouched.
+    pub fn modes(&self) -> BTreeMap<PathBuf, u32> {
+        self.files
+            .iter()
+            .filter_map(|(path, content)| content.mode().map(|mode| (path.clone(), mode)))
             .collect()
     }
 

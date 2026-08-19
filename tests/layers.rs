@@ -795,7 +795,10 @@ fn every_written_path() -> Vec<String> {
             let target = match merge {
                 culm::layer::MergeSpec::JsonDeep { target, .. }
                 | culm::layer::MergeSpec::LineBlock { target, .. }
-                | culm::layer::MergeSpec::TomlMembers { target, .. } => target,
+                | culm::layer::MergeSpec::TomlMembers { target, .. }
+                | culm::layer::MergeSpec::YamlList { target, .. }
+                | culm::layer::MergeSpec::HookScript { target, .. }
+                | culm::layer::MergeSpec::YamlSteps { target, .. } => target,
             };
             paths.push(target.to_string_lossy().into_owned());
         }

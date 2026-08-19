@@ -13,12 +13,16 @@ pub fn write(
     root: &Path,
     plan: &CopyPlan,
     merged: &BTreeMap<PathBuf, String>,
+    modes: &BTreeMap<PathBuf, u32>,
 ) -> Result<(), ScaffoldError> {
     for planned in plan.files() {
         write_one(root, &planned.to, &planned.contents, planned.mode)?;
     }
+    /* A merged file carries a mode only when the strategy that built it says
+     * so, which today means hooks. A hook without the executable bit is
+     * skipped by git in silence, so losing it here would be invisible. */
     for (path, contents) in merged {
-        write_one(root, path, contents, None)?;
+        write_one(root, path, contents, modes.get(path).copied())?;
     }
     Ok(())
 }

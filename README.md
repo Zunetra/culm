@@ -954,13 +954,15 @@ so re-verify before relying on it.
 - **The CLI.** `src/main.rs` prints hello and nothing else. There is no
   `culm new`, no argument parsing, and no wizard.
 - **Presets.** Designed in [decision 6](docs/CONTEXT.md#decisions) and
-  [docs/01-scaffolder.md](docs/01-scaffolder.md) §6, implemented nowhere.
+  [docs/01-scaffolder.md](docs/01-scaffolder.md) section 6, implemented nowhere.
 - **Install execution.** `[[install]]` entries are parsed and validated,
   and nothing runs a package manager.
-- **The `yaml-list`, `hook-script`, and `yaml-steps` strategies.** Only
-  the three above exist. Note that the `[[hook]]` block shown in
-  `docs/01-scaffolder.md` §3 is design, not format: the parser rejects it
-  as an unknown field today.
+- **The `yaml-steps` strategy.** `yaml-list` and `hook-script` landed on
+  2026-08-19; only `yaml-steps` is still missing. Note that the
+  `[[hook]]` block shown in `docs/01-scaffolder.md` section 3 remains
+  design rather than format: a hook is declared as an ordinary
+  `[[merge]]` with `strategy = "hook-script"`, so that every file several
+  layers contribute to arrives through one mechanism.
 - **Version resolution**, including the `compat` range and the
   minimum-release-age guard.
 - **Nightly CI** over the preset matrix.

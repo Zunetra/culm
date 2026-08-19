@@ -31,9 +31,9 @@ fn scaffold_entries(root: &Path, entries: &[&CatalogEntry], project: &str) {
         .iter()
         .map(|manifest| manifest.to_layer().expect("manifest converts to a layer"))
         .collect();
-    let merged = FileSet::build(&layers)
-        .expect("the selection merges cleanly")
-        .render();
+    let file_set = FileSet::build(&layers).expect("the selection merges cleanly");
+    let modes = file_set.modes();
+    let merged = file_set.render();
 
     let variables = Variables::new().with("project_name", project);
     let planned: Vec<(&Manifest, &LayerSource)> = manifests
@@ -43,7 +43,7 @@ fn scaffold_entries(root: &Path, entries: &[&CatalogEntry], project: &str) {
         .collect();
     let plan = CopyPlan::build(planned, &variables).expect("the copy plan is buildable");
 
-    write(root, &plan, &merged).expect("the workspace writes");
+    write(root, &plan, &merged, &modes).expect("the workspace writes");
 }
 
 /// Scaffolds an exact selection, named by qualified id, with nothing added.
@@ -255,4 +255,53 @@ fn selection_order_does_not_change_the_workspace() {
         let b = fs::read_to_string(backward.path().join(name)).expect("written");
         assert_eq!(a, b, "{name} depends on selection order");
     }
+}
+
+// == Hooks reach disk able to run
+
+/// A merged hook is written with the executable bit, end to end.
+/// git skips a hook that is not executable without printing anything, so a hook that reaches disk unexecutable is a feature that silently does not exist. The bit travels from the strategy through `FileSet::modes` to `write`, and only this test covers the whole path.
+#[cfg(unix)]
+#[test]
+fn a_merged_hook_lands_executable() {
+    use std::os::unix::fs::PermissionsExt;
+
+    use culm::merge::{Contribution, Layer};
+
+    let dir = tempfile::tempdir().expect("a temp dir");
+    let root = dir.path();
+
+    let formatting = Layer::new("quality/prettier").with_merge(
+        ".husky/pre-commit",
+        Contribution::HookScript {
+            order: 10,
+            body: vec!["pnpm lint-staged".to_owned()],
+        },
+    );
+    let rust = Layer::new("quality/rustfmt").with_merge(
+        ".husky/pre-commit",
+        Contribution::HookScript {
+            order: 20,
+            body: vec!["cargo fmt --check".to_owned()],
+        },
+    );
+
+    let set = FileSet::build([&formatting, &rust]).expect("the two hooks merge");
+    let merged = set.render();
+    let modes = set.modes();
+    write(root, &CopyPlan::default(), &merged, &modes).expect("the workspace writes");
+
+    let hook = root.join(".husky").join("pre-commit");
+    let body = fs::read_to_string(&hook).expect("the hook was written");
+    assert!(body.starts_with("#!/bin/sh\n"));
+    assert!(
+        body.find("pnpm lint-staged").unwrap() < body.find("cargo fmt --check").unwrap(),
+        "the declared order decides which body runs first"
+    );
+
+    let mode = fs::metadata(&hook)
+        .expect("the hook is on disk")
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o777, 0o755, "a hook git will not run is not a hook");
 }

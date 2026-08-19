@@ -7,7 +7,7 @@ use serde::Deserialize;
 
 use super::category::Category;
 use super::error::LayerError;
-use crate::merge::{Contribution, Layer, LayerId};
+use crate::merge::{Contribution, Layer, LayerId, Step};
 
 /// One `layer.toml`, as written on disk.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -55,6 +55,27 @@ pub enum MergeSpec {
     TomlMembers {
         target: PathBuf,
         members: Vec<String>,
+    },
+    /// Named sequences keyed by their YAML key, so one target can carry several.
+    /// `pnpm-workspace.yaml` holds both `packages` and `onlyBuiltDependencies`, and a strategy that assumed one sequence per file could express neither without naming the other.
+    YamlList {
+        target: PathBuf,
+        lists: BTreeMap<String, Vec<String>>,
+    },
+    /// A body placed in a shell hook at a declared order.
+    /// `order` is explicit because sequence is observable here: a formatter that rewrites files and a linter that reads them produce different results depending on which ran first.
+    HookScript {
+        target: PathBuf,
+        order: u32,
+        body: Vec<String>,
+    },
+    /// CI steps placed in a named job at a declared order.
+    /// The job is named rather than derived, so a Rust layer and a JavaScript layer can share one workflow file without sharing a job.
+    YamlSteps {
+        target: PathBuf,
+        job: String,
+        order: u32,
+        steps: Vec<Step>,
     },
 }
 
@@ -137,6 +158,33 @@ impl Manifest {
                 MergeSpec::TomlMembers { target, members } => {
                     (target.clone(), Contribution::TomlMembers(members.clone()))
                 }
+                MergeSpec::YamlList { target, lists } => {
+                    (target.clone(), Contribution::YamlList(lists.clone()))
+                }
+                MergeSpec::HookScript {
+                    target,
+                    order,
+                    body,
+                } => (
+                    target.clone(),
+                    Contribution::HookScript {
+                        order: *order,
+                        body: body.clone(),
+                    },
+                ),
+                MergeSpec::YamlSteps {
+                    target,
+                    job,
+                    order,
+                    steps,
+                } => (
+                    target.clone(),
+                    Contribution::YamlSteps {
+                        job: job.clone(),
+                        order: *order,
+                        steps: steps.clone(),
+                    },
+                ),
             };
             merges.insert(target, contribution);
         }
@@ -193,6 +241,36 @@ packages = ["nuxt"]
         let layer = parsed.to_layer().unwrap();
         assert_eq!(layer.requires, vec![LayerId::new("toolchain/node-pnpm")]);
         assert_eq!(layer.merges.len(), 2);
+    }
+
+    /* The one strategy whose payload is a table of tables, so its TOML shape is
+     * the easiest to get wrong and the only one a layer author cannot copy from
+     * a sibling yet. */
+    #[test]
+    fn a_yaml_list_merge_parses_and_converts() {
+        let source = r#"
+id = "monorepo"
+category = "shape"
+
+[[merge]]
+strategy = "yaml-list"
+target = "pnpm-workspace.yaml"
+[merge.lists]
+packages = ["apps/*", "libs/*"]
+onlyBuiltDependencies = ["esbuild"]
+"#;
+        let parsed = Manifest::parse("monorepo/layer.toml", source).unwrap();
+        let layer = parsed.to_layer().unwrap();
+        let contribution = layer
+            .merges
+            .get(&PathBuf::from("pnpm-workspace.yaml"))
+            .expect("the target is claimed");
+
+        let Contribution::YamlList(lists) = contribution else {
+            panic!("expected a yaml-list contribution");
+        };
+        assert_eq!(lists["packages"], vec!["apps/*", "libs/*"]);
+        assert_eq!(lists["onlyBuiltDependencies"], vec!["esbuild"]);
     }
 
     /* Bare ids are not unique, so one that slipped into a manifest would

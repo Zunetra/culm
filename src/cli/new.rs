@@ -89,7 +89,9 @@ pub fn run_new_to(args: &NewArgs, parent: &Path, out: &mut impl Write) -> Result
     /* Merged files are interpolated too, not just copied ones. Without this
      * nothing can name the workspace, because the only layer that could own
      * `package.json`'s `name` has no way to know it until scaffold time. */
-    let merged = variables.render_files(FileSet::build(&layers)?.render());
+    let file_set = FileSet::build(&layers)?;
+    let modes = file_set.modes();
+    let merged = variables.render_files(file_set.render());
 
     let planned: Vec<(&Manifest, &LayerSource)> = entries
         .iter()
@@ -105,7 +107,7 @@ pub fn run_new_to(args: &NewArgs, parent: &Path, out: &mut impl Write) -> Result
         return Ok(());
     }
 
-    write(&root, &plan, &merged)?;
+    write(&root, &plan, &merged, &modes)?;
 
     writeln!(out, "\nScaffolded {} into {}", project, root.display())?;
     finish_installs(out, &installs, &root, args.no_install)?;

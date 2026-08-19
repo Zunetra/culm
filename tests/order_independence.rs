@@ -13,6 +13,10 @@ use serde_json::{Map, Value};
 const SECTIONS: [&str; 3] = ["scripts", "dependencies", "compilerOptions"];
 const ARRAY_ENTRIES: [&str; 5] = ["dist", "bin", "README.md", "src", "LICENSE"];
 const IGNORE_LINES: [&str; 5] = ["node_modules/", "target/", "dist/", ".env", "coverage/"];
+/* Two sequence names, so the property covers layers colliding inside one
+ * sequence and layers contributing to different sequences of the same file. */
+const YAML_KEYS: [&str; 2] = ["packages", "onlyBuiltDependencies"];
+const YAML_ENTRIES: [&str; 5] = ["apps/*", "libs/*", "packages/*", "esbuild", "sharp"];
 
 /* Numbers straddling 2^53, the point where f64 stops being able to tell adjacent
  * integers apart. The middle three collapse onto the same f64, so a comparator
@@ -65,6 +69,7 @@ struct Plan {
     nested: Vec<(usize, String)>,
     array: Vec<Entry>,
     lines: Vec<usize>,
+    yaml: Vec<(usize, usize)>,
 }
 
 fn plan_strategy() -> impl Strategy<Value = Plan> {
@@ -74,13 +79,15 @@ fn plan_strategy() -> impl Strategy<Value = Plan> {
         prop::collection::vec((0usize..4, "[a-z]{1,4}"), 0..4),
         prop::collection::vec(entry_strategy(), 0..4),
         prop::collection::vec(0..IGNORE_LINES.len(), 0..4),
+        prop::collection::vec((0..YAML_KEYS.len(), 0..YAML_ENTRIES.len()), 0..4),
     )
-        .prop_map(|(section, scalars, nested, array, lines)| Plan {
+        .prop_map(|(section, scalars, nested, array, lines, yaml)| Plan {
             section,
             scalars,
             nested,
             array,
             lines,
+            yaml,
         })
 }
 
@@ -121,9 +128,17 @@ fn build_layer(index: usize, plan: &Plan) -> Layer {
         .map(|slot| IGNORE_LINES[*slot].to_owned())
         .collect();
 
+    let mut yaml: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for (key, entry) in &plan.yaml {
+        yaml.entry(YAML_KEYS[*key].to_owned())
+            .or_default()
+            .push(YAML_ENTRIES[*entry].to_owned());
+    }
+
     Layer::new(id)
         .with_merge("package.json", Contribution::JsonDeep(Value::Object(root)))
         .with_merge(".gitignore", Contribution::LineBlock(lines))
+        .with_merge("pnpm-workspace.yaml", Contribution::YamlList(yaml))
 }
 
 /* Every permutation, not a sample: with at most five layers the full set is 120
