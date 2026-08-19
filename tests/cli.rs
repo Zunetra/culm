@@ -293,23 +293,89 @@ fn a_preset_and_a_layer_cannot_be_combined() {
 
 // == The nuxt layer emits an application
 
+/// One application in a workspace gets the layout its own framework's tooling expects.
+/// A developer who asked for Nuxt and nothing else should not have to explain to anyone why their sources sit one directory deeper than every Nuxt project they have seen.
 #[test]
-fn a_nuxt_scaffold_has_an_app_and_a_test() {
+fn one_application_is_laid_out_like_an_ordinary_project() {
     let dir = tempfile::tempdir().expect("a temp dir");
     run_new(&args("demo", &["frontend/nuxt"]), dir.path()).expect("the scaffold runs");
 
     let root = dir.path().join("demo");
     for path in [
         "nuxt.config.ts",
-        "src/nuxt/app.vue",
-        "src/nuxt/error.vue",
-        "src/nuxt/pages/index.vue",
-        "src/nuxt/layouts/default.vue",
-        "vitest.nuxt.config.ts",
-        "test/nuxt/index.spec.ts",
+        "src/app.vue",
+        "src/error.vue",
+        "src/pages/index.vue",
+        "src/layouts/default.vue",
+        "vitest.config.ts",
+        "test/index.spec.ts",
     ] {
         assert!(root.join(path).is_file(), "{path} is missing");
     }
+
+    let manifest = fs::read_to_string(root.join("package.json")).expect("a package.json");
+    assert!(
+        manifest.contains("\"dev\""),
+        "the only app should own `dev`"
+    );
+    assert!(
+        !manifest.contains("dev:nuxt"),
+        "nothing to disambiguate from: {manifest}"
+    );
+}
+
+/// A second application is what forces the namespacing, and it has to force it for both.
+/// Two layers writing different values to `scripts.dev`, or both owning `vitest.config.ts`, is a hard error rather than something to resolve silently.
+#[test]
+fn a_second_application_namespaces_both_of_them() {
+    let dir = tempfile::tempdir().expect("a temp dir");
+    run_new(
+        &args(
+            "demo",
+            &["shape/monorepo", "frontend/nuxt", "frontend/react-vite"],
+        ),
+        dir.path(),
+    )
+    .expect("the scaffold runs");
+
+    let root = dir.path().join("demo");
+    for path in [
+        "src/nuxt/app.vue",
+        "vitest.nuxt.config.ts",
+        "test/nuxt/index.spec.ts",
+        "src/react-vite/App.tsx",
+        "vitest.react-vite.config.ts",
+    ] {
+        assert!(root.join(path).is_file(), "{path} is missing");
+    }
+
+    let manifest = fs::read_to_string(root.join("package.json")).expect("a package.json");
+    assert!(manifest.contains("dev:nuxt"), "{manifest}");
+    assert!(manifest.contains("dev:react-vite"), "{manifest}");
+    assert!(
+        !manifest.contains("\"dev\":"),
+        "an unqualified `dev` cannot mean two things: {manifest}"
+    );
+}
+
+/// The case a shape check alone gets wrong.
+/// A single-app workspace still takes one frontend and one backend, which is two layers wanting `dev`, so what decides is how many applications there are rather than the shape.
+#[test]
+fn a_frontend_beside_a_backend_is_namespaced_in_a_single_app() {
+    let dir = tempfile::tempdir().expect("a temp dir");
+    run_new(
+        &args("demo", &["frontend/nuxt", "backend/fastify"]),
+        dir.path(),
+    )
+    .expect("the scaffold runs");
+
+    let manifest =
+        fs::read_to_string(dir.path().join("demo").join("package.json")).expect("a package.json");
+    assert!(manifest.contains("dev:nuxt"), "{manifest}");
+    assert!(
+        !manifest.contains("\"dev\":"),
+        "the frontend must not claim the bare `dev`: {manifest}"
+    );
 }
 
 /// Scaffolding on top of existing work would overwrite files the user did not name.

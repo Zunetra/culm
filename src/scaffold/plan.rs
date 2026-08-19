@@ -30,13 +30,18 @@ impl CopyPlan {
     }
 
     /// Plans every `[[files]]` entry of every manifest.
-    /// Each manifest arrives with the source its `from` paths resolve against, which is what lets the same plan be built from the compiled-in tree or from a directory on disk.
-    pub fn build<'a, I>(manifests: I, variables: &Variables) -> Result<Self, ScaffoldError>
+    ///
+    /// Each manifest arrives with the source its `from` paths resolve against,
+    /// which is what lets the same plan be built from the compiled-in tree or
+    /// from a directory on disk, and with its own variables, because a layer's
+    /// templates refer to a directory whose name depends on how many
+    /// applications the selection holds.
+    pub fn build<'a, I>(manifests: I) -> Result<Self, ScaffoldError>
     where
-        I: IntoIterator<Item = (&'a Manifest, &'a LayerSource)>,
+        I: IntoIterator<Item = (&'a Manifest, &'a LayerSource, &'a Variables)>,
     {
         let mut plan = Self::new();
-        for (manifest, source) in manifests {
+        for (manifest, source, variables) in manifests {
             plan.add(manifest, source, variables)?;
         }
         Ok(plan)

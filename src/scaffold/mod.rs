@@ -7,10 +7,12 @@
 
 pub mod error;
 pub mod interpolate;
+pub mod layout;
 pub mod plan;
 pub mod write;
 
 pub use error::ScaffoldError;
 pub use interpolate::Variables;
+pub use layout::variables;
 pub use plan::{CopyPlan, PlannedFile};
 pub use write::write;

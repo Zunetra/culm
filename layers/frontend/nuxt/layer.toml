@@ -12,12 +12,12 @@ default = false
 strategy = "json-deep"
 target = "package.json"
 [merge.value.scripts]
-"dev:nuxt" = "nuxt dev"
-"build:nuxt" = "nuxt build"
-"preview:nuxt" = "nuxt preview"
-"generate:nuxt" = "nuxt generate"
-"typecheck:nuxt" = "nuxt typecheck"
-"test:nuxt" = "vitest run --config vitest.nuxt.config.ts"
+"dev{{script_suffix}}" = "nuxt dev"
+"build{{script_suffix}}" = "nuxt build"
+"preview{{script_suffix}}" = "nuxt preview"
+"generate{{script_suffix}}" = "nuxt generate"
+"typecheck{{script_suffix}}" = "nuxt typecheck"
+"test{{script_suffix}}" = "vitest run --config vitest{{config_suffix}}.config.ts"
 
 [[merge]]
 strategy = "line-block"
@@ -33,35 +33,35 @@ to = "nuxt.config.ts"
 
 [[files]]
 from = "files/app.vue"
-to = "src/nuxt/app.vue"
+to = "{{app_dir}}/app.vue"
 
 [[files]]
 from = "files/default.vue"
-to = "src/nuxt/layouts/default.vue"
+to = "{{app_dir}}/layouts/default.vue"
 
 [[files]]
 from = "files/index.vue"
-to = "src/nuxt/pages/index.vue"
+to = "{{app_dir}}/pages/index.vue"
 
 # Nuxt renders this in place of the whole application, so it lives beside
 # app.vue rather than under pages.
 [[files]]
 from = "files/error.vue"
-to = "src/nuxt/error.vue"
+to = "{{app_dir}}/error.vue"
 
 # Scoped to srcDir rather than claiming the root tsconfig.json, which is a
 # whole-workspace file this layer has no business owning.
 [[files]]
 from = "files/tsconfig.json"
-to = "src/nuxt/tsconfig.json"
+to = "{{app_dir}}/tsconfig.json"
 
 [[files]]
 from = "files/vitest.nuxt.config.ts"
-to = "vitest.nuxt.config.ts"
+to = "vitest{{config_suffix}}.config.ts"
 
 [[files]]
 from = "files/index.spec.ts"
-to = "test/nuxt/index.spec.ts"
+to = "{{test_dir}}/index.spec.ts"
 
 [[install]]
 manager = "pnpm"

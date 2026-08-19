@@ -9,11 +9,11 @@ default = false
 strategy = "json-deep"
 target = "package.json"
 [merge.value.scripts]
-"dev:svelte" = "vite dev --config vite.svelte.config.ts"
-"build:svelte" = "vite build --config vite.svelte.config.ts"
-"preview:svelte" = "vite preview --config vite.svelte.config.ts"
-"test:svelte" = "vitest run --config vitest.svelte.config.ts"
-"check:svelte" = "svelte-kit sync && svelte-check --tsconfig ./src/svelte/tsconfig.json"
+"dev{{script_suffix}}" = "vite dev --config vite{{config_suffix}}.config.ts"
+"build{{script_suffix}}" = "vite build --config vite{{config_suffix}}.config.ts"
+"preview{{script_suffix}}" = "vite preview --config vite{{config_suffix}}.config.ts"
+"test{{script_suffix}}" = "vitest run --config vitest{{config_suffix}}.config.ts"
+"check{{script_suffix}}" = "svelte-kit sync && svelte-check --tsconfig ./{{app_dir}}/tsconfig.json"
 
 [[merge]]
 strategy = "line-block"
@@ -45,42 +45,42 @@ to = "svelte.config.js"
 
 [[files]]
 from = "files/vite.config.ts"
-to = "vite.svelte.config.ts"
+to = "vite{{config_suffix}}.config.ts"
 
 [[files]]
 from = "files/app.html"
-to = "src/svelte/app.html"
+to = "{{app_dir}}/app.html"
 
 [[files]]
 from = "files/+page.svelte"
-to = "src/svelte/routes/+page.svelte"
+to = "{{app_dir}}/routes/+page.svelte"
 
 # SvelteKit renders this in place of the route that failed, so it sits beside
 # the page rather than under it.
 [[files]]
 from = "files/+error.svelte"
-to = "src/svelte/routes/+error.svelte"
+to = "{{app_dir}}/routes/+error.svelte"
 
 # Under lib rather than beside the routes, so a component reaches it by the
 # $lib alias instead of a relative path that changes with nesting.
 [[files]]
 from = "files/config.ts"
-to = "src/svelte/lib/config.ts"
+to = "{{app_dir}}/lib/config.ts"
 
 # Scoped to the layer's own directory rather than claiming the root
 # tsconfig.json, which is a whole-workspace file this layer has no business
 # owning.
 [[files]]
 from = "files/tsconfig.json"
-to = "src/svelte/tsconfig.json"
+to = "{{app_dir}}/tsconfig.json"
 
 [[files]]
 from = "files/vitest.svelte.config.ts"
-to = "vitest.svelte.config.ts"
+to = "vitest{{config_suffix}}.config.ts"
 
 [[files]]
 from = "files/page.spec.ts"
-to = "test/svelte/page.spec.ts"
+to = "{{test_dir}}/page.spec.ts"
 
 # ESLint's default match covers .js, .mjs and .cjs only, so this layer's sources
 # would be silently unlinted. The root config finds this file by its name rather

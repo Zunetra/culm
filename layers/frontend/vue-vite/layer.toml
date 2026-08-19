@@ -12,11 +12,11 @@ default = false
 strategy = "json-deep"
 target = "package.json"
 [merge.value.scripts]
-"dev:vue-vite" = "vite --config vite.vue-vite.config.ts"
-"build:vue-vite" = "vite build --config vite.vue-vite.config.ts"
-"preview:vue-vite" = "vite preview --config vite.vue-vite.config.ts"
-"typecheck:vue-vite" = "vue-tsc -p src/vue-vite/tsconfig.json"
-"test:vue-vite" = "vitest run --config vitest.vue-vite.config.ts"
+"dev{{script_suffix}}" = "vite --config vite{{config_suffix}}.config.ts"
+"build{{script_suffix}}" = "vite build --config vite{{config_suffix}}.config.ts"
+"preview{{script_suffix}}" = "vite preview --config vite{{config_suffix}}.config.ts"
+"typecheck{{script_suffix}}" = "vue-tsc -p {{app_dir}}/tsconfig.json"
+"test{{script_suffix}}" = "vitest run --config vitest{{config_suffix}}.config.ts"
 
 [[merge]]
 strategy = "line-block"
@@ -46,48 +46,48 @@ packages = [
 # its own config file rather than fighting over vite.config.ts.
 [[files]]
 from = "files/vite.config.ts"
-to = "vite.vue-vite.config.ts"
+to = "vite{{config_suffix}}.config.ts"
 
 # The Vite root is the directory holding index.html, so the entry document lives
 # beside the sources rather than at the workspace root.
 [[files]]
 from = "files/index.html"
-to = "src/vue-vite/index.html"
+to = "{{app_dir}}/index.html"
 
 [[files]]
 from = "files/main.ts"
-to = "src/vue-vite/main.ts"
+to = "{{app_dir}}/main.ts"
 
 # The error boundary is in the root component rather than a separate one,
 # because onErrorCaptured only sees what is below it.
 [[files]]
 from = "files/App.vue"
-to = "src/vue-vite/App.vue"
+to = "{{app_dir}}/App.vue"
 
 # The environment is read in one module so a component cannot reach for a
 # variable nothing documents.
 [[files]]
 from = "files/config.ts"
-to = "src/vue-vite/config.ts"
+to = "{{app_dir}}/config.ts"
 
 [[files]]
 from = "files/tsconfig.json"
-to = "src/vue-vite/tsconfig.json"
+to = "{{app_dir}}/tsconfig.json"
 
 # Without a shim TypeScript cannot resolve a .vue import at all, so the entry
 # point and everything it reaches is untyped. A meta framework generates this
 # during prepare; with no meta framework the layer ships it.
 [[files]]
 from = "files/env.d.ts"
-to = "src/vue-vite/env.d.ts"
+to = "{{app_dir}}/env.d.ts"
 
 [[files]]
 from = "files/vitest.vue-vite.config.ts"
-to = "vitest.vue-vite.config.ts"
+to = "vitest{{config_suffix}}.config.ts"
 
 [[files]]
 from = "files/App.spec.ts"
-to = "test/vue-vite/App.spec.ts"
+to = "{{test_dir}}/App.spec.ts"
 
 # ESLint's default match covers .js, .mjs and .cjs only, so this layer's sources
 # would be silently unlinted. The root config finds this file by its name rather

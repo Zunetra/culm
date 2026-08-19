@@ -9,11 +9,11 @@ default = false
 strategy = "json-deep"
 target = "package.json"
 [merge.value.scripts]
-"dev:next" = "next dev"
-"build:next" = "next build"
-"start:next" = "next start"
-"typecheck:next" = "tsc -p src/app/tsconfig.json"
-"test:next" = "vitest run --config vitest.next.config.ts"
+"dev{{script_suffix}}" = "next dev"
+"build{{script_suffix}}" = "next build"
+"start{{script_suffix}}" = "next start"
+"typecheck{{script_suffix}}" = "tsc -p src/app/tsconfig.json"
+"test{{script_suffix}}" = "vitest run --config vitest{{config_suffix}}.config.ts"
 
 [[merge]]
 strategy = "line-block"
@@ -77,11 +77,11 @@ to = "src/app/tsconfig.json"
 
 [[files]]
 from = "files/vitest.next.config.ts"
-to = "vitest.next.config.ts"
+to = "vitest{{config_suffix}}.config.ts"
 
 [[files]]
 from = "files/page.spec.tsx"
-to = "test/next/page.spec.tsx"
+to = "{{test_dir}}/page.spec.tsx"
 
 # ESLint's default match covers .js, .mjs and .cjs only, so this layer's sources
 # would be silently unlinted. The root config finds this file by its name rather

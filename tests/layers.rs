@@ -18,19 +18,42 @@ fn shipped() -> Catalog {
     Catalog::load(&layers_root()).unwrap_or_else(|e| panic!("the shipped layers do not load: {e}"))
 }
 
-/// Every entry, owned, so a test can iterate without holding the catalog open.
+/// Every entry, owned, with the scaffold's variables already substituted into its manifest.
+///
+/// Interpolated rather than raw because a raw manifest is not a thing culm ever
+/// merges or writes: paths and script names carry placeholders until a
+/// selection settles the layout. Rendered through the real layout logic over
+/// the whole catalog rather than a table restated here, so these tests cannot
+/// drift from what a scaffold actually does. The catalog holds many
+/// applications, so the variables come out namespaced, which is the case these
+/// tests are about; the bare form arises only when a workspace holds exactly
+/// one application, and that is covered end to end in `tests/cli.rs`.
+///
+/// Nothing an identity check reads is touched by this: `id`, `category`, and
+/// the install lists carry no placeholders.
 fn entries() -> Vec<CatalogEntry> {
-    shipped().entries().cloned().collect()
+    let catalog = shipped();
+    let raw: Vec<&CatalogEntry> = catalog.entries().collect();
+    let variables = culm::scaffold::variables(&raw, "demo");
+    raw.iter()
+        .zip(&variables)
+        .map(|(entry, vars)| CatalogEntry {
+            manifest: entry
+                .interpolated(vars)
+                .unwrap_or_else(|e| panic!("{} does not interpolate: {e}", entry.dir().display())),
+            source: entry.source.clone(),
+        })
+        .collect()
 }
 
 /// Loads a manifest by its category and id, for the tests that need a named layer.
 fn load_layer(category: &str, id: &str) -> Manifest {
-    let id = LayerId::new(format!("{category}/{id}"));
-    shipped()
-        .get(&id)
-        .unwrap_or_else(|| panic!("{id} is not a shipped layer"))
-        .manifest
-        .clone()
+    let wanted = LayerId::new(format!("{category}/{id}"));
+    entries()
+        .into_iter()
+        .map(|entry| entry.manifest)
+        .find(|manifest| manifest.qualified_id() == wanted)
+        .unwrap_or_else(|| panic!("{wanted} is not a shipped layer"))
 }
 
 // == Every shipped manifest is well formed

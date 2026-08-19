@@ -14,7 +14,7 @@ use crate::install;
 use crate::layer::{Catalog, CatalogEntry, LayerSource, Manifest, resolve};
 use crate::merge::{FileSet, LayerId};
 use crate::preset;
-use crate::scaffold::{CopyPlan, Variables, write};
+use crate::scaffold::{self, CopyPlan, Variables, write};
 
 #[derive(Debug, Args)]
 pub struct NewArgs {
@@ -80,24 +80,36 @@ pub fn run_new_to(args: &NewArgs, parent: &Path, out: &mut impl Write) -> Result
     check_destination(&root)?;
 
     /* Everything is assembled and validated before anything touches disk, so a
-     * refusal leaves no half-written directory behind. */
-    let layers = entries
+     * refusal leaves no half-written directory behind.
+     *
+     * The layout is settled before a single manifest is used, because how many
+     * applications the selection holds decides each one's directory and script
+     * names. Interpolating the manifest rather than the output is what lets a
+     * merge value carry a placeholder: substitution happens per layer, before
+     * anything is merged, so two layers still contribute distinct values where
+     * they should and identical ones where they should. */
+    let variables = scaffold::variables(&entries, project);
+    let manifests = entries
         .iter()
-        .map(|entry| entry.manifest.to_layer())
+        .zip(&variables)
+        .map(|(entry, vars)| entry.interpolated(vars))
+        .collect::<Result<Vec<Manifest>, _>>()?;
+
+    let layers = manifests
+        .iter()
+        .map(Manifest::to_layer)
         .collect::<Result<Vec<_>, _>>()?;
-    let variables = Variables::new().with("project_name", project);
-    /* Merged files are interpolated too, not just copied ones. Without this
-     * nothing can name the workspace, because the only layer that could own
-     * `package.json`'s `name` has no way to know it until scaffold time. */
     let file_set = FileSet::build(&layers)?;
     let modes = file_set.modes();
-    let merged = variables.render_files(file_set.render());
+    let merged = file_set.render();
 
-    let planned: Vec<(&Manifest, &LayerSource)> = entries
+    let planned: Vec<(&Manifest, &LayerSource, &Variables)> = manifests
         .iter()
-        .map(|entry| (&entry.manifest, &entry.source))
+        .zip(entries.iter())
+        .zip(&variables)
+        .map(|((manifest, entry), vars)| (manifest, &entry.source, vars))
         .collect();
-    let plan = CopyPlan::build(planned, &variables)?;
+    let plan = CopyPlan::build(planned)?;
     let installs = install::plan(&entries)?;
 
     summarise(out, &entries, plan.len(), merged.len(), &root)?;

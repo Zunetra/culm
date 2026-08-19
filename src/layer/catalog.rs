@@ -9,6 +9,10 @@ use super::error::LayerError;
 use super::manifest::Manifest;
 use super::source::{LayerSource, embedded_file, embedded_manifests};
 use crate::merge::LayerId;
+use crate::scaffold::Variables;
+
+/// The file a layer is defined by. Named once so the walk and the re-read cannot disagree.
+const MANIFEST: &str = "layer.toml";
 
 /// One layer, from whichever tree it was loaded out of.
 /// The source travels with the manifest because `[[files]]` paths are relative to the layer's own directory, and the copy plan cannot resolve them otherwise.
@@ -22,6 +26,26 @@ impl CatalogEntry {
     /// The layer's own directory, for messages and for tests that reason about layout.
     pub fn dir(&self) -> &Path {
         self.source.dir()
+    }
+
+    /// This layer's manifest with the scaffold's variables substituted throughout.
+    ///
+    /// Rendered over the manifest text and re-parsed, rather than walked field
+    /// by field, so every field is covered by construction: a merge strategy
+    /// added later needs no change here to interpolate, and none can be
+    /// forgotten. The substituted values are culm's own, derived from the
+    /// layer id and the shape of the selection, so they cannot carry a quote
+    /// into the TOML that a hand-written value might.
+    pub fn interpolated(&self, variables: &Variables) -> Result<Manifest, LayerError> {
+        let path = self.dir().join(MANIFEST);
+        let raw = self
+            .source
+            .read(Path::new(MANIFEST))
+            .ok_or_else(|| LayerError::Unreadable {
+                path: path.clone(),
+                message: "the layer's manifest is no longer readable".to_owned(),
+            })?;
+        Manifest::parse(&path.display().to_string(), &variables.render(&raw))
     }
 }
 
@@ -144,7 +168,7 @@ fn collect(dir: &Path, found: &mut Vec<PathBuf>) -> Result<(), LayerError> {
             .path();
         if path.is_dir() {
             collect(&path, found)?;
-        } else if path.file_name().is_some_and(|name| name == "layer.toml") {
+        } else if path.file_name().is_some_and(|name| name == MANIFEST) {
             found.push(path);
         }
     }

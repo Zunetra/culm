@@ -24,7 +24,16 @@ fn catalog() -> Catalog {
 /// Merges, plans, and writes an already-settled selection into `root`.
 /// This is the whole pipeline a scaffold runs, which is the point: the pieces are tested apart elsewhere, and this proves they fit together.
 fn scaffold_entries(root: &Path, entries: &[&CatalogEntry], project: &str) {
-    let manifests: Vec<Manifest> = entries.iter().map(|e| e.manifest.clone()).collect();
+    /* The same order the CLI uses: settle the layout from the whole selection,
+     * interpolate each manifest with its own variables, and only then merge.
+     * A helper that took a shortcut here would be testing a pipeline nobody
+     * runs. */
+    let variables = culm::scaffold::variables(entries, project);
+    let manifests: Vec<Manifest> = entries
+        .iter()
+        .zip(&variables)
+        .map(|(entry, vars)| entry.interpolated(vars).expect("the manifest interpolates"))
+        .collect();
     validate_selection(&manifests).expect("the selection is legal");
 
     let layers: Vec<_> = manifests
@@ -35,13 +44,13 @@ fn scaffold_entries(root: &Path, entries: &[&CatalogEntry], project: &str) {
     let modes = file_set.modes();
     let merged = file_set.render();
 
-    let variables = Variables::new().with("project_name", project);
-    let planned: Vec<(&Manifest, &LayerSource)> = manifests
+    let planned: Vec<(&Manifest, &LayerSource, &Variables)> = manifests
         .iter()
         .zip(entries.iter())
-        .map(|(manifest, entry)| (manifest, &entry.source))
+        .zip(&variables)
+        .map(|((manifest, entry), vars)| (manifest, &entry.source, vars))
         .collect();
-    let plan = CopyPlan::build(planned, &variables).expect("the copy plan is buildable");
+    let plan = CopyPlan::build(planned).expect("the copy plan is buildable");
 
     write(root, &plan, &merged, &modes).expect("the workspace writes");
 }
@@ -200,9 +209,10 @@ to = "../../../.ssh/authorized_keys"
 "#;
     let manifest = Manifest::parse("hostile/layer.toml", source).expect("it parses");
     let prettier = layer_source("quality", "prettier");
-    let planned = vec![(&manifest, &prettier)];
+    let vars = Variables::new();
+    let planned = vec![(&manifest, &prettier, &vars)];
 
-    match CopyPlan::build(planned, &Variables::new()) {
+    match CopyPlan::build(planned) {
         Err(ScaffoldError::EscapesRoot { layer, .. }) => {
             assert_eq!(layer.as_str(), "quality/hostile");
         }
@@ -222,9 +232,10 @@ to = "whatever.toml"
 "#;
     let manifest = Manifest::parse("typo/layer.toml", source).expect("it parses");
     let prettier = layer_source("quality", "prettier");
-    let planned = vec![(&manifest, &prettier)];
+    let vars = Variables::new();
+    let planned = vec![(&manifest, &prettier, &vars)];
 
-    match CopyPlan::build(planned, &Variables::new()) {
+    match CopyPlan::build(planned) {
         Err(ScaffoldError::TemplateMissing { layer, .. }) => {
             assert_eq!(layer.as_str(), "quality/typo");
         }
