@@ -45,23 +45,47 @@ jobs:
         include:
           # Only layers that emit an application belong here. A manifest-only
           # layer would fail for a reason that has nothing to do with upstream,
-          # which would make a red run mean nothing. Add each frontend to this
-          # list as it reaches the decision 19 bar.
+          # which would make a red run mean nothing.
+          #
+          # `lint` and `format:check` are in every list because they are the two
+          # that fail silently. A flat config claims .js, .mjs and .cjs and
+          # nothing else, so a workspace of TypeScript can be entirely unlinted
+          # and still exit 0, and a build passing tells you nothing about it.
           - layer: frontend/nuxt
             toolchain: node
-            scripts: build:nuxt test:nuxt
+            scripts: build:nuxt test:nuxt typecheck:nuxt lint format:check
+
+          - layer: frontend/next
+            toolchain: node
+            scripts: build:next test:next typecheck:next lint format:check
+
+          - layer: frontend/astro
+            toolchain: node
+            scripts: build:astro test:astro check:astro lint format:check
+
+          - layer: frontend/svelte
+            toolchain: node
+            scripts: build:svelte test:svelte check:svelte lint format:check
+
+          - layer: frontend/react-vite
+            toolchain: node
+            scripts: build:react-vite test:react-vite typecheck:react-vite lint format:check
+
+          - layer: frontend/vue-vite
+            toolchain: node
+            scripts: build:vue-vite test:vue-vite typecheck:vue-vite lint format:check
 
           - layer: backend/express
             toolchain: node
-            scripts: test:express
+            scripts: test:express lint format:check
 
           - layer: backend/fastify
             toolchain: node
-            scripts: test:fastify
+            scripts: test:fastify lint format:check
 
           - layer: backend/nestjs
             toolchain: node
-            scripts: build:nestjs test:nestjs
+            scripts: build:nestjs test:nestjs typecheck:nestjs lint format:check
 
           - layer: backend/axum
             toolchain: rust
@@ -79,12 +103,12 @@ jobs:
       - uses: pnpm/action-setup@v4
         if: matrix.toolchain == 'node'
         with:
-          version: 10
+          version: 11
 
       - uses: actions/setup-node@v4
         if: matrix.toolchain == 'node'
         with:
-          node-version: 22
+          node-version: 24
 
       # Release rather than debug: this is the binary a user would have, and
       # the layer tree is compiled into it, so a debug build would be testing a

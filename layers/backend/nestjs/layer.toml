@@ -2,7 +2,7 @@
 
 id = "nestjs"
 category = "backend"
-requires = ["toolchain/node-pnpm"]
+requires = ["toolchain/node-pnpm", "quality/eslint"]
 default = false
 
 # Namespaced by layer id for the same reason the frontends are: a monorepo can
@@ -21,6 +21,7 @@ target = "package.json"
 "dev:nestjs" = "nest start --watch"
 "build:nestjs" = "nest build"
 "start:nestjs" = "node dist/nestjs/main.js"
+"typecheck:nestjs" = "tsc -p tsconfig.nestjs.json --noEmit"
 "test:nestjs" = "node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.nestjs.config.js"
 
 [[merge]]
@@ -92,3 +93,18 @@ packages = [
   "supertest",
   "@types/supertest",
 ]
+
+# ESLint's default match covers .js, .mjs and .cjs only, so this layer's sources
+# would be silently unlinted. The root config finds this file by its name rather
+# than by importing it, so neither layer names the other.
+[[files]]
+from = "files/eslint.config.mjs"
+to = "eslint.nestjs.config.mjs"
+
+# The parsers and rules ESLint needs for this layer's file types. Declared here
+# rather than by the eslint layer, which has no way to know what languages a
+# workspace ended up holding.
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["typescript-eslint"]

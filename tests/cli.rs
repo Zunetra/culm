@@ -89,7 +89,7 @@ fn a_node_selection_is_scaffolded() {
 }
 
 /// The project name reaches a copied template, not just the directory name.
-/// Merged files are deliberately not covered here: nothing interpolates them, which is recorded as an open gap rather than asserted as behaviour.
+/// Merged files are covered by `the_root_package_json_is_named_after_the_project`, since the two go through different code paths.
 #[test]
 fn the_project_name_is_interpolated() {
     let dir = tempfile::tempdir().expect("a temp dir");
@@ -343,4 +343,23 @@ fn an_empty_destination_is_accepted() {
 fn a_project_name_that_is_a_path_is_refused() {
     let dir = tempfile::tempdir().expect("a temp dir");
     assert!(run_new(&args("../escape", &["backend/axum"]), dir.path()).is_err());
+}
+
+/// The workspace carries the project's name, not just its directory.
+/// Merged files were not interpolated at all until this was fixed, so nothing could own a key whose value is only known at scaffold time.
+#[test]
+fn the_root_package_json_is_named_after_the_project() {
+    let dir = tempfile::tempdir().expect("a temp dir");
+    run_new(&args("klassivox", &["frontend/nuxt"]), dir.path()).expect("the scaffold runs");
+
+    let manifest = fs::read_to_string(dir.path().join("klassivox").join("package.json"))
+        .expect("a package.json is written");
+    assert!(
+        manifest.contains("\"name\": \"klassivox\""),
+        "the root manifest is unnamed: {manifest}"
+    );
+    assert!(
+        !manifest.contains("{{project_name}}"),
+        "a placeholder survived into a merged file"
+    );
 }

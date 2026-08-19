@@ -5,6 +5,7 @@
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
+use culm::banner;
 use culm::cli::{NewArgs, run_new};
 
 #[derive(Parser)]
@@ -25,6 +26,10 @@ enum Command {
  * needs a sentence. */
 fn main() -> ExitCode {
     let cli = Cli::parse();
+
+    /* After parsing, so `--help` and `--version` stay clean, and so a bad
+     * argument is rejected before anything is drawn. */
+    banner::print();
 
     let result = match &cli.command {
         Command::New(args) => match std::env::current_dir() {

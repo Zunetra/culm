@@ -85,9 +85,12 @@ pub fn run_new_to(args: &NewArgs, parent: &Path, out: &mut impl Write) -> Result
         .iter()
         .map(|entry| entry.manifest.to_layer())
         .collect::<Result<Vec<_>, _>>()?;
-    let merged = FileSet::build(&layers)?.render();
-
     let variables = Variables::new().with("project_name", project);
+    /* Merged files are interpolated too, not just copied ones. Without this
+     * nothing can name the workspace, because the only layer that could own
+     * `package.json`'s `name` has no way to know it until scaffold time. */
+    let merged = variables.render_files(FileSet::build(&layers)?.render());
+
     let planned: Vec<(&Manifest, &LayerSource)> = entries
         .iter()
         .map(|entry| (&entry.manifest, &entry.source))

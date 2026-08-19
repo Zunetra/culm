@@ -468,25 +468,35 @@ compiled into the binary by `include_dir` with `Catalog::load` kept as
 the `--layers-dir` escape hatch. `culm new`, non-interactive, in
 `src/cli/`. The install step in `src/install/`, running `pnpm add` and
 `cargo add` in the generated workspace, with `--no-install` printing the
-plan. Presets in `src/preset/`, TOML, compiled in the same way.
+plan. Presets in `src/preset/`, TOML, compiled in the same way. The
+startup banner in `src/banner.rs`, printed after argument parsing and
+suppressed when stdout is not a terminal, when `NO_COLOR` is set, or when
+`CULM_NO_BANNER` is set.
 
 **What does not exist yet.** The wizard. Git URL presets, and saving a
 run as a preset. The `hook-script` and `yaml-steps` strategies.
 Telemetry. The runner half. The `infra` and `editor` layers, which have
-categories and no members. Five of the six frontends, which are
-manifest-only. There is no ordinary CI workflow either: `.github/` holds
-the template matrix and nothing else, so the clippy gate is still run by
-hand.
+categories and no members. There is no ordinary CI workflow either:
+`.github/` holds the template matrix and nothing else, so the clippy gate
+is still run by hand. **No generated workspace has ever been installed
+and built.** Every frontend is asserted by scaffolding it, not by running
+its dev server or its test, so the templates are correct as far as the
+merge engine and a reading can tell and no further.
 
 **The order from here.**
 
-1. `frontend/next`, `astro`, `react-vite`, `vue-vite`, `svelte` to the
-   decision 19 bar. `frontend/nuxt` is the reference; the others emit
-   scripts without an application.
+1. Prove one generated workspace installs and builds, end to end, by
+   hand. Every layer is currently correct only on paper. This is the
+   cheapest place left to find a wrong package name or a config key that
+   moved, and it is what the nightly matrix later automates.
 2. The `infra` and `editor` layers: docker-compose, dockerfile,
    github-actions, husky, commitlint, vscode, editorconfig.
 3. The wizard. Deliberately last: it is the part everyone builds first
    and the part that matters least, and flags have to work anyway.
+
+All six frontends reached the decision 19 bar on 2026-08-18. Each ships a
+runtime-configured entry page, an error boundary, a scoped tsconfig, a
+vitest config named for the layer, and one component test.
 
 The order actually followed so far was an interleave rather than a
 sequence: layers to the quality bar, then the CLI, then the installs,
@@ -538,9 +548,45 @@ upstream, which would make a red run mean nothing.
 
 ## Traps already identified, do not rediscover
 
+- **A layer's `tsconfig.json` goes inside that layer's own source
+  directory, and is never renamed.** Two frontends cannot both own the
+  root `tsconfig.json`, so the obvious escape is a distinct name at the
+  root, such as `tsconfig.next.json`. That is worse than the collision it
+  avoids: an editor's TypeScript server finds a project only by walking
+  up from the open file to something called exactly `tsconfig.json`, so a
+  renamed root file leaves every source in that layer with no
+  configuration at all, and `strict` and the path aliases silently do not
+  apply. Nothing fails, which is what makes it expensive to find. Where a
+  framework insists on being told, point it at the scoped file:
+  `frontend/next` sets `typescript.tsconfigPath` to
+  `src/app/tsconfig.json`.
 - **Never author a combination of layers.** The moment a special case
   exists for a specific pair, the combinatorial death has started. A kill
   criterion, not a style note.
+- **A layer that contributes to another layer's file declares it in
+  `requires`.** Established 2026-08-19. Contributing to `package.json`
+  already meant requiring `toolchain/node-pnpm`; the same now holds for
+  ESLint. `close_over_requirements` adds a requirement on a layer's
+  behalf when the required layer is a toolchain or is already a default,
+  because neither is a guess, and refuses when it was explicitly opted
+  out rather than overriding the opt-out. Anything else stays an error,
+  so requiring a database still cannot pick one for somebody.
+- **A tool's ignore list is inherited from `.gitignore`, never
+  restated.** Every framework layer already declares its own build output
+  there. ESLint reads it through `includeIgnoreFile`, Prettier through
+  `--ignore-path`. Restating `.next/` in a quality layer would make that
+  layer aware of a framework, and forgetting to restate it is invisible:
+  `lint` passes on a clean checkout and fails forever after the first
+  build.
+- **Flat config lints `.js`, `.mjs` and `.cjs` and nothing else.** A
+  workspace of TypeScript with a stack-agnostic `eslint.config.mjs`
+  reports success having examined one file, its own config. Each layer
+  whose file types ESLint would skip ships an
+  `eslint.<layer-id>.config.mjs` that claims them with `files` globs; the
+  root config discovers those by filename rather than importing them, so
+  no layer names another. Globs must stay scoped to the layer's own
+  directories, which is what keeps fragments disjoint and their load
+  order irrelevant.
 - **Never emit configuration only culm's runner can consume.** Decision
   3.
 - **Never put a version number in a layer template file.** Decision 5.
@@ -553,13 +599,16 @@ upstream, which would make a red run mean nothing.
 
 ## Context a fresh session will not have
 
-- **Merged files are never interpolated.** `Variables::render` runs over
-  copied `[[files]]` only; whatever `FileSet::render()` produces is
-  written verbatim. The visible consequence is that no layer names the
-  root `package.json`, so every scaffolded Node workspace gets one
-  without a `name`. Either a merge value has to interpolate too, or a
-  layer has to own that key. Found while writing `tests/cli.rs`, and
-  deliberately left unfixed because it is a product question.
+- **Merged files are interpolated after the merge, not before it.**
+  `Variables::render_files` runs over what `FileSet::render()` produces,
+  which is what lets `toolchain/node-pnpm` own `name` in the root
+  `package.json`: that value is only knowable at scaffold time, so no
+  layer could have owned the key while merged content was written
+  verbatim. Substituting after the merge rather than before it means two
+  layers contributing the same placeholder still dedupe as identical
+  text, so order independence is untouched. Until 2026-08-18 no merged
+  file was interpolated at all and every generated Node workspace had an
+  unnamed `package.json`.
 - **A cargo install is pointed at the crate its layer ships**, derived in
   `src/install/` from the layer's own `[[files]]` entry ending in
   `Cargo.toml`. The root manifest is a `[workspace]` with no `[package]`,

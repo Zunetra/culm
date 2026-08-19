@@ -28,4 +28,4 @@ to = "eslint.config.mjs"
 [[install]]
 manager = "pnpm"
 dev = true
-packages = ["eslint", "@eslint/js"]
+packages = ["eslint", "@eslint/js", "@eslint/compat"]

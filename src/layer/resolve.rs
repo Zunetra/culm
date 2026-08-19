@@ -37,7 +37,7 @@ pub fn resolve<'c>(
         selected.insert(id.clone(), entry);
     }
 
-    close_over_requirements(catalog, &mut selected)?;
+    close_over_requirements(catalog, &mut selected, &opted_out)?;
     fill_shape(catalog, &mut selected, &opted_out)?;
 
     let shape = shape_of(manifests_of(&selected))?;
@@ -58,14 +58,23 @@ fn lookup<'c>(catalog: &'c Catalog, id: &LayerId) -> Result<&'c CatalogEntry, La
         .ok_or_else(|| LayerError::UnknownLayer { id: id.clone() })
 }
 
-/* Only a toolchain is added on a layer's behalf. Node and pnpm follow any JS
- * app and Rust and cargo follow any Rust one, and both answers are forced, so
- * asking would be theatre. Everything else stays an error: `backend/actix`
- * requires `data/sea-orm`, and quietly choosing somebody's database for them
- * is a guess dressed up as an implication. */
+/* Two kinds of requirement are added on a layer's behalf. A toolchain, because
+ * Node and pnpm follow any JS app and Rust and cargo follow any Rust one, and
+ * both answers are forced, so asking would be theatre. And a layer that is
+ * already a default, because it was arriving anyway and requiring it only
+ * settles the order it arrives in.
+ *
+ * Everything else stays an error: `backend/actix` requires `data/sea-orm`, and
+ * quietly choosing somebody's database for them is a guess dressed up as an
+ * implication.
+ *
+ * An explicit opt-out still wins over both. Adding a layer the user asked not
+ * to have would make `--without` silently advisory, so the contradiction is
+ * reported instead. */
 fn close_over_requirements<'c>(
     catalog: &'c Catalog,
     selected: &mut BTreeMap<LayerId, &'c CatalogEntry>,
+    opted_out: &BTreeSet<&LayerId>,
 ) -> Result<(), LayerError> {
     let mut pending: Vec<LayerId> = selected.keys().cloned().collect();
 
@@ -77,7 +86,9 @@ fn close_over_requirements<'c>(
                 continue;
             }
             let candidate = lookup(catalog, &required)?;
-            if candidate.manifest.category != Category::Toolchain {
+            let implied =
+                candidate.manifest.category == Category::Toolchain || candidate.manifest.default;
+            if !implied || opted_out.contains(&required) {
                 return Err(LayerError::MissingRequirement {
                     layer: id.clone(),
                     requires: required,
@@ -151,9 +162,14 @@ fn add_defaults<'c>(
 }
 
 /* Runner is exactly one and no runner layer is a default, because the right
- * answer is not a property of the runner. `nx` requires node-pnpm, so a
- * Rust-only workspace has exactly one legal runner and it is `none`. Decision
- * 3 keeps our own runner out of this until it has earned the default. */
+ * answer is not a property of the runner. The fallback is always `none`.
+ *
+ * Deriving `nx` from the presence of `toolchain/node-pnpm` was wrong twice
+ * over. It put a task runner into every single-app workspace, which has
+ * nothing to orchestrate across. And it paired two named layers in code, where
+ * the test that forbids a layer from naming another layer cannot see it.
+ * Decision 3 keeps every runner out of the default, ours included, until one
+ * has earned it. */
 fn fill_runner<'c>(
     catalog: &'c Catalog,
     selected: &mut BTreeMap<LayerId, &'c CatalogEntry>,
@@ -164,11 +180,7 @@ fn fill_runner<'c>(
     {
         return Ok(());
     }
-    let wanted = if selected.contains_key(&LayerId::new("toolchain/node-pnpm")) {
-        LayerId::new("runner/nx")
-    } else {
-        LayerId::new("runner/none")
-    };
+    let wanted = LayerId::new("runner/none");
     let entry = lookup(catalog, &wanted)?;
     selected.insert(wanted, entry);
     Ok(())
@@ -357,15 +369,59 @@ mod tests {
         assert!(selection.contains(&"quality/prettier".to_owned()));
     }
 
-    // == The runner
-
+    /* A JS app requires the linter, because it ships lint configuration for
+     * its own file types and that configuration is meaningless without one. */
     #[test]
-    fn a_javascript_workspace_falls_back_to_nx() {
-        assert!(resolved(&["frontend/next"]).contains(&"runner/nx".to_owned()));
+    fn a_required_default_arrives_without_being_asked_for() {
+        assert!(resolved(&["frontend/next"]).contains(&"quality/eslint".to_owned()));
     }
 
-    /* nx requires node-pnpm and runner is exactly one, so a Rust-only
-     * workspace has one legal answer rather than a choice. */
+    /* The opt-out has to outrank the requirement, or `--without` would be
+     * advisory and the contradiction would be resolved silently. */
+    #[test]
+    fn opting_out_of_a_required_default_is_refused_rather_than_ignored() {
+        let catalog = shipped();
+        assert_eq!(
+            resolve(
+                &catalog,
+                &[LayerId::new("frontend/next")],
+                &[LayerId::new("quality/eslint")],
+            ),
+            Err(LayerError::MissingRequirement {
+                layer: LayerId::new("frontend/next"),
+                requires: LayerId::new("quality/eslint"),
+            })
+        );
+    }
+
+    /* Prettier is a default that nothing requires, so opting out still works
+     * exactly as it did. The rule above narrows nothing else. */
+    #[test]
+    fn a_default_nobody_requires_can_still_be_opted_out() {
+        let catalog = shipped();
+        let selection: Vec<String> = resolve(
+            &catalog,
+            &[LayerId::new("frontend/next")],
+            &[LayerId::new("quality/prettier")],
+        )
+        .unwrap()
+        .into_iter()
+        .map(|entry| entry.manifest.qualified_id().to_string())
+        .collect();
+        assert!(!selection.contains(&"quality/prettier".to_owned()));
+    }
+
+    // == The runner
+
+    /* A JavaScript workspace used to derive nx from the toolchain, which meant
+     * every solo app shipped a task runner it had nothing to run across. */
+    #[test]
+    fn a_javascript_workspace_falls_back_to_no_runner() {
+        let selection = resolved(&["frontend/next"]);
+        assert!(selection.contains(&"runner/none".to_owned()));
+        assert!(!selection.contains(&"runner/nx".to_owned()));
+    }
+
     #[test]
     fn a_rust_only_workspace_falls_back_to_no_runner() {
         let selection = resolved(&["backend/axum"]);
@@ -373,9 +429,20 @@ mod tests {
         assert!(!selection.contains(&"runner/nx".to_owned()));
     }
 
+    /* Asserted with nx rather than none, so the test would fail if the
+     * explicit choice were being dropped and the fallback silently agreeing. */
     #[test]
     fn an_explicit_runner_is_not_overridden() {
-        let selection = resolved(&["frontend/next", "runner/none"]);
+        let selection = resolved(&["frontend/next", "runner/nx"]);
+        assert!(selection.contains(&"runner/nx".to_owned()));
+        assert!(!selection.contains(&"runner/none".to_owned()));
+    }
+
+    /* A monorepo is where a runner earns its place, and it is still a choice
+     * rather than something the shape implies. */
+    #[test]
+    fn a_monorepo_does_not_imply_a_runner_either() {
+        let selection = resolved(&["shape/monorepo", "frontend/next", "backend/nestjs"]);
         assert!(selection.contains(&"runner/none".to_owned()));
         assert!(!selection.contains(&"runner/nx".to_owned()));
     }

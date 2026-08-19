@@ -1,0 +1,31 @@
+{
+  "//": "Inside src/app rather than at the workspace root. TypeScript's editor server finds a project by walking up from the open file looking for tsconfig.json and nothing else, so a root file under any other name leaves these sources with no configuration at all. next.config.ts points the compiler here.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "ES2022"],
+    "jsx": "preserve",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "incremental": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "plugins": [{ "name": "next" }],
+    "baseUrl": "..",
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "../../next-env.d.ts",
+    "../../.next/types/**/*.ts"
+  ],
+  "exclude": ["../../node_modules"]
+}

@@ -12,8 +12,8 @@ default = true
 strategy = "json-deep"
 target = "package.json"
 [merge.value.scripts]
-format = "prettier --write ."
-"format:check" = "prettier --check ."
+format = "prettier --write . --ignore-path .gitignore --ignore-path .prettierignore"
+"format:check" = "prettier --check . --ignore-path .gitignore --ignore-path .prettierignore"
 
 [[files]]
 from = "files/.prettierrc"

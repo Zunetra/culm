@@ -2,7 +2,7 @@
 
 id = "nuxt"
 category = "frontend"
-requires = ["toolchain/node-pnpm"]
+requires = ["toolchain/node-pnpm", "quality/eslint"]
 default = false
 
 # `nuxt prepare` is deliberately not contributed as `postinstall`. That key has
@@ -16,6 +16,7 @@ target = "package.json"
 "build:nuxt" = "nuxt build"
 "preview:nuxt" = "nuxt preview"
 "generate:nuxt" = "nuxt generate"
+"typecheck:nuxt" = "nuxt typecheck"
 "test:nuxt" = "vitest run --config vitest.nuxt.config.ts"
 
 [[merge]]
@@ -80,3 +81,18 @@ packages = [
   "@vue/test-utils",
   "happy-dom",
 ]
+
+# ESLint's default match covers .js, .mjs and .cjs only, so this layer's sources
+# would be silently unlinted. The root config finds this file by its name rather
+# than by importing it, so neither layer names the other.
+[[files]]
+from = "files/eslint.config.mjs"
+to = "eslint.nuxt.config.mjs"
+
+# The parsers and rules ESLint needs for this layer's file types. Declared here
+# rather than by the eslint layer, which has no way to know what languages a
+# workspace ended up holding.
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["typescript-eslint", "eslint-plugin-vue"]

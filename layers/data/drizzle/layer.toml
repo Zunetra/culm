@@ -2,7 +2,7 @@
 
 id = "drizzle"
 category = "data"
-requires = ["toolchain/node-pnpm"]
+requires = ["toolchain/node-pnpm", "quality/eslint"]
 default = false
 
 # Namespaced by layer id, like every other script a monorepo can hold more than
@@ -41,3 +41,18 @@ packages = ["drizzle-orm", "postgres"]
 manager = "pnpm"
 dev = true
 packages = ["drizzle-kit"]
+
+# ESLint's default match covers .js, .mjs and .cjs only, so this layer's sources
+# would be silently unlinted. The root config finds this file by its name rather
+# than by importing it, so neither layer names the other.
+[[files]]
+from = "files/eslint.config.mjs"
+to = "eslint.drizzle.config.mjs"
+
+# The parsers and rules ESLint needs for this layer's file types. Declared here
+# rather than by the eslint layer, which has no way to know what languages a
+# workspace ended up holding.
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["typescript-eslint"]

@@ -1,6 +1,7 @@
 // === Interpolation
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 /// The values a template may substitute.
 /// Deliberately a closed set rather than arbitrary user data, so a template cannot come to depend on something the wizard does not ask.
@@ -56,6 +57,22 @@ impl Variables {
 
         out.push_str(rest);
         out
+    }
+
+    /// Interpolates a whole set of already-merged files.
+    ///
+    /// Merged content is substituted after the merge rather than before it, so
+    /// two layers contributing the same placeholder still dedupe as identical
+    /// text. Substitution is per file and deterministic, so this cannot disturb
+    /// the order independence the merge engine guarantees.
+    pub fn render_files(&self, files: BTreeMap<PathBuf, String>) -> BTreeMap<PathBuf, String> {
+        files
+            .into_iter()
+            .map(|(path, body)| {
+                let rendered = self.render(&body);
+                (path, rendered)
+            })
+            .collect()
     }
 }
 

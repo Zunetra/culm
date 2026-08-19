@@ -2,6 +2,10 @@
 
 #![forbid(unsafe_code)]
 
+/// The startup banner.
+/// Prints nothing when stdout is not a terminal, so a scripted run and a captured one stay clean.
+pub mod banner;
+
 /// The commands, as functions.
 /// `main.rs` parses arguments and calls in here, so every command is reachable from a test without a subprocess.
 pub mod cli;

@@ -1,0 +1,8 @@
+{
+  "//": "SvelteKit writes the real compiler options into .svelte-kit/tsconfig.json when it syncs the project. Extending them keeps this file from restating aliases the framework already knows.",
+  "extends": "../../.svelte-kit/tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true
+  }
+}

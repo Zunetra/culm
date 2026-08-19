@@ -209,8 +209,11 @@ pub enum MergeError {
 3. **Frontend apps**, if any.
 4. **Backend apps**, if any.
 5. **Quality tooling**, defaults pre-selected.
-6. **Runner**, defaulting to `nx` until culm's own runner passes its
-   v0.2 check.
+6. **Runner**, defaulting to `none`. Corrected 2026-08-18: this said
+   `nx`, and the resolver derived `nx` from the presence of the Node
+   toolchain, so every single-app JavaScript workspace shipped a task
+   runner with nothing to orchestrate across. No runner is implied by
+   anything else in a selection, culm's own included.
 7. **Infra and editor.**
 
 ### Two hard rules
@@ -226,34 +229,34 @@ pub enum MergeError {
 
 ## 6. Presets
 
-A preset is a name, a layer list, and pre-answered questions.
+A preset is a name, a description, and a layer list.
 
-```yaml
-# culm.preset.yaml
-name: polyglot-monorepo
-description: Nuxt frontend, Axum backend, one workspace, full quality gate.
-shape: monorepo
-layers:
-  - nuxt
-  - axum
-  - prettier
-  - eslint
-  - rustfmt
-  - clippy
-  - husky
-  - commitlint
-  - docker-compose
-  - github-actions
-  - vscode
-runner: nx
-answers:
-  database: postgres
+```toml
+# presets/monorepo.toml
+name = "monorepo"
+description = "A Nuxt front end and an Axum service backed by SQLx, in one workspace. No container, CI or hook layers yet."
+layers = ["shape/monorepo", "frontend/nuxt", "backend/axum", "data/sqlx"]
 ```
 
-- **Shipped in the binary:** `monorepo`, `frontend`, `backend`.
-- **From a git URL:** `culm new myapp --preset github:user/repo`.
+TOML rather than the YAML this section first sketched, per decision 20:
+layers are already TOML, the crate already parses it, and `serde_yaml` is
+archived.
+
+Layers are named by qualified id, `<category>/<id>`, because a bare `none`
+is a legal answer for both shape and runner and the catalog is keyed by
+the qualified form.
+
+A preset carries no `shape` or `runner` key of its own. Both are layers,
+so both go in the list, and resolution fills in whichever is missing.
+Pre-answered questions wait for the wizard, since nothing asks a question
+yet.
+
+- **Shipped in the binary:** `monorepo`, `frontend`, `backend`. Built.
+- **From a git URL:** `culm new myapp --preset github:user/repo`. Not
+  built yet.
 - **Saved locally after a run:** written to
-  `~/.config/culm/presets/<name>.yaml`.
+  `~/.config/culm/presets/<name>.toml`. Not built yet, and it waits on
+  the wizard, since offering to save is a prompt.
 - No hosted registry before v2. See
   [CONTEXT.md](CONTEXT.md#decisions) decision 6.
 
@@ -309,11 +312,26 @@ first-party presets, non-interactive flags only. No wizard yet, and no
 backend layers yet beyond what the Klassivox shape needs. Scaffolds the
 Klassivox shape and the result builds.
 
-Built so far: the merge engine with both strategies and order
-independence proven by property test, and the layer format with
-categories, manifest parsing, and selection validation. Frontend layers
-are in progress. Not started: file copying, interpolation, presets, the
-CLI.
+Built so far, as of 2026-08-18: the merge engine with `json-deep`,
+`line-block`, and `toml-members`, order independence proven by property
+test. The layer format with categories, manifest parsing, and selection
+validation. File copying and `{{project_name}}` interpolation. The
+twenty six layers, compiled into the binary by `include_dir`, with
+`Catalog::load` kept as the `--layers-dir` escape hatch. `culm new` with
+non-interactive flags. The install step, running `pnpm add` and
+`cargo add` with `--no-install` to print the plan instead. The three
+first-party presets.
+
+All six frontends reached the bar on 2026-08-18: `nuxt`, `next`, `astro`,
+`react-vite`, `vue-vite`, `svelte`. Each ships an entry page reading its
+framework's public environment variables, an error boundary, a tsconfig
+scoped to its own directory rather than the workspace root, a vitest
+config named for the layer, and one component test. All six compose into
+a single monorepo with no file collision and no script collision.
+
+Left for v0.1: nothing generated has been installed and built yet. The
+templates are correct as far as the merge engine and a careful reading
+can tell, which is not the same as correct.
 
 **v0.2 (1 week).** Interactive wizard, plan preview and confirmation,
 `toml-members` and `hook-script` and `yaml-steps` strategies.

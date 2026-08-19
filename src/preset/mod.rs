@@ -61,12 +61,13 @@ pub fn all() -> Result<Vec<Preset>, PresetError> {
 
     let mut presets = Vec::new();
     for file in files {
-        presets.push(parse(file.path(), file.contents_utf8().ok_or_else(|| {
-            PresetError::Malformed {
+        presets.push(parse(
+            file.path(),
+            file.contents_utf8().ok_or_else(|| PresetError::Malformed {
                 path: file.path().display().to_string(),
                 message: "the compiled-in preset is not valid UTF-8".to_owned(),
-            }
-        })?)?);
+            })?,
+        )?);
     }
     Ok(presets)
 }

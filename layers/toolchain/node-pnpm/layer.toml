@@ -5,7 +5,9 @@ category = "toolchain"
 default = false
 
 # `private` is the one root key every JS layer can agree on, and they all agree
-# on the same value, so it merges rather than conflicts.
+# on the same value, so it merges rather than conflicts. `name` is owned here
+# for the same reason: the root manifest's identity is a property of the
+# workspace, not of whichever framework happens to be installed in it.
 #
 # `type` is owned here for a different reason. Decision 21 makes every generated
 # workspace ESM, and the module system is a property of the workspace rather
@@ -16,6 +18,7 @@ default = false
 strategy = "json-deep"
 target = "package.json"
 [merge.value]
+name = "{{project_name}}"
 private = true
 type = "module"
 
