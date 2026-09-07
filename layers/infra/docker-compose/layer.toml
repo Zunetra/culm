@@ -1,0 +1,30 @@
+# A compose service around the image `infra/dockerfile` builds.
+#
+# Requires `infra/dockerfile` because `build: .` is meaningless without it;
+# that is a genuine cross-category dependency, not a guess at what else was
+# picked, so it belongs in `requires` rather than being left implicit.
+#
+# What this does not do: add a database service. `data/sqlx`'s
+# `.env.example` line implies Postgres, but naming `data/sqlx` here to add
+# one would be exactly the combination-authoring decision 4 forbids, and
+# there is no generic "a data layer wants a service" signal this layer can
+# read instead. Shipped as the app service alone; a workspace that also
+# picked a data layer adds its own database service by hand.
+
+id = "docker-compose"
+category = "infra"
+requires = ["infra/dockerfile"]
+default = false
+
+[[files]]
+from = "files/docker-compose.yml"
+to   = "docker-compose.yml"
+
+# Documents the port mapping the compose file reads, the same way
+# `data/sqlx` documents `DATABASE_URL`: a committed file naming the
+# variables a workspace needs is the only version of "documentation" that
+# cannot drift out of sync with the code that reads them.
+[[merge]]
+strategy = "line-block"
+target = ".env.example"
+lines = ["APP_PORT=3000"]

@@ -1,0 +1,30 @@
+# GitHub Actions CI for the generated workspace.
+#
+# Distinct from this repository's own .github/workflows/templates.yml, which
+# tests culm's shipped templates and is never touched by a layer. This layer
+# writes .github/workflows/ci.yml into the *scaffolded* workspace.
+#
+# Decision 4 forbids a layer knowing what else was picked, so this layer
+# cannot ask "is toolchain/node-pnpm selected" or "is toolchain/rust-cargo
+# selected". All it can honestly contribute on its own is the one step every
+# job needs regardless of stack: checking the repository out. It claims the
+# `build` job at order = 0 so that step always lands first; the toolchain
+# layers contribute their own setup, build, and test steps to the same job at
+# a higher order. A workspace that selects this layer alone still gets a
+# valid workflow, one that checks out and does nothing further, because
+# `yaml-steps` fixes the trigger and the job skeleton rather than leaving
+# them for whichever layer got there first.
+
+id = "github-actions"
+category = "infra"
+default = false
+
+[[merge]]
+strategy = "yaml-steps"
+target = ".github/workflows/ci.yml"
+job = "build"
+order = 0
+
+[[merge.steps]]
+name = "Checkout"
+uses = "actions/checkout@v4"

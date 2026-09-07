@@ -1,7 +1,7 @@
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 
-import App from "../../src/vue-vite/App.vue";
+import App from "@vue-vite/App.vue";
 
 describe("the application", () => {
   it("names the application", () => {

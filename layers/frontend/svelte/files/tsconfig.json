@@ -1,8 +1,21 @@
 {
-  "//": "SvelteKit writes the real compiler options into .svelte-kit/tsconfig.json when it syncs the project. Extending them keeps this file from restating aliases the framework already knows.",
-  "extends": "../../.svelte-kit/tsconfig.json",
+  "//": "SvelteKit writes the real compiler options into .svelte-kit/tsconfig.json when it syncs the project. Extending them keeps this file from restating aliases the framework already knows. {{to_root}} is the layout's own answer to how far this file sits from the workspace root, so this reaches .svelte-kit/tsconfig.json whether or not the selection namespaced app_dir. TypeScript does not merge `paths` across `extends`, so this file's own `paths` fully replaces the generated one and has to restate $lib alongside the alias it adds. The generated config's own `include` is written relative to .svelte-kit and reaches the whole workspace's src and test trees, not just this layer's, so a second frontend's files would be dragged into this layer's type check; `include` below fully replaces it the same way `paths` does, scoped to this layer's own app_dir and test_dir plus the ambient files SvelteKit generates.",
+  "extends": "{{to_root}}.svelte-kit/tsconfig.json",
   "compilerOptions": {
     "strict": true,
-    "noUncheckedIndexedAccess": true
-  }
+    "noUncheckedIndexedAccess": true,
+    "paths": {
+      "$lib": ["./lib"],
+      "$lib/*": ["./lib/*"],
+      "$app-routes/*": ["./routes/*"]
+    }
+  },
+  "include": [
+    "{{to_root}}.svelte-kit/ambient.d.ts",
+    "{{to_root}}.svelte-kit/env.d.ts",
+    "{{to_root}}.svelte-kit/non-ambient.d.ts",
+    "{{to_root}}.svelte-kit/types/**/$types.d.ts",
+    "**/*",
+    "{{to_root}}{{test_dir}}/**/*.ts"
+  ]
 }

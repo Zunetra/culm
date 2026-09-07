@@ -1,7 +1,7 @@
 import { experimental_AstroContainer as AstroContainer } from "astro/container";
 import { describe, expect, it } from "vitest";
 
-import IndexPage from "../../src/astro/pages/index.astro";
+import IndexPage from "@astro/pages/index.astro";
 
 // The container renders a component to a string without starting a server,
 // which is the only way to assert on a page that has no client runtime.

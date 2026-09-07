@@ -12,7 +12,7 @@ target = "package.json"
 "dev{{script_suffix}}" = "vite dev --config vite{{config_suffix}}.config.ts"
 "build{{script_suffix}}" = "vite build --config vite{{config_suffix}}.config.ts"
 "preview{{script_suffix}}" = "vite preview --config vite{{config_suffix}}.config.ts"
-"test{{script_suffix}}" = "vitest run --config vitest{{config_suffix}}.config.ts"
+"test{{script_suffix}}" = "svelte-kit sync && vitest run --config vitest{{config_suffix}}.config.ts"
 "check{{script_suffix}}" = "svelte-kit sync && svelte-check --tsconfig ./{{app_dir}}/tsconfig.json"
 
 [[merge]]
@@ -30,10 +30,11 @@ packages = [
   "@sveltejs/vite-plugin-svelte",
   "svelte-check",
   "vite",
-  "typescript",
+  "typescript@<6",
   "vitest",
   "@testing-library/svelte",
   "jsdom",
+  "@types/node",
 ]
 
 # Everything SvelteKit discovers by convention sits under src/svelte, which
@@ -81,6 +82,12 @@ to = "vitest{{config_suffix}}.config.ts"
 [[files]]
 from = "files/page.spec.ts"
 to = "{{test_dir}}/page.spec.ts"
+
+# Aliased in by vitest.config.ts in place of $env/dynamic/public, which only
+# the bare svelte plugin's dev-server-less tests cannot reach.
+[[files]]
+from = "files/env-dynamic-public.stub.ts"
+to = "{{test_dir}}/env-dynamic-public.stub.ts"
 
 # ESLint's default match covers .js, .mjs and .cjs only, so this layer's sources
 # would be silently unlinted. The root config finds this file by its name rather

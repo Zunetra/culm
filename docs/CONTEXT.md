@@ -635,6 +635,32 @@ upstream, which would make a red run mean nothing.
   Decision 13.
 - **The runner is expected to possibly die at r0.2.** Planned, not
   failure. [02-runner.md](02-runner.md), section 10.
+- **`typescript` is capped `<6` in every layer that adds it.** Discovered
+  2026-09-05 proving `monorepo` builds end to end: unranged `typescript`
+  resolved to `7.0.2`, and `typescript-eslint@8.69.0` refuses to run
+  against TS 7. TypeScript jumped straight from 5.x to 7.x (the native
+  compiler rewrite), so `<6` is not a stale cap, it names the whole 5.x
+  line on purpose. Lift it once `typescript-eslint` supports TS 7.
+- **`vitest` is capped `<5` in `frontend/nuxt`.** Found 2026-09-05 proving
+  the `nuxt` script `test:nuxt`: `@nuxt/test-utils` only declares a peer
+  on `^4.0.2`, and vitest 5 changed the `vitest/environments` export
+  shape the `"nuxt"` test environment it registers depends on, so an
+  unranged `vitest` breaks that environment outright. Lift once
+  `@nuxt/test-utils` supports vitest 5.
+- **`prisma` is capped `<8` in `data/prisma`.** Found 2026-09-07 proving
+  `data/prisma` end to end: the `prisma` CLI's `latest` dist-tag is a
+  `8.0.0-rc` pre-release of an entirely restructured CLI with no
+  `generate`/`migrate`/`studio` commands, while `@prisma/client`'s `latest`
+  is still on the 7.x line, so an unranged `prisma` pulls a CLI that cannot
+  run this layer's own scripts. Prisma 7 also dropped `datasource.url` from
+  `schema.prisma` in favour of `prisma.config.ts`, which the layer now ships.
+  Lift the cap once a stable (non-`rc`) 8.x CLI ships.
+- **A stock pnpm 11 install blocks `esbuild`'s postinstall script by
+  default** (`ERR_PNPM_IGNORED_BUILDS`), which aborts culm's own
+  `install::run` partway through on any layer selection that pulls it in
+  transitively (Nuxt/Vite do). Not a culm bug, a pnpm default; the escape
+  hatch is `pnpm approve-builds --all` or an `allowBuilds` entry in
+  `pnpm-workspace.yaml`, run by hand in the generated workspace.
 
 ---
 

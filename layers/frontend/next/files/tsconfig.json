@@ -24,8 +24,8 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
-    "../../test/next/**/*.ts",
-    "../../test/next/**/*.tsx",
+    "../../{{test_dir}}/**/*.ts",
+    "../../{{test_dir}}/**/*.tsx",
     "../../next-env.d.ts",
     "../../.next/types/**/*.ts"
   ],

@@ -2,43 +2,55 @@
 
 id = "express"
 category = "backend"
-requires = ["toolchain/node-pnpm"]
+requires = ["toolchain/node-pnpm", "quality/eslint"]
 default = false
 
-# Namespaced by layer id for the same reason the frontends are: a monorepo can
-# hold several backends, and two layers writing different values to one script
-# key is a hard merge error rather than a last-one-wins.
+# {{app_dir}}, {{test_dir}} and {{script_suffix}} are the layout's own answer
+# to how many application layers the selection holds, per docs/CONTEXT.md: a
+# layer never hardcodes its own layout. A workspace holding just this one
+# backend gets the idiomatic `src`, `test` and `dev`; a workspace holding this
+# beside another application gets the namespaced form, because two layers
+# writing different values to the same `package.json` key is a hard merge
+# error rather than a last-one-wins.
 [[merge]]
 strategy = "json-deep"
 target = "package.json"
 [merge.value.scripts]
-"dev:express" = "node --watch src/express/server.js"
-"start:express" = "node src/express/server.js"
-"test:express" = "node --test test/express.test.js"
+"dev{{script_suffix}}" = "node --watch {{app_dir}}/server.js"
+"start{{script_suffix}}" = "node {{app_dir}}/server.js"
+"test{{script_suffix}}" = "node --test {{test_dir}}/express.test.js"
 
 # ESM, per decision 21. This layer still sets no `type` key: that remains a
 # whole-workspace switch that one app has no business making for every app
 # beside it, which is why toolchain/node-pnpm owns it instead.
 [[files]]
 from = "files/server.js"
-to = "src/express/server.js"
+to = "{{app_dir}}/server.js"
 
 [[files]]
 from = "files/app.js"
-to = "src/express/app.js"
+to = "{{app_dir}}/app.js"
 
 [[files]]
 from = "files/config.js"
-to = "src/express/config.js"
+to = "{{app_dir}}/config.js"
 
 [[files]]
 from = "files/errors.js"
-to = "src/express/errors.js"
+to = "{{app_dir}}/errors.js"
 
 # Node's own test runner, so a comprehensive template costs no test dependency.
 [[files]]
 from = "files/health.test.js"
-to = "test/express.test.js"
+to = "{{test_dir}}/express.test.js"
+
+# The root config's default match already covers plain .js, but declares no
+# environment, so this layer's Node globals need declaring here rather than
+# left undetected. The root config finds this file by its name rather than by
+# importing it, so neither layer names the other.
+[[files]]
+from = "files/eslint.config.mjs"
+to = "eslint.express.config.mjs"
 
 [[install]]
 manager = "pnpm"

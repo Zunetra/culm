@@ -28,6 +28,13 @@ fn is_app(category: Category) -> bool {
 /// its framework's own tooling expects; two or more get one namespaced
 /// directory and one namespaced script prefix each, because that is the only
 /// way they coexist.
+///
+/// `to_root` is the relative path back to the workspace root from wherever
+/// `app_dir` puts a file, so a template that must `extends` or `import` a
+/// root-level file (a framework's own generated tsconfig, say) never counts
+/// `../` itself. `app_dir` is always one segment (`src`) or two (`src/<id>`),
+/// so this is the one place that fact is allowed to matter; a third depth
+/// would mean this function changed and this constant would have to too.
 pub fn variables(entries: &[&CatalogEntry], project: &str) -> Vec<Variables> {
     let apps = entries
         .iter()
@@ -49,11 +56,13 @@ pub fn variables(entries: &[&CatalogEntry], project: &str) -> Vec<Variables> {
                     .with("test_dir", "test")
                     .with("script_suffix", "")
                     .with("config_suffix", "")
+                    .with("to_root", "../")
             } else {
                 base.with("app_dir", format!("src/{id}"))
                     .with("test_dir", format!("test/{id}"))
                     .with("script_suffix", format!(":{id}"))
                     .with("config_suffix", format!(".{id}"))
+                    .with("to_root", "../../")
             }
         })
         .collect()
@@ -95,6 +104,7 @@ mod tests {
         assert_eq!(vars[0].get("test_dir"), Some("test"));
         assert_eq!(vars[0].get("script_suffix"), Some(""));
         assert_eq!(vars[0].get("config_suffix"), Some(""));
+        assert_eq!(vars[0].get("to_root"), Some("../"));
     }
 
     /* Two frontends both writing `scripts.dev` is a hard merge error, so the
@@ -107,8 +117,10 @@ mod tests {
 
         assert_eq!(vars[0].get("app_dir"), Some("src/nuxt"));
         assert_eq!(vars[0].get("script_suffix"), Some(":nuxt"));
+        assert_eq!(vars[0].get("to_root"), Some("../../"));
         assert_eq!(vars[1].get("app_dir"), Some("src/next"));
         assert_eq!(vars[1].get("script_suffix"), Some(":next"));
+        assert_eq!(vars[1].get("to_root"), Some("../../"));
     }
 
     /* The case a shape check alone would get wrong. A single-app workspace

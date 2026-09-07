@@ -1,0 +1,38 @@
+# A comprehensive multi-stage Dockerfile that does not name a frontend or
+# backend layer.
+#
+# Decision 4 forbids a layer knowing what else was picked, so this cannot
+# check "is frontend/nuxt selected" or "is backend/axum selected". Instead
+# `files/Dockerfile` detects its own toolchains by file presence
+# (package.json, Cargo.toml) at build time, and `files/docker-entrypoint.sh`
+# detects which process to run at container start the same way. No hard
+# `requires`: the same Dockerfile has to work for a JS-only, a Rust-only, or
+# a polyglot workspace, and requiring one toolchain would make it wrong for
+# the other two.
+#
+# Known gap, not solved here: app layers namespace their scripts once there
+# is more than one application (`build:<id>`, `start:<id>`, see
+# docs/CONTEXT.md's app layout rule), so `pnpm run --if-present build` only
+# resolves to something in a single-app workspace. A monorepo selection
+# builds nothing on the JS side and this layer has no way to know which
+# namespaced script to call without naming the layer that owns it. A real
+# fix needs either a generic top-level script every app layer contributes to
+# (docs/CONTEXT.md open question 4, not settled) or per-app Dockerfiles,
+# neither of which this layer can introduce on its own.
+
+id = "dockerfile"
+category = "infra"
+default = false
+
+[[files]]
+from = "files/Dockerfile"
+to   = "Dockerfile"
+
+[[files]]
+from = "files/docker-entrypoint.sh"
+to   = "docker-entrypoint.sh"
+mode = 0o755
+
+[[files]]
+from = "files/.dockerignore"
+to   = ".dockerignore"

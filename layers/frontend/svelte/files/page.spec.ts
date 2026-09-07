@@ -1,7 +1,12 @@
-import { render, screen } from "@testing-library/svelte";
-import { describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/svelte";
+import { afterEach, describe, expect, it } from "vitest";
 
-import Page from "../../src/svelte/routes/+page.svelte";
+import Page from "$app-routes/+page.svelte";
+
+// @testing-library/svelte's automatic cleanup hooks into a global afterEach,
+// which globals: false above never registers, so each render is unmounted by
+// hand or the next test finds two of everything.
+afterEach(cleanup);
 
 describe("the entry page", () => {
   it("names the application", () => {

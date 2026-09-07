@@ -1,0 +1,4 @@
+{
+  "//": "Lives at the workspace root because vue-tsc resolves relative to where it is invoked. .nuxt/tsconfig.json sits one level down from here regardless of how the selection namespaced {{app_dir}}, so no relative '../' count has to track that depth.",
+  "extends": "./.nuxt/tsconfig.json"
+}

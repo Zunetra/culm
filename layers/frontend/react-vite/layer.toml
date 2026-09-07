@@ -12,13 +12,13 @@ target = "package.json"
 "dev{{script_suffix}}" = "vite --config vite{{config_suffix}}.config.ts"
 "build{{script_suffix}}" = "vite build --config vite{{config_suffix}}.config.ts"
 "preview{{script_suffix}}" = "vite preview --config vite{{config_suffix}}.config.ts"
-"typecheck{{script_suffix}}" = "tsc -p {{app_dir}}/tsconfig.json"
+"typecheck{{script_suffix}}" = "tsc -p tsconfig{{config_suffix}}.test.json"
 "test{{script_suffix}}" = "vitest run --config vitest{{config_suffix}}.config.ts"
 
 [[merge]]
 strategy = "line-block"
 target = ".gitignore"
-lines = ["dist/", "vite.config.ts.timestamp-*"]
+lines = ["dist{{config_suffix}}/", "vite.config.ts.timestamp-*"]
 
 [[install]]
 manager = "pnpm"
@@ -33,7 +33,7 @@ packages = [
   "@vitejs/plugin-react",
   "@types/react",
   "@types/react-dom",
-  "typescript",
+  "typescript@<6",
   "vitest",
   "@testing-library/react",
   "jsdom",
@@ -75,6 +75,13 @@ to = "{{app_dir}}/config.ts"
 [[files]]
 from = "files/tsconfig.json"
 to = "{{app_dir}}/tsconfig.json"
+
+# Scoped to the layer's own directory, so a spec under {{test_dir}} sits outside
+# what tsconfig.json's include can see. This one extends it and adds the test
+# directory, and is what the typecheck script actually points at.
+[[files]]
+from = "files/tsconfig.test.json"
+to = "tsconfig{{config_suffix}}.test.json"
 
 [[files]]
 from = "files/vitest.react-vite.config.ts"

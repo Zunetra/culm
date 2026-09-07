@@ -12,10 +12,10 @@ export default tseslint.config({
   files: [
     "src/app/**/*.ts",
     "src/app/**/*.tsx",
-    "test/next/**/*.ts",
-    "test/next/**/*.tsx",
+    "{{test_dir}}/**/*.ts",
+    "{{test_dir}}/**/*.tsx",
     "next.config.ts",
-    "vitest.next.config.ts",
+    "vitest{{config_suffix}}.config.ts",
   ],
   extends: [...tseslint.configs.recommended],
 });

@@ -56,3 +56,12 @@ to = "eslint.drizzle.config.mjs"
 manager = "pnpm"
 dev = true
 packages = ["typescript-eslint"]
+
+# drizzle.config.ts reads `process.env`. A backend chosen alongside this layer
+# may be plain JavaScript with no tsconfig and no @types/node of its own (a JS
+# fastify app, say), so this layer cannot assume that global is typed by
+# anything else already in the workspace.
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["@types/node"]

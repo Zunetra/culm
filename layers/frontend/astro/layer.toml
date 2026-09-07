@@ -12,7 +12,7 @@ target = "package.json"
 "dev{{script_suffix}}" = "astro dev"
 "build{{script_suffix}}" = "astro build"
 "preview{{script_suffix}}" = "astro preview"
-"check{{script_suffix}}" = "astro check"
+"check{{script_suffix}}" = "astro check --tsconfig tsconfig{{config_suffix}}.test.json"
 "test{{script_suffix}}" = "vitest run --config vitest{{config_suffix}}.config.ts"
 
 [[merge]]
@@ -28,7 +28,7 @@ packages = ["astro"]
 [[install]]
 manager = "pnpm"
 dev = true
-packages = ["@astrojs/check", "typescript", "vitest"]
+packages = ["@astrojs/check", "typescript@<6", "vitest"]
 
 # Everything Astro discovers by convention sits under src/astro, which
 # astro.config.mjs names as srcDir. A second frontend in the same workspace gets
@@ -62,6 +62,14 @@ to = "{{app_dir}}/config.ts"
 [[files]]
 from = "files/tsconfig.json"
 to = "{{app_dir}}/tsconfig.json"
+
+# `astro check` reads the tsconfig it is pointed at to decide which files to
+# check. Left on the app's own tsconfig.json it never sees the test directory,
+# so a type error there passes silently; this one adds the test directory to
+# what gets checked, and `check{{script_suffix}}` above points at it instead.
+[[files]]
+from = "files/tsconfig.test.json"
+to = "tsconfig{{config_suffix}}.test.json"
 
 [[files]]
 from = "files/vitest.astro.config.ts"

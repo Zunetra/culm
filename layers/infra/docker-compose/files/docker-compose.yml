@@ -1,0 +1,16 @@
+# Runs the image infra/dockerfile's Dockerfile builds.
+#
+# APP_PORT is the one thing this file can know without naming a frontend or
+# backend layer: every backend layer's Config and the Dockerfile's own
+# ENTRYPOINT agree on PORT, defaulting to 3000, so the same variable drives
+# both the container's internal port and the host mapping. Compose loads
+# .env from the project root automatically, so copying .env.example to .env
+# is enough to change it.
+services:
+  app:
+    build: .
+    ports:
+      - "${APP_PORT:-3000}:${APP_PORT:-3000}"
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "${APP_PORT:-3000}"

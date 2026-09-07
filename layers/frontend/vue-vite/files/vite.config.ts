@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 // file with --config.
 export default defineConfig({
   plugins: [vue()],
-  root: fileURLToPath(new URL("./src/vue-vite", import.meta.url)),
+  root: fileURLToPath(new URL("./{{app_dir}}", import.meta.url)),
   build: {
     outDir: fileURLToPath(new URL("./dist/vue-vite", import.meta.url)),
     emptyOutDir: true,

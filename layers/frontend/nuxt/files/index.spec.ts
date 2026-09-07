@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 
-import IndexPage from "../../src/nuxt/pages/index.vue";
+import IndexPage from "~/pages/index.vue";
 
 describe("the entry page", () => {
   it("names the application", async () => {

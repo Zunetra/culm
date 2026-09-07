@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { createApp } from "../src/fastify/app.js";
+import { createApp } from "{{to_root}}{{app_dir}}/app.js";
 
 /* inject drives the router in process, so the test binds no port and cannot
  * collide with a running service. */

@@ -12,7 +12,11 @@
     "noEmit": true,
     "skipLibCheck": true,
     "strict": true,
-    "noUncheckedIndexedAccess": true
+    "noUncheckedIndexedAccess": true,
+    "baseUrl": ".",
+    "paths": {
+      "@react-vite/*": ["./*"]
+    }
   },
-  "include": ["**/*.ts", "**/*.tsx", "../../test/react-vite/**/*.ts", "../../test/react-vite/**/*.tsx"]
+  "include": ["**/*.ts", "**/*.tsx"]
 }

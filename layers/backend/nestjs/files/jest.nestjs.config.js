@@ -12,7 +12,10 @@ export default {
   testMatch: ["<rootDir>/test/nestjs.e2e-spec.ts"],
   extensionsToTreatAsEsm: [".ts"],
   transform: {
-    "^.+\\.ts$": ["ts-jest", { tsconfig: "tsconfig.nestjs.json", useESM: true }],
+    "^.+\\.ts$": [
+      "ts-jest",
+      { tsconfig: "tsconfig.nestjs.json", useESM: true },
+    ],
   },
   /* The sources import each other with a .js extension, which is what NodeNext
    * requires and what the emitted JavaScript actually resolves. Jest resolves

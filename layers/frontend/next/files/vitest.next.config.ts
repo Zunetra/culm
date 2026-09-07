@@ -14,6 +14,6 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: false,
-    include: ["test/next/**/*.spec.tsx"],
+    include: ["{{test_dir}}/**/*.spec.tsx"],
   },
 });

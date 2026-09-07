@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import IndexPage from "../../src/app/page";
+import IndexPage from "@/app/page";
 
 // Plain vitest matchers rather than jest-dom, so the test needs no setup file
 // and no extra dependency to say the same thing.

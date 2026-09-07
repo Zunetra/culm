@@ -16,15 +16,15 @@ target = "package.json"
 "build{{script_suffix}}" = "nuxt build"
 "preview{{script_suffix}}" = "nuxt preview"
 "generate{{script_suffix}}" = "nuxt generate"
-"typecheck{{script_suffix}}" = "nuxt typecheck"
-"test{{script_suffix}}" = "vitest run --config vitest{{config_suffix}}.config.ts"
+"typecheck{{script_suffix}}" = "nuxt prepare && vue-tsc -p tsconfig{{config_suffix}}.json --noEmit"
+"test{{script_suffix}}" = "nuxt prepare && vitest run --config vitest{{config_suffix}}.config.ts"
 
 [[merge]]
 strategy = "line-block"
 target = ".gitignore"
 lines = [".nuxt/", ".output/", ".data/", "dist/"]
 
-# Everything Nuxt discovers by convention sits under src/nuxt, which
+# Everything Nuxt discovers by convention sits under {{app_dir}}, which
 # nuxt.config.ts names as srcDir. A second frontend in the same workspace gets
 # its own directory rather than fighting over the root.
 [[files]]
@@ -55,6 +55,15 @@ to = "{{app_dir}}/error.vue"
 from = "files/tsconfig.json"
 to = "{{app_dir}}/tsconfig.json"
 
+# vue-tsc, not `nuxt typecheck`, is what the typecheck script actually runs:
+# `nuxt typecheck` always looks for tsconfig.json at the workspace root and
+# has no flag to point it elsewhere, which breaks the moment srcDir is not
+# the root. This file is that root tsconfig, namespaced like every other
+# root file this layer contributes.
+[[files]]
+from = "files/tsconfig.root.json"
+to = "tsconfig{{config_suffix}}.json"
+
 [[files]]
 from = "files/vitest.nuxt.config.ts"
 to = "vitest{{config_suffix}}.config.ts"
@@ -69,14 +78,18 @@ dev = false
 packages = ["vue", "vue-router"]
 
 # happy-dom is what @nuxt/test-utils runs the Nuxt test environment on, so a
-# component test needs it even though nothing imports it directly.
+# component test needs it even though nothing imports it directly. vitest is
+# capped below 5 because @nuxt/test-utils only declares a peer on ^4.0.2;
+# vitest 5's "vitest/environments" export shape breaks the "nuxt" test
+# environment @nuxt/test-utils registers.
 [[install]]
 manager = "pnpm"
 dev = true
 packages = [
   "nuxt",
-  "typescript",
-  "vitest",
+  "typescript@<6",
+  "vue-tsc",
+  "vitest@<5",
   "@nuxt/test-utils",
   "@vue/test-utils",
   "happy-dom",

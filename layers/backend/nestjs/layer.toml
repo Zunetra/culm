@@ -62,6 +62,12 @@ to = "nest-cli.json"
 from = "files/tsconfig.nestjs.json"
 to = "tsconfig.nestjs.json"
 
+# nest build reads this rather than tsconfig.nestjs.json directly, so the
+# emitted entry point lands at dist/nestjs/main.js and not dist/src/nestjs/main.js.
+[[files]]
+from = "files/tsconfig.build.nestjs.json"
+to = "tsconfig.build.nestjs.json"
+
 [[files]]
 from = "files/jest.nestjs.config.js"
 to = "jest.nestjs.config.js"
@@ -70,13 +76,16 @@ to = "jest.nestjs.config.js"
 from = "files/nestjs.e2e-spec.ts"
 to = "test/nestjs.e2e-spec.ts"
 
-# No HTTP platform adapter is installed here. Which server sits underneath is
-# the application's choice, and pinning one would bind this layer to a decision
-# that belongs to whoever selects it.
+# @nestjs/platform-express is a peer of @nestjs/core, not a dependency of it,
+# and NestFactory.create() dynamically imports it when no adapter is given.
+# Skipping it does not leave the application free to choose later: it leaves
+# the generated app unable to boot at all, since Nest has no platform-agnostic
+# HTTP server. Express is the default every Nest app ships with until told
+# otherwise, so it is installed here rather than left as a silent runtime crash.
 [[install]]
 manager = "pnpm"
 dev = false
-packages = ["@nestjs/core", "@nestjs/common", "reflect-metadata", "rxjs"]
+packages = ["@nestjs/core", "@nestjs/common", "@nestjs/platform-express", "express", "reflect-metadata", "rxjs"]
 
 [[install]]
 manager = "pnpm"
@@ -85,8 +94,9 @@ packages = [
   "@nestjs/cli",
   "@nestjs/schematics",
   "@nestjs/testing",
-  "typescript",
+  "typescript@<6",
   "@types/node",
+  "@types/express",
   "jest",
   "@types/jest",
   "ts-jest",

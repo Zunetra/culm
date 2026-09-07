@@ -1,0 +1,23 @@
+# .editorconfig, a single file with a single owner project-wide.
+#
+# No merge complexity: unlike package.json or .gitignore, nothing else will
+# ever contribute to this file, so it is copied rather than merged.
+#
+# `requires` names a toolchain even though the file itself needs neither Node
+# nor Rust to be read by an editor, because every quality layer is required to
+# declare one (tests/layers.rs, every_quality_layer_requires_a_toolchain).
+# node-pnpm is picked to mirror prettier and eslint: as a default, it follows
+# a JS-including workspace and stays out of a Rust-only one, per
+# resolve::add_defaults requiring every `requires` entry to already be
+# selected. A Rust-only workspace can still opt in explicitly with
+# `--layer quality/editorconfig`, which pulls node-pnpm in the same way
+# explicitly selecting any JS quality layer would.
+
+id = "editorconfig"
+category = "quality"
+requires = ["toolchain/node-pnpm"]
+default = true
+
+[[files]]
+from = "files/.editorconfig"
+to = ".editorconfig"

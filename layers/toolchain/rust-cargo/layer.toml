@@ -15,3 +15,32 @@ default = false
 strategy = "line-block"
 target = ".gitignore"
 lines = ["/target", "**/*.rs.bk", "*.pdb"]
+
+# CI steps for this toolchain, at order = 20 so infra/github-actions' checkout
+# (order = 0) and toolchain/node-pnpm's steps (order = 10) land first when
+# those layers are also selected. Nothing here requires either: yaml-steps
+# fixes the trigger and job skeleton itself, so this contribution seeds a
+# valid `.github/workflows/ci.yml` on its own if it is the only infra-shaped
+# thing selected.
+#
+# Unlike the Node half, this genuinely covers every selection: the root
+# Cargo.toml is a real `[workspace]` regardless of app count (decision 4's
+# open question 4 only leaves the JS side without one), so `--workspace`
+# builds and tests every crate any backend layer added, one app or several.
+[[merge]]
+strategy = "yaml-steps"
+target = ".github/workflows/ci.yml"
+job = "build"
+order = 20
+
+[[merge.steps]]
+name = "Set up Rust"
+uses = "dtolnay/rust-toolchain@stable"
+
+[[merge.steps]]
+name = "Build (Rust)"
+run = ["cargo build --locked --workspace --all-targets"]
+
+[[merge.steps]]
+name = "Test (Rust)"
+run = ["cargo test --locked --workspace"]

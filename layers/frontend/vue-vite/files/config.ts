@@ -4,7 +4,8 @@
 //
 // The fallback is the project's own name, so an unset variable still renders
 // something true rather than an empty heading.
-export const appName: string = import.meta.env.VITE_APP_NAME ?? "{{project_name}}";
+export const appName: string =
+  import.meta.env.VITE_APP_NAME ?? "{{project_name}}";
 
 // Deliberately empty when unset. A default here would be a URL somebody ships
 // to production without noticing, where an empty value is visible in the page.

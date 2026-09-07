@@ -1,0 +1,13 @@
+# Zed editor settings.
+
+id = "zed"
+category = "editor"
+default = false
+
+[[merge]]
+strategy = "json-deep"
+target = ".zed/settings.json"
+[merge.value]
+tab_size = 2
+hard_tabs = false
+format_on_save = "on"

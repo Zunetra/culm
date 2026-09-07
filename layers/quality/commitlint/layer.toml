@@ -1,0 +1,30 @@
+# Commitlint, enforcing the org's own commit format rather than the wider
+# conventional-commits default.
+#
+# The org's format is `<type>: <description>` on one line, using feat, fix,
+# refactor, chore, test, docs, perf, style (docs/CONTEXT.md, Git). The
+# conventional-commits default type list also allows build, ci, revert and
+# ships a scope grammar this org does not use, so extending
+# @commitlint/config-conventional would pass commits the org's own rule
+# rejects. A hand-written rule set is a few lines and matches exactly, so
+# @commitlint/config-conventional is not installed at all.
+
+id = "commitlint"
+category = "quality"
+requires = ["toolchain/node-pnpm", "quality/husky"]
+default = true
+
+[[merge]]
+strategy = "hook-script"
+target = ".husky/commit-msg"
+order = 10
+body = ["pnpm exec commitlint --edit \"$1\""]
+
+[[files]]
+from = "files/commitlint.config.mjs"
+to = "commitlint.config.mjs"
+
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["@commitlint/cli"]

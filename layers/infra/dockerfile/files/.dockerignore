@@ -1,0 +1,46 @@
+# Kept in step with what the framework layers put in .gitignore, not
+# generated from it: the Dockerfile cannot read another layer's file at
+# build time, so this is a static list of the same build output and local
+# noise, written by hand instead.
+
+# Rebuilt inside the image, not copied from the host.
+node_modules/
+.pnpm-store/
+.npm/
+target/
+
+# Framework build output, one line per frontend layer this workspace might
+# hold, mirroring each one's own .gitignore contribution.
+.nuxt/
+.output/
+.data/
+dist/
+.next/
+out/
+next-env.d.ts
+.vercel/
+.svelte-kit/
+build/
+.astro/
+vite.config.ts.timestamp-*
+
+# Local and editor noise.
+.git/
+.gitignore
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+*.log
+.eslintcache
+
+# Secrets and environment. .env.example stays: it is meant to be read.
+.env
+.env.local
+
+# Docker's own files add nothing to a build running inside a container.
+Dockerfile
+.dockerignore
+docker-compose.yml

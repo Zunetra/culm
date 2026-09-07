@@ -1,9 +1,9 @@
-// Sources live under src/nuxt rather than at the root, so a workspace holding a
-// second frontend has somewhere of its own to put it. Nuxt's directory
-// conventions all resolve inside srcDir, so pages, layouts and app.vue move
-// with it and nothing else has to be told where they went.
+// A second frontend in the same workspace gets its own directory under src
+// rather than fighting this one over the root. Nuxt's directory conventions
+// all resolve inside srcDir, so pages, layouts and app.vue move with it and
+// nothing else has to be told where they went.
 export default defineNuxtConfig({
-  srcDir: "src/nuxt",
+  srcDir: "{{app_dir}}",
 
   // Read at runtime, not baked in at build time. Public keys reach the browser
   // and are overridden by NUXT_PUBLIC_*; anything outside `public` stays on the

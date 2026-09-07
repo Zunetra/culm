@@ -4,7 +4,7 @@ import { defineVitestConfig } from "@nuxt/test-utils/config";
 // whole-workspace filename a second frontend would collide on.
 export default defineVitestConfig({
   test: {
-    include: ["test/nuxt/**/*.spec.ts"],
+    include: ["{{test_dir}}/**/*.spec.ts"],
     environment: "nuxt",
   },
 });

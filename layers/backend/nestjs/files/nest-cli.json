@@ -4,6 +4,6 @@
   "entryFile": "nestjs/main",
   "compilerOptions": {
     "deleteOutDir": true,
-    "tsConfigPath": "tsconfig.nestjs.json"
+    "tsConfigPath": "tsconfig.build.nestjs.json"
   }
 }

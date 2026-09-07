@@ -1,0 +1,37 @@
+# VS Code workspace settings.
+
+id = "vscode"
+category = "editor"
+default = false
+# The default formatter setting below names Prettier explicitly, so this is a
+# real dependency on it, not an incidental mention. Prettier is already a
+# default layer, so this closes over cleanly rather than guessing.
+requires = ["quality/prettier"]
+
+# Only the two files base/base's .gitignore carves an exception for.
+# launch.json stays out: it is personal and machine specific, which is why
+# .gitignore keeps it ignored while committing these two.
+[[merge]]
+strategy = "json-deep"
+target = ".vscode/settings.json"
+[merge.value]
+"editor.formatOnSave" = true
+"editor.defaultFormatter" = "esbenp.prettier-vscode"
+"editor.tabSize" = 2
+"editor.insertSpaces" = true
+"files.eol" = "\n"
+"files.insertFinalNewline" = true
+"files.trimTrailingWhitespace" = true
+[merge.value."files.exclude"]
+"**/node_modules" = true
+"**/target" = true
+
+[[merge]]
+strategy = "json-deep"
+target = ".vscode/extensions.json"
+[merge.value]
+recommendations = [
+  "editorconfig.editorconfig",
+  "usernamehw.errorlens",
+  "eamodio.gitlens",
+]

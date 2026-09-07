@@ -28,3 +28,52 @@ target = ".gitignore"
 # Node's own artefacts only. `.env` and `*.log` are not Node-specific and live
 # in the base layer, so listing them here too would emit them in two blocks.
 lines = ["node_modules/", ".pnpm-store/", ".npm/"]
+
+# CI steps for this toolchain, at order = 10 so infra/github-actions' checkout
+# (order = 0) lands first when that layer is also selected. Nothing here
+# requires it: yaml-steps fixes the trigger and job skeleton itself, so this
+# contribution seeds a valid `.github/workflows/ci.yml` on its own if it is
+# the only infra-shaped thing selected.
+#
+# `--if-present` covers `build`, `test`, `lint`, and `format:check`, none of
+# which this layer owns or can guarantee exist. A single-app workspace has
+# them unnamespaced and this genuinely runs them; a monorepo namespaces them
+# per app (docs/CONTEXT.md's app layout rule), and this layer has no way to
+# name a script it does not own, so a monorepo's build and test currently run
+# nothing here. The same known gap infra/dockerfile already documents for the
+# same reason.
+[[merge]]
+strategy = "yaml-steps"
+target = ".github/workflows/ci.yml"
+job = "build"
+order = 10
+
+[[merge.steps]]
+name = "Set up Node"
+uses = "actions/setup-node@v4"
+[merge.steps.with]
+node-version = "lts/*"
+
+[[merge.steps]]
+name = "Set up pnpm"
+run = ["npm install -g pnpm"]
+
+[[merge.steps]]
+name = "Install dependencies"
+run = ["pnpm install --frozen-lockfile"]
+
+[[merge.steps]]
+name = "Build (Node)"
+run = ["pnpm run --if-present build"]
+
+[[merge.steps]]
+name = "Test (Node)"
+run = ["pnpm run --if-present test"]
+
+[[merge.steps]]
+name = "Lint"
+run = ["pnpm run --if-present lint"]
+
+[[merge.steps]]
+name = "Check formatting"
+run = ["pnpm run --if-present format:check"]

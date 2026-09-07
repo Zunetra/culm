@@ -1,0 +1,35 @@
+# Husky git hooks.
+#
+# Owns the pre-commit hook's mechanism, not its content. Other quality layers
+# add their own body at their own order without knowing husky exists; husky
+# only guarantees a shebang and an executable file at the end.
+
+id = "husky"
+category = "quality"
+requires = ["toolchain/node-pnpm"]
+default = true
+
+[[merge]]
+strategy = "hook-script"
+target = ".husky/pre-commit"
+order = 10
+body = ["pnpm exec lint-staged"]
+
+[[merge]]
+strategy = "json-deep"
+target = "package.json"
+[merge.value.scripts]
+prepare = "husky"
+
+# Keyed on file extension, never on a layer id: husky does not know whether
+# quality/eslint or quality/prettier are part of the selection, only that a
+# staged file with this extension exists. A selection that drops one of them
+# while keeping husky is a known gap, left open rather than guessed at.
+[[files]]
+from = "files/.lintstagedrc.json"
+to = ".lintstagedrc.json"
+
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["husky", "lint-staged"]

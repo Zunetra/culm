@@ -130,11 +130,32 @@ fn carries_a_version(package: &str) -> bool {
     at_a_digit || range_marker
 }
 
+/// The deliberate, documented exceptions to decision 5, each recorded in
+/// docs/CONTEXT.md alongside the upstream incompatibility that forces it:
+/// - `typescript@<6`: TypeScript jumped straight from the 5.x line to a 7.x
+///   native-compiler rewrite with no 6.x in between, and
+///   `typescript-eslint@8.69.0` refuses to run against it; an unranged
+///   `typescript` resolves straight into the broken major.
+/// - `vitest@<5`: `@nuxt/test-utils` only declares a peer on `^4.0.2`, and
+///   vitest 5 changed the `vitest/environments` export shape the "nuxt" test
+///   environment it registers depends on.
+/// - `prisma@<8`: the `prisma` CLI's `latest` dist-tag is a `8.0.0-rc`
+///   pre-release of an entirely restructured CLI with no `generate`/
+///   `migrate`/`studio` commands, while `@prisma/client`'s `latest` is still
+///   on the 7.x line; an unranged `prisma` pulls the broken pre-release CLI.
+///
+/// Lift each cap, and its matching CONTEXT.md entry, once the upstream
+/// package it names resolves the incompatibility.
+const DOCUMENTED_VERSION_EXCEPTIONS: &[&str] = &["typescript@<6", "vitest@<5", "prisma@<8"];
+
 #[test]
 fn no_shipped_package_carries_a_version() {
     for entry in entries() {
         for install in &entry.manifest.installs {
             for package in &install.packages {
+                if DOCUMENTED_VERSION_EXCEPTIONS.contains(&package.as_str()) {
+                    continue;
+                }
                 assert!(
                     !carries_a_version(package),
                     "{} pins '{package}', but package managers write versions, not layers",
@@ -563,6 +584,26 @@ fn every_frontend_declares_the_node_toolchain_and_the_two_shared_files() {
     }
 }
 
+/// A layer id that also happens to be an ordinary word a different layer's
+/// payload genuinely needs, unrelated to that sibling layer:
+/// - `backend/express` shares its id with the `express` npm package
+///   `backend/nestjs` installs as `@nestjs/core`'s HTTP platform adapter (a
+///   peer dependency Nest requires to boot at all).
+/// - `editor/vscode` shares its id with the `.vscode/*` entry `base/base`
+///   ignores for every workspace regardless of which editor layers are
+///   selected (generic editor noise, not a reference to that layer).
+/// - `quality/editorconfig` shares its id with the VS Code marketplace
+///   extension id `editorconfig.editorconfig` that `editor/vscode`
+///   recommends unconditionally, not a reference to that layer.
+///
+/// The substring search below cannot tell any of these apart from a real
+/// reference to the sibling layer without this narrow, explicit allowlist.
+const SIBLING_NAME_FALSE_POSITIVES: &[(&str, &str)] = &[
+    ("nestjs", "express"),
+    ("base", "vscode"),
+    ("vscode", "editorconfig"),
+];
+
 /// No layer may name another layer outside its own `requires`, which is where combination authoring would start.
 #[test]
 fn no_layer_special_cases_a_sibling() {
@@ -588,7 +629,9 @@ fn no_layer_special_cases_a_sibling() {
                 .requires
                 .iter()
                 .any(|id| id == other || id.ends_with(&format!("/{other}")));
-            if *other == manifest.id || required {
+            let is_a_false_positive =
+                SIBLING_NAME_FALSE_POSITIVES.contains(&(manifest.id.as_str(), other.as_str()));
+            if *other == manifest.id || required || is_a_false_positive {
                 continue;
             }
             assert!(
@@ -663,11 +706,23 @@ fn is_a_path(literal: &str) -> bool {
 
 /// Every glob a fragment claims must land inside that layer's own output.
 /// Disjoint globs are what let the root config load fragments in any order: two layers claiming the same path would make the result depend on which was read first, which is the guarantee the whole merge engine is built on.
+///
+/// Compared against the raw, uninterpolated manifest rather than `entries()`'s
+/// namespaced one: a fragment's `files` glob is shipped with `{{app_dir}}`
+/// etc. still in it (the whole point, so it works whether or not the
+/// selection ends up namespaced), and `entries()` renders those same
+/// placeholders in `to` before this test ever sees them. Comparing rendered
+/// paths against an unrendered glob would flag every well-formed fragment.
 #[test]
 fn every_eslint_fragment_claims_only_its_own_paths() {
+    let raw = shipped();
     for (entry, fragment) in layers_needing_a_fragment() {
-        let spec = entry
-            .manifest
+        let manifest = &raw
+            .entries()
+            .find(|raw_entry| raw_entry.manifest.qualified_id() == entry.manifest.qualified_id())
+            .unwrap_or_else(|| panic!("{} vanished from the raw catalog", entry.dir().display()))
+            .manifest;
+        let spec = manifest
             .files
             .iter()
             .find(|spec| spec.to.to_string_lossy() == fragment)
@@ -680,8 +735,7 @@ fn every_eslint_fragment_claims_only_its_own_paths() {
             )
         });
 
-        let written: Vec<String> = entry
-            .manifest
+        let written: Vec<String> = manifest
             .files
             .iter()
             .map(|spec| spec.to.to_string_lossy().into_owned())
@@ -904,6 +958,15 @@ fn provider_of(binary: &str) -> Option<String> {
     }
 }
 
+/// A package string with any trailing version range stripped.
+/// A scoped package's leading `@` is not itself a version marker (`@sveltejs/kit`), so only an `@` after the first character can start one (`typescript@<6`).
+fn package_name(package: &str) -> &str {
+    match package.get(1..).and_then(|rest| rest.find('@')) {
+        Some(i) => &package[..i + 1],
+        None => package,
+    }
+}
+
 /// A script may only invoke a tool its own layer installs.
 /// `typecheck:vue-vite` invoking `vue-tsc` is only meaningful because that layer declares it; a script reaching for a binary nobody installed fails with `command not found` after a full install, which is the most expensive possible moment to learn it.
 #[test]
@@ -913,7 +976,7 @@ fn every_tool_a_script_invokes_is_installed() {
             .manifest
             .installs
             .iter()
-            .flat_map(|install| install.packages.iter().map(String::as_str))
+            .flat_map(|install| install.packages.iter().map(|p| package_name(p)))
             .collect();
 
         for (name, command) in scripts_of(&entry.manifest) {
@@ -1015,16 +1078,28 @@ fn a_scoped_tsconfig_covers_its_own_tests() {
         if !ships_specs {
             continue;
         }
-        for (to, body) in &templates {
-            if !to.ends_with("tsconfig.json") || !body.contains("\"include\"") {
-                continue;
-            }
-            assert!(
-                body.contains("test/"),
-                "'{}' ships specs under test/ but {to} declares an include that never names them",
-                entry.manifest.id
-            );
+        /* A layer may ship two tsconfigs on purpose (an app-scoped one plus a
+         * root one that extends it and adds the test tree, as vue-vite and
+         * react-vite both do) - the app-scoped one is not expected to name
+         * tests itself, only *some* tsconfig for the layer has to. And the
+         * name it names them by may be the raw "test/" a layer that hardcodes
+         * its own (namespaced) path uses, or the "{{test_dir}}" placeholder a
+         * layer that works in any layout uses instead - both cover the tests,
+         * only the raw text differs. */
+        let tsconfigs_with_an_include: Vec<&(String, String)> = templates
+            .iter()
+            .filter(|(to, body)| to.contains("tsconfig") && to.ends_with(".json") && body.contains("\"include\""))
+            .collect();
+        if tsconfigs_with_an_include.is_empty() {
+            continue;
         }
+        assert!(
+            tsconfigs_with_an_include
+                .iter()
+                .any(|(_, body)| body.contains("test/") || body.contains("{{test_dir}}")),
+            "'{}' ships specs under test/ but no tsconfig's include ever names them",
+            entry.manifest.id
+        );
     }
 }
 
@@ -1032,7 +1107,14 @@ fn a_scoped_tsconfig_covers_its_own_tests() {
 /// Interpolation deliberately leaves an unknown placeholder alone rather than blanking it, so a typo survives all the way into a generated file rather than failing the scaffold.
 #[test]
 fn every_placeholder_in_a_template_is_a_variable_that_exists() {
-    let known = ["project_name"];
+    let known = [
+        "project_name",
+        "app_dir",
+        "test_dir",
+        "script_suffix",
+        "config_suffix",
+        "to_root",
+    ];
 
     for entry in entries() {
         for (to, body) in templates_of(&entry) {

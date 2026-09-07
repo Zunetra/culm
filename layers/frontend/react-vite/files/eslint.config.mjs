@@ -8,12 +8,12 @@ import tseslint from "typescript-eslint";
  * workspace lints its files under its own fragment and the two never overlap. */
 export default tseslint.config({
   files: [
-    "src/react-vite/**/*.ts",
-    "src/react-vite/**/*.tsx",
-    "test/react-vite/**/*.ts",
-    "test/react-vite/**/*.tsx",
-    "vite.react-vite.config.ts",
-    "vitest.react-vite.config.ts",
+    "{{app_dir}}/**/*.ts",
+    "{{app_dir}}/**/*.tsx",
+    "{{test_dir}}/**/*.ts",
+    "{{test_dir}}/**/*.tsx",
+    "vite{{config_suffix}}.config.ts",
+    "vitest{{config_suffix}}.config.ts",
   ],
   extends: [...tseslint.configs.recommended],
 });

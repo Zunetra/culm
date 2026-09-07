@@ -15,7 +15,7 @@ target = "package.json"
 "dev{{script_suffix}}" = "vite --config vite{{config_suffix}}.config.ts"
 "build{{script_suffix}}" = "vite build --config vite{{config_suffix}}.config.ts"
 "preview{{script_suffix}}" = "vite preview --config vite{{config_suffix}}.config.ts"
-"typecheck{{script_suffix}}" = "vue-tsc -p {{app_dir}}/tsconfig.json"
+"typecheck{{script_suffix}}" = "vue-tsc -p tsconfig{{config_suffix}}.test.json"
 "test{{script_suffix}}" = "vitest run --config vitest{{config_suffix}}.config.ts"
 
 [[merge]]
@@ -35,7 +35,7 @@ packages = [
   "vite",
   "@vitejs/plugin-vue",
   "vue-tsc",
-  "typescript",
+  "typescript@<6",
   "vitest",
   "@vue/test-utils",
   "jsdom",
@@ -73,6 +73,16 @@ to = "{{app_dir}}/config.ts"
 [[files]]
 from = "files/tsconfig.json"
 to = "{{app_dir}}/tsconfig.json"
+
+# A second project file rather than a wider include on the one above: it lives
+# at the workspace root so it can reach both {{app_dir}} and {{test_dir}} with a
+# forward path, which is what lets the typecheck script cover the tests too
+# without a relative '../' count that would depend on whether the selection
+# namespaced app_dir. The editor still finds the layer's own tsconfig.json
+# inside {{app_dir}} unchanged.
+[[files]]
+from = "files/tsconfig.test.json"
+to = "tsconfig{{config_suffix}}.test.json"
 
 # Without a shim TypeScript cannot resolve a .vue import at all, so the entry
 # point and everything it reaches is untyped. A meta framework generates this

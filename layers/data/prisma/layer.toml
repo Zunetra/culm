@@ -2,7 +2,7 @@
 
 id = "prisma"
 category = "data"
-requires = ["toolchain/node-pnpm"]
+requires = ["toolchain/node-pnpm", "quality/eslint"]
 default = false
 
 # Namespaced by layer id, like every other script a monorepo can hold more than
@@ -28,12 +28,40 @@ lines = ["DATABASE_URL=postgresql://user:password@localhost:5432/app"]
 from = "files/schema.prisma"
 to = "prisma/schema.prisma"
 
+# Prisma 7 moved the datasource connection string out of the schema file and
+# into this config, read at the workspace root regardless of shape: data
+# layers take no app_dir, the same reasoning sqlx's root level migrations
+# directory rests on.
+[[files]]
+from = "files/prisma.config.ts"
+to = "prisma.config.ts"
+
+# ESLint's default match covers .js, .mjs and .cjs only, so prisma.config.ts
+# would be silently unlinted. The root config finds this file by its name
+# rather than by importing it, so neither layer names the other.
+[[files]]
+from = "files/eslint.config.mjs"
+to = "eslint.prisma.config.mjs"
+
 [[install]]
 manager = "pnpm"
 dev = false
 packages = ["@prisma/client"]
 
+# Capped below 8: the 8.x CLI dropped the `generate` command in favor of a
+# different shape, so an unpinned install pulls a CLI that cannot run the
+# `generate:prisma` script above the moment npm's latest tag crosses that
+# major, while @prisma/client's own latest tag is still 7.x. Ranged rather
+# than exact per decision 5, the same way nestjs caps typescript.
 [[install]]
 manager = "pnpm"
 dev = true
-packages = ["prisma"]
+packages = ["prisma@<8"]
+
+# The parser and rules ESLint needs to lint prisma.config.ts. Declared here
+# rather than by the eslint layer, which has no way to know a workspace ended
+# up holding TypeScript.
+[[install]]
+manager = "pnpm"
+dev = true
+packages = ["typescript-eslint"]

@@ -1,4 +1,4 @@
 {
-  "//": "Nuxt writes the real compiler options into .nuxt/tsconfig.json when it prepares the project. Extending them keeps this file from restating paths that the framework already knows.",
-  "extends": "../../.nuxt/tsconfig.json"
+  "//": "Nuxt writes the real compiler options into .nuxt/tsconfig.json when it prepares the project. Extending them keeps this file from restating paths that the framework already knows. {{to_root}} is the layout's own answer to how far this file sits from the workspace root, so this reaches .nuxt/tsconfig.json whether or not the selection namespaced app_dir. The typecheck script does not read this file, see tsconfig.root.json.",
+  "extends": "{{to_root}}.nuxt/tsconfig.json"
 }

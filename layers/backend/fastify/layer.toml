@@ -2,43 +2,56 @@
 
 id = "fastify"
 category = "backend"
-requires = ["toolchain/node-pnpm"]
+requires = ["toolchain/node-pnpm", "quality/eslint"]
 default = false
 
-# Namespaced by layer id for the same reason the frontends are: a monorepo can
-# hold several backends, and two layers writing different values to one script
-# key is a hard merge error rather than a last-one-wins.
+# {{app_dir}}, {{test_dir}} and {{script_suffix}} are the layout's own answer
+# to how many application layers the selection holds, per docs/CONTEXT.md: a
+# layer never hardcodes its own layout. A workspace holding just this one
+# backend gets the idiomatic `src`, `test` and `dev`; a workspace holding this
+# beside another application gets the namespaced form, because two layers
+# writing different values to the same `package.json` key is a hard merge
+# error rather than a last-one-wins.
 [[merge]]
 strategy = "json-deep"
 target = "package.json"
 [merge.value.scripts]
-"dev:fastify" = "node --watch src/fastify/server.js"
-"start:fastify" = "node src/fastify/server.js"
-"test:fastify" = "node --test test/fastify.test.js"
+"dev{{script_suffix}}" = "node --watch {{app_dir}}/server.js"
+"start{{script_suffix}}" = "node {{app_dir}}/server.js"
+"test{{script_suffix}}" = "node --test {{test_dir}}/fastify.test.js"
 
 # ESM, per decision 21. This layer still sets no `type` key: that key is a
 # whole-workspace switch, and one app's module system is not a decision this
 # layer gets to make for every other app beside it.
 [[files]]
 from = "files/server.js"
-to = "src/fastify/server.js"
+to = "{{app_dir}}/server.js"
 
 [[files]]
 from = "files/app.js"
-to = "src/fastify/app.js"
+to = "{{app_dir}}/app.js"
 
 [[files]]
 from = "files/config.js"
-to = "src/fastify/config.js"
+to = "{{app_dir}}/config.js"
 
 [[files]]
 from = "files/errors.js"
-to = "src/fastify/errors.js"
+to = "{{app_dir}}/errors.js"
 
 # Node's own test runner, so a comprehensive template costs no test dependency.
 [[files]]
 from = "files/health.test.js"
-to = "test/fastify.test.js"
+to = "{{test_dir}}/fastify.test.js"
+
+# Claimed by explicit globs rather than left to the default match. The base
+# config's own match already covers .js, so without this fragment the sources
+# would still be linted, just without process and console declared, which is
+# worse than not being linted: a fresh scaffold would fail lint before a line
+# of application code was ever written.
+[[files]]
+from = "files/eslint.config.mjs"
+to = "eslint.fastify.config.mjs"
 
 [[install]]
 manager = "pnpm"
