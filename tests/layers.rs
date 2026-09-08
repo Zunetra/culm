@@ -1088,7 +1088,9 @@ fn a_scoped_tsconfig_covers_its_own_tests() {
          * only the raw text differs. */
         let tsconfigs_with_an_include: Vec<&(String, String)> = templates
             .iter()
-            .filter(|(to, body)| to.contains("tsconfig") && to.ends_with(".json") && body.contains("\"include\""))
+            .filter(|(to, body)| {
+                to.contains("tsconfig") && to.ends_with(".json") && body.contains("\"include\"")
+            })
             .collect();
         if tsconfigs_with_an_include.is_empty() {
             continue;

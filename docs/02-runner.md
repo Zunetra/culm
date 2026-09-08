@@ -71,19 +71,20 @@ Configuration is a plain file describing tasks and their inputs and
 outputs, not a plugin system that has to understand every build tool in
 existence.
 
-```yaml
-# culm.yaml, one per project in the workspace
-tasks:
-  build:
-    command: cargo build --release
-    inputs: ['src/**/*.rs', 'Cargo.toml', 'Cargo.lock']
-    outputs: ['target/release/backend']
-    cache: true
-  test:
-    command: cargo nextest run
-    inputs: ['src/**/*.rs', 'tests/**/*.rs', 'Cargo.toml']
-    depends_on: ['build']
-    cache: true
+```toml
+# culm.toml, one per project in the workspace
+
+[tasks.build]
+command = "cargo build --release"
+inputs = ["src/**/*.rs", "Cargo.toml", "Cargo.lock"]
+outputs = ["target/release/backend"]
+cache = true
+
+[tasks.test]
+command = "cargo nextest run"
+inputs = ["src/**/*.rs", "tests/**/*.rs", "Cargo.toml"]
+depends_on = ["build"]
+cache = true
 ```
 
 **culm does not know what `cargo` or `pnpm` or `vite` are.** It knows a
@@ -95,7 +96,7 @@ every build tool's own changes.
 
 ```
 ┌────────────────────────────────────────────┐
-│  culm.yaml (per project) + workspace root │
+│  culm.toml (per project) + workspace root │
 │    parsed into a task graph                │
 │  Task graph (petgraph)                     │
 │    topological order + change detection    │
@@ -235,7 +236,7 @@ tokio       = { version = "1", features = ["full"] }
 petgraph    = "0.7"          # task dependency graph
 clap        = { version = "4", features = ["derive", "env"] }
 serde       = { version = "1", features = ["derive"] }
-serde_yaml  = "0.9"
+toml        = "1"            # culm.toml, same crate the scaffolder already uses
 globset     = "0.4"          # input glob matching
 ignore      = "0.4"          # gitignore-aware walking, the ripgrep crate
 blake3      = "1"            # fast content hashing, feeds the cas module
@@ -294,7 +295,7 @@ Preserved from the original document. Do not soften these.
 - **The r1.0 benchmark shows no meaningful win over Nx** on the real
   Klassivox workspace, not a synthetic one. "Roughly the same speed, but
   self-built" is not a reason for anyone else to adopt it.
-- **Any point before r0.2 where writing `culm.yaml` feels like more work
+- **Any point before r0.2 where writing `culm.toml` feels like more work
   than the Nx configuration already in place.** If the replacement is not
   obviously less annoying than the incumbent on day one, on the one
   workspace with perfect information, it will not be less annoying

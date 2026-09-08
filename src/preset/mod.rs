@@ -13,10 +13,12 @@
 use std::path::Path;
 
 use include_dir::{Dir, include_dir};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::merge::LayerId;
+
+pub mod remote;
 
 static PRESETS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/presets");
 
@@ -36,7 +38,7 @@ pub enum PresetError {
 }
 
 /// A named selection of layers, as one `presets/*.toml`.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Preset {
     pub name: String,

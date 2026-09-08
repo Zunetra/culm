@@ -26,6 +26,7 @@ fn args(project: &str, layers: &[&str]) -> NewArgs {
         yes: true,
         layers_dir: None,
         no_install: true,
+        save_preset: None,
     }
 }
 

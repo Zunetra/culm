@@ -6,5 +6,7 @@
  * profile. `main.rs` is left with argument parsing and an exit code. */
 
 pub mod new;
+pub mod run;
 
 pub use new::{NewArgs, run_new, run_new_to};
+pub use run::{RunArgs, run_task, run_task_to};

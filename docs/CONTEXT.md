@@ -276,16 +276,23 @@ real risk, since Nest targets CommonJS by default and `ts-jest` under ESM
 is fiddly. *Reopen if:* a first-party layer cannot be ESM at any
 reasonable cost. Preferring CommonJS is not a reason.
 
+**22. The config file is `culm.toml`.** Settled 2026-09-07, closing open
+question 2. TOML, not YAML: decision 20 already committed to TOML
+everywhere else in the project (`layer.toml`, `presets/*.toml`)
+specifically so a second serialisation format is never bought for one
+file shape, and `culm.toml` names the tool rather than a generic word
+(`config.toml`) a real project's own tooling might already claim. Nothing
+reads or writes this file yet; the runner is what will, starting at v0.2.
+Settling the name now is what decision 2's own reasoning already asked
+for: renaming a config file after release is a migration, so the name is
+worth fixing before anything is built against it.
+
 ### Open
 
 Not yet decided. Do not treat silence as agreement.
 
 1. **Where the hosted remote cache runs, and what it costs.** Does not
    matter until the runner reaches v0.4.
-2. **Whether `culm.yaml` is the config filename.** Should be settled
-   before any file format is written, since renaming a config file after
-   release is a migration. Decision 20 is a nudge towards TOML but
-   decided a different file.
 3. **Whether Klassivox's `docs/Projects/05-task-runner.md` becomes a stub
    pointing here.**
 4. **Whether the JavaScript half of a monorepo becomes real workspace
@@ -359,7 +366,9 @@ is not.
 
 - `rustfmt.toml` and `clippy.toml` stay at defaults.
 - `cargo clippy --all-targets -- -D warnings` must pass before any
-  commit.
+  commit. `Cargo.toml`'s `[lints.clippy]` allows `needless_return`: an
+  explicit `return` is a chosen style here, not a mistake the gate should
+  flag. Deny-by-default stays the rule; this is the one named exception.
 - Errors are `thiserror` in library code, `anyhow` at the binary
   boundary.
 
@@ -485,38 +494,59 @@ been happy to write themselves. The quality bar is decision 19:
 configuration loading, error types, a health check, an integration test,
 real tooling config.
 
-**What exists.** The merge engine with `json-deep`, `line-block`, and
-`toml-members`. The layer format with categories, shape-dependent
-cardinality, manifest parsing, and selection validation. The scaffold
-module: interpolation, copy plan, disk writing. Twenty six layers across
-base, shape, frontend, backend, data, toolchain, quality, and runner,
-compiled into the binary by `include_dir` with `Catalog::load` kept as
-the `--layers-dir` escape hatch. `culm new`, non-interactive, in
+**What exists.** The merge engine, complete: `json-deep`, `line-block`,
+`toml-members`, `yaml-list`, `hook-script`, `yaml-steps`. The layer
+format with categories, shape-dependent cardinality, manifest parsing,
+and selection validation. The scaffold module: interpolation, copy plan,
+disk writing, and the layout system (`{{app_dir}}`, `{{test_dir}}`,
+`{{script_suffix}}`, `{{config_suffix}}`, `{{to_root}}`) that lets a
+layer never hardcode its own depth. Thirty four layers across base,
+shape, frontend, backend, data, toolchain, quality, runner, infra, and
+editor, compiled into the binary by `include_dir` with `Catalog::load`
+kept as the `--layers-dir` escape hatch. `culm new`, non-interactive, in
 `src/cli/`. The install step in `src/install/`, running `pnpm add` and
 `cargo add` in the generated workspace, with `--no-install` printing the
 plan. Presets in `src/preset/`, TOML, compiled in the same way. The
 startup banner in `src/banner.rs`, printed after argument parsing and
 suppressed when stdout is not a terminal, when `NO_COLOR` is set, or when
-`CULM_NO_BANNER` is set.
+`CULM_NO_BANNER` is set. Two GitHub Actions workflows: `templates.yml`
+(weekly, proves every shipped layer that emits an application still
+installs and builds against a live registry) and `ci.yml` (every push and
+PR: build, `cargo install`, clippy).
+
+**Proven, not just parsed, as of 2026-09-07.** Every one of the thirty
+four layers has been scaffolded, installed with real registry packages,
+and built by hand, in both `single-app` and `monorepo` shape. This
+surfaced and fixed a systemic bug class: several layers hardcoded a
+relative-path depth (a `../` count, a fixed `src/<id>` path) that was
+correct for single-app and silently wrong the moment a second app layer
+forced namespacing. `{{to_root}}` exists because of this. It also
+surfaced and fixed a run of smaller, real defects the merge engine and a
+reading could not catch on their own: a `.gitignore` contribution that
+stopped matching its own build output once namespaced, `svelte-check`
+leaking into a sibling frontend's files under monorepo, `astro check`
+never type-checking the shipped test file at all, three frontend
+component parsers not being told about TypeScript, missing Node globals
+failing `lint` before any user code was written, a missing HTTP platform
+adapter that would have crashed NestJS at boot, and an npm dist-tag trap
+where `prisma@latest` currently resolves to a broken pre-release (see
+"Traps already identified" for the version caps this forced).
 
 **What does not exist yet.** The wizard. Git URL presets, and saving a
-run as a preset. The `hook-script` and `yaml-steps` strategies.
-Telemetry. The runner half. The `infra` and `editor` layers, which have
-categories and no members. There is no ordinary CI workflow either:
-`.github/` holds the template matrix and nothing else, so the clippy gate
-is still run by hand. **No generated workspace has ever been installed
-and built.** Every frontend is asserted by scaffolding it, not by running
-its dev server or its test, so the templates are correct as far as the
-merge engine and a reading can tell and no further.
+run as a preset. Telemetry. The runner half. Real per-app JS packages for
+a monorepo (open question 4), which is what blocks `runner/turborepo` and
+`runner/moon` from ever being written; `runner/nx` is an honest stub for
+the same reason (it installs real `nx`, emits no `nx.json`, and says so).
+Klassivox's setup published as a preset (decision 17's second half) is
+deliberately not being pursued right now.
 
 **The order from here.**
 
-1. Prove one generated workspace installs and builds, end to end, by
-   hand. Every layer is currently correct only on paper. This is the
-   cheapest place left to find a wrong package name or a config key that
-   moved, and it is what the nightly matrix later automates.
-2. The `infra` and `editor` layers: docker-compose, dockerfile,
-   github-actions, husky, commitlint, vscode, editorconfig.
+1. ~~Prove one generated workspace installs and builds, end to end, by
+   hand.~~ Done 2026-09-07, for every layer, in every shape.
+2. ~~The `infra` and `editor` layers.~~ Done 2026-09-07: `docker-compose`,
+   `dockerfile`, `github-actions`, `husky`, `commitlint`, `editorconfig`,
+   `vscode`, `zed`.
 3. The wizard. Deliberately last: it is the part everyone builds first
    and the part that matters least, and flags have to work anyway.
 
@@ -526,7 +556,8 @@ vitest config named for the layer, and one component test.
 
 The order actually followed so far was an interleave rather than a
 sequence: layers to the quality bar, then the CLI, then the installs,
-then one frontend, then presets. Doing the CLI before every layer was
+then one frontend, then presets, then every layer to the proof-by-build
+bar, then the infra/editor gap. Doing the CLI before every layer was
 finished meant no CLI test was written against a surface that then had to
 change.
 

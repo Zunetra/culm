@@ -1,0 +1,11 @@
+name = "culm-telemetry"
+main = "src/index.js"
+compatibility_date = "2026-09-08"
+
+# `database_id` is filled in after `wrangler d1 create` - see README.md. It is
+# not a secret, but it is specific to your account, which is why it is not
+# guessed here.
+[[d1_databases]]
+binding = "DB"
+database_name = "culm-telemetry"
+database_id = "REPLACE_ME_AFTER_D1_CREATE"

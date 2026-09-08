@@ -22,6 +22,10 @@ pub mod layer;
 /// A preset is a starting point rather than a template of its own: it resolves to layers and then takes the ordinary path.
 pub mod preset;
 
+/// The task runner.
+/// Parses `culm.toml`, builds the dependency graph, and runs tasks in topological order. r0.1: sequential, no caching.
+pub mod runner;
+
 /// Copying a layer's own files into the generated workspace.
 /// Shared files are the merge engine's business; this handles the files one layer alone owns.
 pub mod scaffold;
@@ -29,3 +33,11 @@ pub mod scaffold;
 /// The merge engine.
 /// Layers contribute fragments to shared files, and this module resolves them into one deterministic file set.
 pub mod merge;
+
+/// Anonymous, opt-out usage reporting.
+/// Decision 9 is LOCKED: this is the one module that owns what leaves the machine, and no other module talks to the network.
+pub mod telemetry;
+
+/// The interactive picker `culm new` falls back to when no `--layer` or `--preset` is given on a real terminal.
+/// Builds the same `Vec<LayerId>` a flag-driven run would, then hands off to the ordinary path in `cli::new`, so nothing downstream knows a human was involved.
+pub mod wizard;

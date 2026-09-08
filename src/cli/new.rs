@@ -46,6 +46,11 @@ pub struct NewArgs {
     /// Write the workspace but print the package manager commands instead of running them.
     #[arg(long)]
     pub no_install: bool,
+
+    /// Save the resolved layer selection as `<NAME>.toml`, next to where this was run.
+    /// The local half of decision 6: no network, no registry, just the file this run already resolved, written out so a second `culm new --preset ./NAME.toml`-shaped workflow does not have to re-list every layer by hand.
+    #[arg(long, value_name = "NAME")]
+    pub save_preset: Option<String>,
 }
 
 /// Scaffolds a new workspace into `parent/<project>`.
@@ -65,13 +70,13 @@ pub fn run_new(args: &NewArgs, parent: &Path) -> Result<()> {
 pub fn run_new_to(args: &NewArgs, parent: &Path, out: &mut impl Write) -> Result<()> {
     let project = project_name(&args.project)?;
 
-    let chosen = chosen_layers(args)?;
-
     let catalog = match &args.layers_dir {
         Some(dir) => Catalog::load(dir)
             .with_context(|| format!("cannot load layers from {}", dir.display()))?,
         None => Catalog::embedded().context("the compiled-in layer catalog is unreadable")?,
     };
+
+    let chosen = chosen_layers(args, &catalog)?;
 
     let opt_outs = ids(&args.without);
     let entries = resolve(&catalog, &chosen, &opt_outs)?;
@@ -123,7 +128,36 @@ pub fn run_new_to(args: &NewArgs, parent: &Path, out: &mut impl Write) -> Result
 
     writeln!(out, "\nScaffolded {} into {}", project, root.display())?;
     finish_installs(out, &installs, &root, args.no_install)?;
+
+    if let Some(name) = &args.save_preset {
+        let layers = entries
+            .iter()
+            .map(|entry| entry.manifest.qualified_id().to_string())
+            .collect();
+        let saved = save_preset(name, layers, parent)?;
+        writeln!(out, "\nSaved this selection as {}", saved.display())?;
+    }
+
     Ok(())
+}
+
+/// Writes the resolved selection out as a preset, for a later `culm new
+/// --preset ./NAME.toml`.
+///
+/// Written beside the generated workspace, not inside it: a preset describes
+/// how to build a workspace, so it belongs with the command that produced it,
+/// not as a file the generated project would otherwise have to `.gitignore`
+/// or explain to itself.
+fn save_preset(name: &str, layers: Vec<String>, parent: &Path) -> Result<PathBuf> {
+    let preset = preset::Preset {
+        name: name.to_owned(),
+        description: format!("Saved by `culm new --save-preset {name}`."),
+        layers,
+    };
+    let path = parent.join(format!("{name}.toml"));
+    let body = toml::to_string_pretty(&preset).context("cannot serialise the saved preset")?;
+    std::fs::write(&path, body).with_context(|| format!("cannot write {}", path.display()))?;
+    Ok(path)
 }
 
 /// Runs the install plan, or prints it when the user asked not to run it.
@@ -180,21 +214,62 @@ fn ids(raw: &[String]) -> Vec<LayerId> {
     raw.iter().map(LayerId::new).collect()
 }
 
-/// The layers the run starts from, whether they were listed or named by a preset.
+/// The layers the run starts from, whether they were listed, named by a
+/// preset, or picked in the wizard.
 ///
 /// A preset resolves to ids here and then takes the ordinary path, so nothing
-/// downstream has to know a preset was involved. Clap keeps the two flags
-/// exclusive, and the check is repeated because `run_new` is also called
-/// directly by the tests.
-fn chosen_layers(args: &NewArgs) -> Result<Vec<LayerId>> {
+/// downstream has to know a preset was involved. Clap keeps `--layer` and
+/// `--preset` exclusive, and the check is repeated because `run_new` is also
+/// called directly by the tests.
+///
+/// The wizard is the fallback when neither is given, and only when both
+/// stdin and stdout are real terminals: a script that forgot `--layer` gets
+/// the same clear error it always has, never a hang waiting for keystrokes
+/// nothing will send. This is also what keeps `cargo test` from ever
+/// launching it, the same way `banner::print` never draws under a test
+/// harness.
+fn chosen_layers(args: &NewArgs, catalog: &Catalog) -> Result<Vec<LayerId>> {
     match (&args.preset, args.layers.is_empty()) {
         (Some(_), false) => bail!("--preset and --layer cannot be combined"),
-        (Some(name), true) => Ok(preset::get(name)?.ids()),
+        (Some(source), true) => Ok(resolve_preset(source)?.ids()),
         (None, false) => Ok(ids(&args.layers)),
+        (None, true) if is_interactive() => match crate::wizard::run(catalog)? {
+            Some(chosen) => Ok(ids(&chosen)),
+            None => bail!("cancelled: nothing was chosen"),
+        },
         (None, true) => bail!(
             "no layers chosen: pass --preset NAME, or at least one --layer, for example --layer backend/axum"
         ),
     }
+}
+
+fn is_interactive() -> bool {
+    use std::io::IsTerminal;
+    std::io::stdin().is_terminal() && std::io::stdout().is_terminal()
+}
+
+/// A preset by first-party name, by local file, or by git URL, in that order.
+///
+/// A local file is checked first and only when the string plainly looks like
+/// one (ends in `.toml`, and a first-party preset never does since it is
+/// named bare), so a real preset called `team` is never shadowed by a
+/// same-named file sitting in the working directory by coincidence.
+fn resolve_preset(source: &str) -> Result<preset::Preset> {
+    if source.ends_with(".toml") {
+        let contents = std::fs::read_to_string(source)
+            .with_context(|| format!("cannot read preset file `{source}`"))?;
+        return toml::from_str(&contents)
+            .with_context(|| format!("`{source}` is not a valid preset"));
+    }
+
+    if let Some(remote) = preset::remote::parse_source(source) {
+        let cache_root = preset::remote::default_cache_root()
+            .context("cannot find a cache directory for a remote preset on this platform")?;
+        return preset::remote::fetch(&remote, &cache_root)
+            .with_context(|| format!("cannot fetch preset `{source}`"));
+    }
+
+    Ok(preset::get(source)?)
 }
 
 /// Refuses anything that would scaffold on top of existing work.
