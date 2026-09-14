@@ -93,6 +93,9 @@ jobs:
           - layer: backend/actix
             toolchain: rust
 
+          - layer: backend/go-chi
+            toolchain: go
+
     steps:
       - uses: actions/checkout@v4
 
@@ -109,6 +112,11 @@ jobs:
         if: matrix.toolchain == 'node'
         with:
           node-version: 24
+
+      - uses: actions/setup-go@v5
+        if: matrix.toolchain == 'go'
+        with:
+          go-version: stable
 
       # Release rather than debug: this is the binary a user would have, and
       # the layer tree is compiled into it, so a debug build would be testing a
@@ -172,6 +180,25 @@ jobs:
           failed=""
           cargo build --locked --workspace || failed="$failed build"
           cargo test --workspace || failed="$failed test"
+
+          echo "### ${{ matrix.layer }}" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$failed" ]; then
+            echo "Failed:$failed" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "All steps passed." >> "$GITHUB_STEP_SUMMARY"
+
+      # `culm new` already ran `go get` for real, so this proves the module
+      # actually builds and tests, not just that the install step succeeded.
+      # single-app is the only shape this matrix scaffolds, so {{app_dir}}
+      # is always plain `src`.
+      - name: Build and test
+        if: matrix.toolchain == 'go'
+        run: |
+          cd "$RUNNER_TEMP/scaffold/demo/src"
+          failed=""
+          go build ./... || failed="$failed build"
+          go test ./... || failed="$failed test"
 
           echo "### ${{ matrix.layer }}" >> "$GITHUB_STEP_SUMMARY"
           if [ -n "$failed" ]; then

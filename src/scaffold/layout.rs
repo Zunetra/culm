@@ -57,12 +57,16 @@ pub fn variables(entries: &[&CatalogEntry], project: &str) -> Vec<Variables> {
                     .with("script_suffix", "")
                     .with("config_suffix", "")
                     .with("to_root", "../")
+                    .with("pkg_target", "package.json")
+                    .with("pkg_name", project.to_owned())
             } else {
                 base.with("app_dir", format!("src/{id}"))
                     .with("test_dir", format!("test/{id}"))
                     .with("script_suffix", format!(":{id}"))
                     .with("config_suffix", format!(".{id}"))
                     .with("to_root", "../../")
+                    .with("pkg_target", format!("src/{id}/package.json"))
+                    .with("pkg_name", format!("{project}-{id}"))
             }
         })
         .collect()
@@ -105,6 +109,8 @@ mod tests {
         assert_eq!(vars[0].get("script_suffix"), Some(""));
         assert_eq!(vars[0].get("config_suffix"), Some(""));
         assert_eq!(vars[0].get("to_root"), Some("../"));
+        assert_eq!(vars[0].get("pkg_target"), Some("package.json"));
+        assert_eq!(vars[0].get("pkg_name"), Some("demo"));
     }
 
     /* Two frontends both writing `scripts.dev` is a hard merge error, so the
@@ -118,9 +124,13 @@ mod tests {
         assert_eq!(vars[0].get("app_dir"), Some("src/nuxt"));
         assert_eq!(vars[0].get("script_suffix"), Some(":nuxt"));
         assert_eq!(vars[0].get("to_root"), Some("../../"));
+        assert_eq!(vars[0].get("pkg_target"), Some("src/nuxt/package.json"));
+        assert_eq!(vars[0].get("pkg_name"), Some("demo-nuxt"));
         assert_eq!(vars[1].get("app_dir"), Some("src/next"));
         assert_eq!(vars[1].get("script_suffix"), Some(":next"));
         assert_eq!(vars[1].get("to_root"), Some("../../"));
+        assert_eq!(vars[1].get("pkg_target"), Some("src/next/package.json"));
+        assert_eq!(vars[1].get("pkg_name"), Some("demo-next"));
     }
 
     /* The case a shape check alone would get wrong. A single-app workspace

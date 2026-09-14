@@ -8,12 +8,7 @@ import tseslint from "typescript-eslint";
  * `lang="ts"` on its own, so the TypeScript parser has to be named explicitly. */
 export default [
   ...tseslint.config({
-    files: [
-      "{{app_dir}}/**/*.ts",
-      "{{test_dir}}/**/*.ts",
-      "vite{{config_suffix}}.config.ts",
-      "vitest{{config_suffix}}.config.ts",
-    ],
+    files: ["{{app_dir}}/**/*.ts"],
     extends: [...tseslint.configs.recommended],
   }),
   ...pluginSvelte.configs["flat/recommended"].map((entry) => ({

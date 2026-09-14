@@ -95,6 +95,13 @@ pub struct InstallSpec {
      * features is a separate entry. */
     #[serde(default)]
     pub features: Vec<String>,
+    /// Forces this install to the workspace root even when the layer's own
+    /// package.json lives elsewhere. For a package a root-level file (an
+    /// ESLint fragment discovered by scanning the root directory) imports
+    /// directly, since Node resolves that import from the fragment's own
+    /// location, not the layer's.
+    #[serde(default)]
+    pub root: bool,
 }
 
 impl Manifest {

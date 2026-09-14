@@ -7,19 +7,27 @@ default = false
 
 [[merge]]
 strategy = "json-deep"
-target = "package.json"
+target = "{{pkg_target}}"
+[merge.value]
+name = "{{pkg_name}}"
+private = true
+type = "module"
 [merge.value.scripts]
-"dev{{script_suffix}}" = "vite dev --config vite{{config_suffix}}.config.ts"
-"build{{script_suffix}}" = "vite build --config vite{{config_suffix}}.config.ts"
-"preview{{script_suffix}}" = "vite preview --config vite{{config_suffix}}.config.ts"
-"test{{script_suffix}}" = "svelte-kit sync && vitest run --config vitest{{config_suffix}}.config.ts"
-"check{{script_suffix}}" = "svelte-kit sync && svelte-check --tsconfig ./{{app_dir}}/tsconfig.json"
+dev = "cd {{app_dir}} && svelte-kit sync && vite dev"
+build = "cd {{app_dir}} && svelte-kit sync && vite build"
+preview = "cd {{app_dir}} && vite preview"
+test = "cd {{app_dir}} && svelte-kit sync && vitest run"
+check = "cd {{app_dir}} && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
 
 [[merge]]
 strategy = "line-block"
 target = ".gitignore"
-lines = [".svelte-kit/", "build/", "dist/"]
+lines = ["{{app_dir}}/.svelte-kit/", "{{app_dir}}/build/", "{{app_dir}}/dist/"]
 
+# vitest is capped below 5 because its own vitest/config.d.ts type-imports
+# from @vitest/expect and vitest/browser, neither of which vitest 5 lists as
+# a dependency; svelte-check walks that d.ts and fails on both, even though
+# nothing here uses browser mode.
 [[install]]
 manager = "pnpm"
 dev = true
@@ -31,22 +39,19 @@ packages = [
   "svelte-check",
   "vite",
   "typescript@<6",
-  "vitest",
+  "vitest@<5",
   "@testing-library/svelte",
   "jsdom",
   "@types/node",
 ]
 
-# Everything SvelteKit discovers by convention sits under src/svelte, which
-# svelte.config.js names in `kit.files`. A second frontend in the same workspace
-# gets its own directory rather than fighting over the root.
 [[files]]
 from = "files/svelte.config.js"
-to = "svelte.config.js"
+to = "{{app_dir}}/svelte.config.js"
 
 [[files]]
 from = "files/vite.config.ts"
-to = "vite{{config_suffix}}.config.ts"
+to = "{{app_dir}}/vite.config.ts"
 
 [[files]]
 from = "files/app.html"
@@ -77,17 +82,17 @@ to = "{{app_dir}}/tsconfig.json"
 
 [[files]]
 from = "files/vitest.svelte.config.ts"
-to = "vitest{{config_suffix}}.config.ts"
+to = "{{app_dir}}/vitest.config.ts"
 
 [[files]]
 from = "files/page.spec.ts"
-to = "{{test_dir}}/page.spec.ts"
+to = "{{app_dir}}/test/page.spec.ts"
 
 # Aliased in by vitest.config.ts in place of $env/dynamic/public, which only
 # the bare svelte plugin's dev-server-less tests cannot reach.
 [[files]]
 from = "files/env-dynamic-public.stub.ts"
-to = "{{test_dir}}/env-dynamic-public.stub.ts"
+to = "{{app_dir}}/test/env-dynamic-public.stub.ts"
 
 # ESLint's default match covers .js, .mjs and .cjs only, so this layer's sources
 # would be silently unlinted. The root config finds this file by its name rather
@@ -102,4 +107,5 @@ to = "eslint.svelte.config.mjs"
 [[install]]
 manager = "pnpm"
 dev = true
+root = true
 packages = ["typescript-eslint", "eslint-plugin-svelte"]

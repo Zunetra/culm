@@ -287,6 +287,53 @@ Settling the name now is what decision 2's own reasoning already asked
 for: renaming a config file after release is a migration, so the name is
 worth fixing before anything is built against it.
 
+**23. A JS app in a monorepo owns a real `package.json`, not a namespaced
+contribution to a shared root one.** Settled 2026-09-14, closing open
+question 4. `backend/actix` already gets a real crate at `crates/actix`
+via `toml-members`, and `backend/go-chi` already gets a real module at
+`{{app_dir}}/go.mod`; JS was the one ecosystem still sharing one root
+manifest with `:​<id>`-suffixed scripts. This is what makes `runner/turborepo`
+and `runner/moon` writable at all: neither can orchestrate a workspace
+with exactly one JS package in it, which is also why `runner/nx` has
+shipped as a stub. The merge target itself needed no new capability:
+`CatalogEntry::interpolated` already renders the whole manifest's raw text
+against the layout variables before parsing it, so a `target =
+"{{pkg_target}}"` line resolves the same way a `[[files]] to =
+"{{app_dir}}/..."` path already does. `pnpm-workspace.yaml` needed no new
+merge strategy either: `yaml-list`, landed 2026-08-19, was written for
+exactly this case and had simply never been pointed at a layer.
+
+Migration in progress, one layer at a time, the same discipline
+`backend/go-chi` went through alone before anything else changed.
+`frontend/react-vite` is the first layer through, fully: `package.json`
+(with a real `name`/`private`/`type`), `vite.config.ts`,
+`tsconfig.json`/`tsconfig.test.json`, `vitest.config.ts`, and its test
+file all now live under `{{app_dir}}`, `config_suffix` dropped for this
+layer's own scripts since a real per-app package needs no namespacing.
+`eslint.react-vite.config.mjs` stays at the workspace root deliberately:
+the root `eslint.config.mjs` discovers fragments by scanning its own
+directory, not recursively, so a fragment moved into `{{app_dir}}` would
+stop being found at all.
+
+Verified for real in a hand-scaffolded two-app monorepo (`frontend/nuxt`
++ `frontend/react-vite`, a hand-written `pnpm-workspace.yaml` since
+generating one is not built yet): `pnpm install`, then
+`pnpm --filter proof-react-vite run build`, `run typecheck`, `run test`,
+and the root `run lint` all passed. The first pass surfaced a real bug on
+the way: `install::plan` had no case pointing `pnpm add` at a layer's own
+package.json, so `react`/`react-dom` landed in the shared root manifest
+instead of `react-vite`'s. Fixed the same way `go_module_dir` already
+handles the equivalent case for `go get`: a `pnpm_package_dir` lookup
+over the layer's own merges, and `-C <dir>` added to the command before
+`add`.
+
+What is left: the other ten JS layers (five frontends, three Node
+backends, two data layers), each needing the same treatment and the same
+real verification, not just the merge target moved and called done.
+`pnpm-workspace.yaml` generation itself (wiring `yaml-list` to a layer,
+so culm writes it rather than a person writing it by hand to test) has
+not started either.
+
 ### Open
 
 Not yet decided. Do not treat silence as agreement.
@@ -295,32 +342,6 @@ Not yet decided. Do not treat silence as agreement.
    matter until the runner reaches v0.4.
 3. **Whether Klassivox's `docs/Projects/05-task-runner.md` becomes a stub
    pointing here.**
-4. **Whether the JavaScript half of a monorepo becomes real workspace
-   packages.** Raised 2026-08-19. Today `shape/monorepo` changes
-   cardinality and contributes nothing, so a JS monorepo is one root
-   `package.json` holding every app under `src/<layer-id>/`, with
-   scripts namespaced `build:nuxt`, `build:next`. The Rust half is not
-   symmetric: `toml-members` produces a real Cargo workspace with the
-   backend in `crates/<id>/`.
-
-   This blocks decision 3. Nx, Turborepo and Moon all orchestrate tasks
-   across projects, and the JS half has exactly one project, which is
-   why `runner/nx` emits no `nx.json` and installs a package that
-   organises nothing. `turborepo` and `moon` layers cannot be written
-   against the current output shape, so the constraint that culm must be
-   able to emit three runners is presently unmet and cannot be met by
-   authoring two more layers.
-
-   It is also the same question as the solo-scaffold ergonomics: real
-   packages would let a single app sit at the root with a plain `dev`
-   script, and a monorepo put each app in `apps/<id>/` with its own
-   `package.json` and unnamespaced scripts, which removes the reason
-   namespacing exists. Keyed on `Shape`, which is an explicit choice, so
-   it is not sibling-sniffing.
-
-   Cost: every JS layer changes, and `pnpm-workspace.yaml` needs a merge
-   strategy that does not exist. Not to be started before section 9a of
-   [01-scaffolder.md](01-scaffolder.md) is closed.
 
 ---
 
@@ -532,23 +553,98 @@ adapter that would have crashed NestJS at boot, and an npm dist-tag trap
 where `prisma@latest` currently resolves to a broken pre-release (see
 "Traps already identified" for the version caps this forced).
 
-**What does not exist yet.** The wizard. Git URL presets, and saving a
-run as a preset. Telemetry. The runner half. Real per-app JS packages for
-a monorepo (open question 4), which is what blocks `runner/turborepo` and
-`runner/moon` from ever being written; `runner/nx` is an honest stub for
-the same reason (it installs real `nx`, emits no `nx.json`, and says so).
-Klassivox's setup published as a preset (decision 17's second half) is
-deliberately not being pursued right now.
+**The scaffolder (v0.1) is complete as of 2026-09-08.** Every item that
+was on this list is done:
 
-**The order from here.**
+- **The wizard**, `src/wizard/` (`ratatui` + `crossterm`). Triggers on
+  `culm new <name>` with no `--layer`/`--preset` given, only when both
+  stdin and stdout are real terminals; falls through to the same error a
+  script has always gotten otherwise, so nothing about scripted or CI use
+  changed. Walks shape, frontend, backend, (toolchain, only under
+  `tooling-only`), quality, infra, editor, runner, using the real
+  `Category::cardinality`/`shape_of` logic rather than a second copy of
+  either. Data layers (`sqlx`, `prisma`, `drizzle`) are deliberately not
+  in the wizard flow: they are not in `01-scaffolder.md`'s documented
+  order either, so none was invented for them. Verified live via a real
+  pty: the cancel path, the "accept every default" path (which correctly
+  hits the existing cross-category validation error rather than the
+  wizard trying to re-implement that rule), and a real successful
+  scaffold.
+- **Git URL presets**, `src/preset/remote.rs`. `--preset github:user/repo`,
+  `gitlab:user/repo`, an optional `/path/to/file.toml` and `@ref`, or a raw
+  git URL, fetched via a real `git clone` into a local cache keyed by the
+  clone URL. Tested against real local git repositories standing in for
+  "remote" (`git clone` treats a filesystem path exactly like a URL), so
+  `cargo test` stays fully offline. `--preset ./file.toml` also works, no
+  git involved, added because the feature was already half-built once the
+  local-file case was considered.
+- **Saving a run as a preset**, `--save-preset NAME` on `culm new`. Writes
+  the fully resolved layer list (every default included, not just what
+  was typed) to `<NAME>.toml` beside the generated workspace, in the same
+  shape a first-party preset already parses, so `--preset ./NAME.toml`
+  reads it straight back.
+- **Telemetry**, `src/telemetry/`. The Rust side only: UUID persistence
+  (`dirs`), the exact decision-9 payload and nothing else, opt-out via
+  `CULM_TELEMETRY=0`, a 500ms best-effort send on a detached thread so a
+  dead network never adds visible latency. Wired into `main.rs` only,
+  never into `cli::new` itself, specifically because `tests/cli.rs` calls
+  `run_new` directly to avoid spawning a process, and that must never
+  touch the network or this machine's real telemetry id as a side effect
+  of `cargo test` — the same reasoning that already keeps `banner::print`
+  out of `cli::new`. The receiver is written but not deployed:
+  `telemetry/worker/` is a complete Cloudflare Worker + D1 schema with a
+  step-by-step `README.md`; `DEFAULT_ENDPOINT` in `src/telemetry/mod.rs`
+  still points at a domain that does not resolve to anything yet.
 
-1. ~~Prove one generated workspace installs and builds, end to end, by
-   hand.~~ Done 2026-09-07, for every layer, in every shape.
-2. ~~The `infra` and `editor` layers.~~ Done 2026-09-07: `docker-compose`,
-   `dockerfile`, `github-actions`, `husky`, `commitlint`, `editorconfig`,
-   `vscode`, `zed`.
-3. The wizard. Deliberately last: it is the part everyone builds first
-   and the part that matters least, and flags have to work anyway.
+**Decision 22 settled 2026-09-07**: the config file is `culm.toml`,
+closing open question 2.
+
+**The runner (v0.2) has started, milestone r0.1 done.** `src/runner/`:
+`culm.toml` parsing, a `petgraph` task graph, named-cycle detection,
+topological execution of one task's dependency closure, sequential, no
+caching, per `docs/02-runner.md` section 6's own scope for this
+milestone. Dogfooded for real 2026-09-08 against a genuine scaffolded
+`monorepo` (Nuxt + Axum): `culm run build`/`culm run test` correctly
+ordered and ran the real `cargo`/`pnpm` commands, and a real injected
+compile error in the backend crate stopped the run at the right task with
+the right exit code, without ever reaching the tasks that depended on it.
+No bugs found. Per the doc's own methodology this is the evidence r0.2
+(content hashing, local caching via `cas`) wants before it starts, not a
+substitute for the two-week real-use check r0.2 itself requires once it
+exists.
+
+**Go exists as of 2026-09-08**: `backend/go-chi` (the `go-chi/chi` router)
+and `toolchain/go-mod`, decision 7's "then Go." No `go.work`: Go modules
+are directory scoped, so `{{app_dir}}/go.mod` is a complete module on its
+own and a second Go backend needs no shared root file to collide with —
+`backend/go-chi` carries no `[[merge]]` entry at all. `src/install/mod.rs`
+gained a `"go"` manager (`go get`, pointed at the right module via a
+leading `-C {{app_dir}}` the same way `cargo add` uses `--manifest-path`
+for a virtual workspace root) rather than leaving the dependency to be
+added by hand, which is what every other backend already gets for free.
+Building this exposed a real, previously-latent bug: `install::plan` was
+reading the **uninterpolated** `CatalogEntry` list, so a `[[files]] to`
+path containing a placeholder (`{{app_dir}}/go.mod`) reached it as literal
+text instead of the resolved path. This never surfaced before because
+every Rust layer's `Cargo.toml` sits at a literal `crates/<id>/` rather
+than a templated location — `backend/go-chi` was the first layer whose
+install-relevant path was ever templated. Fixed in `src/cli/new.rs`: the
+already-interpolated manifests are what `install::plan` reads now.
+Verified for real: `go get` resolving and writing a real version into
+`go.mod`, `go build`/`go test` passing, in both single-app and monorepo
+shape (the latter proving `{{app_dir}}` namespacing reaches the install
+step correctly too, not only the copy plan).
+
+**What does not exist yet.** r0.2 onward (caching, `--affected`, parallel
+execution, remote cache) — not started, and not to be started until r0.1
+has seen more real use per the point above it. Real per-app JS packages
+for a monorepo (open
+question 4), which is what blocks `runner/turborepo` and `runner/moon`
+from ever being written; `runner/nx` is an honest stub for the same
+reason (it installs real `nx`, emits no `nx.json`, and says so). The
+Cloudflare telemetry receiver is written but not deployed. Klassivox's
+setup published as a preset (decision 17's second half) is deliberately
+not being pursued right now.
 
 All six frontends reached the decision 19 bar on 2026-08-18. Each ships a
 runtime-configured entry page, an error boundary, a scoped tsconfig, a
@@ -557,9 +653,21 @@ vitest config named for the layer, and one component test.
 The order actually followed so far was an interleave rather than a
 sequence: layers to the quality bar, then the CLI, then the installs,
 then one frontend, then presets, then every layer to the proof-by-build
-bar, then the infra/editor gap. Doing the CLI before every layer was
-finished meant no CLI test was written against a surface that then had to
-change.
+bar, then the infra/editor gap, then the wizard and remote presets and
+telemetry and runner r0.1 together in one session. Doing the CLI before
+every layer was finished meant no CLI test was written against a surface
+that then had to change.
+
+**A process trap, not a design one.** 2026-09-08: a background agent
+working on the runner ran a bare `git stash` to isolate its own changes
+while debugging, which stashed every tracked-file change in the working
+tree indiscriminately, including unrelated concurrent work from another
+session. Recovered without loss because `git stash` stashes rather than
+discards, but the lesson generalises: **never run `git stash`, `reset`,
+`checkout`, or `clean` against a shared working tree without checking
+`git status` first**, and scope a stash to specific paths
+(`git stash push -- <paths>`) rather than a bare `git stash` when there
+might be work outside the files actually being edited.
 
 **Two rules that shape every layer authored from here.**
 
@@ -692,6 +800,18 @@ upstream, which would make a red run mean nothing.
   transitively (Nuxt/Vite do). Not a culm bug, a pnpm default; the escape
   hatch is `pnpm approve-builds --all` or an `allowBuilds` entry in
   `pnpm-workspace.yaml`, run by hand in the generated workspace.
+- **`infra/dockerfile`'s Nuxt container has a slow first start**, found
+  verifying it against a real Docker daemon 2026-09-07: `corepack enable`
+  at build time enables corepack but does not cache the `pnpm` binary
+  itself into the image, so the first `docker compose up` spends 10-15
+  seconds downloading pnpm fresh before `nuxt preview` runs. Not a
+  correctness bug — every subsequent start is fast, and the build itself
+  succeeds — just a cold-start cost nobody has decided is worth fixing
+  yet. The fix, if it becomes worth doing: `RUN corepack prepare
+  pnpm@<version> --activate` as its own build step, which decision 5 does
+  not reach the same way it reaches a generated workspace's own
+  dependencies, since this is a version of the tool the Dockerfile
+  installs, not a package a generated project depends on.
 
 ---
 

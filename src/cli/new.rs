@@ -115,7 +115,22 @@ pub fn run_new_to(args: &NewArgs, parent: &Path, out: &mut impl Write) -> Result
         .map(|((manifest, entry), vars)| (manifest, &entry.source, vars))
         .collect();
     let plan = CopyPlan::build(planned)?;
-    let installs = install::plan(&entries)?;
+
+    /* Interpolated, not the raw `entries`: a placeholder in a `[[files]] to`
+     * path (`{{app_dir}}/go.mod`) is real text only after substitution, and
+     * `install::plan` reads that path to find where a `go get`/`cargo add`
+     * belongs. This never surfaced before `backend/go-chi`, because every
+     * Rust layer's `Cargo.toml` path is a literal `crates/<id>/` rather than
+     * a templated one. */
+    let interpolated_entries: Vec<CatalogEntry> = entries
+        .iter()
+        .zip(&manifests)
+        .map(|(entry, manifest)| CatalogEntry {
+            manifest: manifest.clone(),
+            source: entry.source.clone(),
+        })
+        .collect();
+    let installs = install::plan(&interpolated_entries.iter().collect::<Vec<_>>())?;
 
     summarise(out, &entries, plan.len(), merged.len(), &root)?;
 

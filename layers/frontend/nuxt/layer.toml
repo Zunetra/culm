@@ -10,26 +10,27 @@ default = false
 # framework needing its own postinstall step would collide on it.
 [[merge]]
 strategy = "json-deep"
-target = "package.json"
+target = "{{pkg_target}}"
+[merge.value]
+name = "{{pkg_name}}"
+private = true
+type = "module"
 [merge.value.scripts]
-"dev{{script_suffix}}" = "nuxt dev"
-"build{{script_suffix}}" = "nuxt build"
-"preview{{script_suffix}}" = "nuxt preview"
-"generate{{script_suffix}}" = "nuxt generate"
-"typecheck{{script_suffix}}" = "nuxt prepare && vue-tsc -p tsconfig{{config_suffix}}.json --noEmit"
-"test{{script_suffix}}" = "nuxt prepare && vitest run --config vitest{{config_suffix}}.config.ts"
+dev = "cd {{app_dir}} && nuxt dev"
+build = "cd {{app_dir}} && nuxt build"
+preview = "cd {{app_dir}} && nuxt preview"
+generate = "cd {{app_dir}} && nuxt generate"
+typecheck = "cd {{app_dir}} && nuxt prepare && vue-tsc -p tsconfig.json --noEmit"
+test = "cd {{app_dir}} && nuxt prepare && vitest run"
 
 [[merge]]
 strategy = "line-block"
 target = ".gitignore"
-lines = [".nuxt/", ".output/", ".data/", "dist/"]
+lines = ["{{app_dir}}/.nuxt/", "{{app_dir}}/.output/", "{{app_dir}}/.data/", "{{app_dir}}/dist/"]
 
-# Everything Nuxt discovers by convention sits under {{app_dir}}, which
-# nuxt.config.ts names as srcDir. A second frontend in the same workspace gets
-# its own directory rather than fighting over the root.
 [[files]]
 from = "files/nuxt.config.ts"
-to = "nuxt.config.ts"
+to = "{{app_dir}}/nuxt.config.ts"
 
 [[files]]
 from = "files/app.vue"
@@ -55,22 +56,13 @@ to = "{{app_dir}}/error.vue"
 from = "files/tsconfig.json"
 to = "{{app_dir}}/tsconfig.json"
 
-# vue-tsc, not `nuxt typecheck`, is what the typecheck script actually runs:
-# `nuxt typecheck` always looks for tsconfig.json at the workspace root and
-# has no flag to point it elsewhere, which breaks the moment srcDir is not
-# the root. This file is that root tsconfig, namespaced like every other
-# root file this layer contributes.
-[[files]]
-from = "files/tsconfig.root.json"
-to = "tsconfig{{config_suffix}}.json"
-
 [[files]]
 from = "files/vitest.nuxt.config.ts"
-to = "vitest{{config_suffix}}.config.ts"
+to = "{{app_dir}}/vitest.config.ts"
 
 [[files]]
 from = "files/index.spec.ts"
-to = "{{test_dir}}/index.spec.ts"
+to = "{{app_dir}}/test/index.spec.ts"
 
 [[install]]
 manager = "pnpm"
@@ -81,7 +73,9 @@ packages = ["vue", "vue-router"]
 # component test needs it even though nothing imports it directly. vitest is
 # capped below 5 because @nuxt/test-utils only declares a peer on ^4.0.2;
 # vitest 5's "vitest/environments" export shape breaks the "nuxt" test
-# environment @nuxt/test-utils registers.
+# environment @nuxt/test-utils registers. @types/node is what typecheck
+# actually needs: vitest.config.ts imports node:url and sits inside srcDir,
+# so vue-tsc type-checks it along with everything else.
 [[install]]
 manager = "pnpm"
 dev = true
@@ -93,6 +87,7 @@ packages = [
   "@nuxt/test-utils",
   "@vue/test-utils",
   "happy-dom",
+  "@types/node",
 ]
 
 # ESLint's default match covers .js, .mjs and .cjs only, so this layer's sources
@@ -108,4 +103,5 @@ to = "eslint.nuxt.config.mjs"
 [[install]]
 manager = "pnpm"
 dev = true
+root = true
 packages = ["typescript-eslint", "eslint-plugin-vue"]

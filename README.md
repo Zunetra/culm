@@ -312,7 +312,7 @@ that would have arrived as a default.
 
 ## 📚 Shipped layers
 
-Twenty-six layers live under `layers/`. Every one of them is loaded,
+Thirty-six layers live under `layers/`. Every one of them is loaded,
 parsed, and merge-tested by `tests/layers.rs`, which discovers them by
 walking the tree rather than reading a list, so a layer added tomorrow is
 covered without anybody remembering to register it.
@@ -358,7 +358,7 @@ hard merge error rather than something to resolve silently.
 key has to keep its literal name to work, so it cannot be namespaced, and
 a second framework needing its own postinstall step would collide on it.
 
-### backend (5)
+### backend (6)
 
 | Layer | Requires | Notes |
 | --- | --- | --- |
@@ -367,6 +367,7 @@ a second framework needing its own postinstall step would collide on it.
 | `backend/express` | `toolchain/node-pnpm` | Server at `src/express/server.js` |
 | `backend/fastify` | `toolchain/node-pnpm` | Server at `src/fastify/server.js` |
 | `backend/nestjs` | `toolchain/node-pnpm` | Sources under `src/nestjs/`, plus `nest-cli.json` |
+| `backend/go-chi` | `toolchain/go-mod` | `{{app_dir}}/go.mod` is a complete module on its own, no `[[merge]]` entry |
 
 The two Rust backends put their entry point under `src/bin/` rather than
 at `src/main.rs`, so a second Rust service in the same workspace has a
@@ -396,12 +397,13 @@ All three add a `DATABASE_URL` line to `.env.example` rather than
 defaulting one. A committed file holding a working credential is how a
 real one ends up in a repository.
 
-### toolchain (2)
+### toolchain (3)
 
 | Layer | Contributes |
 | --- | --- |
 | `toolchain/node-pnpm` | `private: true` in `package.json`, plus `node_modules/`, `.pnpm-store/`, `.npm/` |
 | `toolchain/rust-cargo` | `/target`, `**/*.rs.bk`, `*.pdb` |
+| `toolchain/go-mod` | `*.exe`, `*.test`, `*.out`, `vendor/`. No root manifest: every Go app owns a complete module in `{{app_dir}}` |
 
 `private` is the one root key every JS layer can agree on, and they all
 agree on the same value, so it merges rather than conflicts.
@@ -410,7 +412,7 @@ agree on the same value, so it merges rather than conflicts.
 repository is one crate or many is the shape layer's business, and
 guessing wrong would clobber a real manifest in an existing repository.
 
-### quality (4)
+### quality (7)
 
 | Layer | Default | Requires | Contributes |
 | --- | --- | --- | --- |
@@ -418,6 +420,9 @@ guessing wrong would clobber a real manifest in an existing repository.
 | `quality/eslint` | ✅ | `toolchain/node-pnpm` | `lint`, `lint:fix`, `eslint.config.mjs`, `.eslintcache` ignore |
 | `quality/rustfmt` | ✅ | `toolchain/rust-cargo` | `rustfmt.toml` |
 | `quality/clippy` | ✅ | `toolchain/rust-cargo` | `clippy.toml` |
+| `quality/husky` | ✅ | `toolchain/node-pnpm` | `.husky/pre-commit`, `.lintstagedrc.json`, installs `husky` and `lint-staged` |
+| `quality/commitlint` | ✅ | `toolchain/node-pnpm`, `quality/husky` | `.husky/commit-msg`, `commitlint.config.mjs`, installs `@commitlint/cli` |
+| `quality/editorconfig` | ✅ | `toolchain/node-pnpm` | `.editorconfig` |
 
 Quality scripts are **not** namespaced, unlike the frontend ones. At most
 one of each quality layer is selected, so `format` has a single owner and
@@ -443,11 +448,23 @@ scaffolder must be able to emit somebody else's runner or nothing at all.
 If the scaffolder ever emits configuration only culm's runner can
 consume, the entire argument for building the scaffolder first collapses.
 
-### Not yet shipped
+### infra (3)
 
-`infra` and `editor` are declared categories with no members yet. Both
-are `zero or more` under every shape, so a selection is legal without
-them.
+| Layer | Default | Requires | Contributes |
+| --- | --- | --- | --- |
+| `infra/dockerfile` | | | A `Dockerfile` per app |
+| `infra/docker-compose` | | `infra/dockerfile` | `compose.yaml`, merged `.env.example` |
+| `infra/github-actions` | | | `.github/workflows/ci.yml` |
+
+### editor (2)
+
+| Layer | Default | Requires | Contributes |
+| --- | --- | --- | --- |
+| `editor/vscode` | | `quality/prettier` | `.vscode/settings.json`, `.vscode/extensions.json` |
+| `editor/zed` | | | `.zed/settings.json` |
+
+All five are `zero or more` under every shape, so any combination, or
+none, is a legal selection.
 
 ## 🔀 The merge engine
 
@@ -941,49 +958,68 @@ so re-verify before relying on it.
   parsing, selection validation, and selection resolution.
 - The layer catalog, which walks a directory tree and loads every
   `layer.toml` it finds.
-- The merge engine with `json-deep`, `line-block`, and `toml-members`.
+- The merge engine, all four strategies: `json-deep`, `line-block`,
+  `toml-members`, `yaml-list`, `yaml-steps`, and `hook-script`.
 - Order independence, covered by a proptest over every permutation.
 - The scaffold module: the copy plan, `{{name}}` interpolation, path
   containment, and the disk writer.
-- Twenty-six layers across base, shape, frontend, backend, data,
-  toolchain, quality, and runner.
-- Unit tests beside every module plus three integration suites.
+- **The CLI.** `culm new` and `culm run`, both callable as a function from
+  a test without spawning a process.
+- **The wizard**, `src/wizard/` (`ratatui` + `crossterm`). Falls back to
+  flags on anything that is not a real terminal, so scripted and CI use
+  are unaffected.
+- **Git URL presets and `--save-preset`.** `--preset github:user/repo`,
+  `gitlab:user/repo`, a raw git URL, or a local `./file.toml`.
+- **Install execution.** `[[install]]` entries run for real: `pnpm`,
+  `cargo`, and `go`.
+- **Telemetry**, the Rust side. The decision 9 payload, opt-out via
+  `CULM_TELEMETRY=0`, sent best-effort on a detached thread. The
+  Cloudflare receiver is written but not deployed.
+- **`infra` and `editor` layers**: `docker-compose`, `dockerfile`,
+  `github-actions`, `husky`, `commitlint`, `editorconfig`, `vscode`,
+  `zed`.
+- Thirty-six layers across base, shape, frontend, backend, data,
+  toolchain, quality, infra, editor, and runner, all six frontends and
+  every shipped layer verified against a real install and build, per
+  [decision 19](docs/CONTEXT.md#decisions).
+- **The runner, milestone r0.1.** `culm.toml` parsing, a `petgraph` task
+  graph, named-cycle detection, sequential topological execution of one
+  task's dependency closure. Dogfooded against a real scaffolded
+  monorepo, no caching yet.
+- Unit tests beside every module plus five integration suites.
 
 ### Not built
 
-- **The CLI.** `src/main.rs` prints hello and nothing else. There is no
-  `culm new`, no argument parsing, and no wizard.
-- **Presets.** Designed in [decision 6](docs/CONTEXT.md#decisions) and
-  [docs/01-scaffolder.md](docs/01-scaffolder.md) section 6, implemented nowhere.
-- **Install execution.** `[[install]]` entries are parsed and validated,
-  and nothing runs a package manager.
-- **The `yaml-steps` strategy.** `yaml-list` and `hook-script` landed on
-  2026-08-19; only `yaml-steps` is still missing. Note that the
-  `[[hook]]` block shown in `docs/01-scaffolder.md` section 3 remains
-  design rather than format: a hook is declared as an ordinary
-  `[[merge]]` with `strategy = "hook-script"`, so that every file several
-  layers contribute to arrives through one mechanism.
+- **The runner past r0.1.** Content hashing, local caching via `cas`,
+  `--affected`, parallel execution, remote cache. Not started, and not
+  started until r0.1 has seen more real use. See
+  [docs/02-runner.md](docs/02-runner.md).
+- **JVM and C/C++ layers**, per [decision 7](docs/CONTEXT.md#decisions)'s
+  ordering: JS/TS and Rust first, then Go (shipped), then JVM, then
+  C/C++.
 - **Version resolution**, including the `compat` range and the
   minimum-release-age guard.
 - **Nightly CI** over the preset matrix.
-- **Telemetry.** The payload is specified in
-  [docs/TELEMETRY.md](docs/TELEMETRY.md) and nothing sends it.
-- **`infra` and `editor` layers.** The categories exist with no members.
-- **The entire runner.** Task graph, `cas`, and build cache. See
-  [docs/02-runner.md](docs/02-runner.md).
+- **The telemetry receiver deployment.** The Cloudflare Worker and D1
+  schema are written; `DEFAULT_ENDPOINT` does not resolve to anything
+  yet.
+- **`runner/turborepo` and `runner/moon`.** Blocked on open question 4,
+  real per-app JS packages for a monorepo. `runner/nx` is an honest stub
+  for the same reason: it installs real `nx` and emits no `nx.json`.
+- **Klassivox's setup as a preset**, decision 17's second half.
+  Deliberately not pursued right now.
 
 ### The order from here
 
-1. Bring each layer up to the quality bar, composed by category per
-   [decision 19](docs/CONTEXT.md#decisions). Start with `backend/actix`, since
-   the reference exists for it, then `backend/axum`, then the Node
-   backends, then the frontends.
-2. Non-interactive flags, so a selection can be made without a wizard.
-3. The install step, running `pnpm add` and `cargo add` after
-   scaffolding.
-4. Presets, then the wizard. **The wizard is deliberately last.** It is
-   the part everyone builds first and the part that matters least, and
-   flags have to work anyway.
+1. JVM layers, the next step in decision 7's language ordering, once the
+   dependency-write question is settled: unlike `go get`/`cargo
+   add`/`pnpm add`, neither Gradle nor Maven has a first-party "add a
+   dependency and write its version" command, so `install::plan` needs a
+   real answer here before a JVM layer can follow the Go pattern.
+2. More real use of the runner at r0.1 before r0.2 (caching) starts, per
+   the methodology in [docs/02-runner.md](docs/02-runner.md).
+3. Deploy the telemetry receiver, closing the last piece of decision 9.
+4. Version resolution and nightly CI over the preset matrix.
 
 ## 🔧 Troubleshooting
 

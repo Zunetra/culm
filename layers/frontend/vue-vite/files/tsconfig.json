@@ -14,5 +14,6 @@
     "strict": true,
     "noUncheckedIndexedAccess": true
   },
-  "include": ["**/*.ts", "**/*.vue"]
+  "include": ["**/*.ts", "**/*.vue"],
+  "exclude": ["test"]
 }

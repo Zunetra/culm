@@ -12,7 +12,7 @@ import tseslint from "typescript-eslint";
  * clobbers the frontmatter parser the plugin's base entry set. */
 export default [
   ...tseslint.config({
-    files: ["{{app_dir}}/**/*.ts", "{{test_dir}}/**/*.ts", "vitest{{config_suffix}}.config.ts"],
+    files: ["{{app_dir}}/**/*.ts"],
     extends: [...tseslint.configs.recommended],
   }),
   ...pluginAstro.configs["flat/recommended"],

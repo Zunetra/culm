@@ -1,11 +1,11 @@
 {
-  "//": "Lives at the workspace root rather than inside {{app_dir}}, so both the app's own tsconfig.json and this layer's test directory can be reached with a forward path, never a relative '../' count that would depend on whether the selection namespaced app_dir. `astro check` only type-checks .astro files, so this is what actually type-checks the shipped test file.",
-  "extends": "./{{app_dir}}/tsconfig.json",
+  "extends": "./tsconfig.json",
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@astro/*": ["{{app_dir}}/*"]
+      "@astro/*": ["./*"]
     }
   },
-  "include": [".astro/types.d.ts", "{{app_dir}}/**/*", "{{test_dir}}/**/*.ts"]
+  "include": [".astro/types.d.ts", "**/*"],
+  "exclude": ["dist"]
 }

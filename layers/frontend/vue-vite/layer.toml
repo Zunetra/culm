@@ -5,29 +5,33 @@ category = "frontend"
 requires = ["toolchain/node-pnpm", "quality/eslint"]
 default = false
 
-# Scripts are suffixed with the layer id because a monorepo may hold several
-# frontends at once, and two layers writing different values to `scripts.dev`
-# is a hard merge error rather than something to resolve silently.
 [[merge]]
 strategy = "json-deep"
-target = "package.json"
+target = "{{pkg_target}}"
+[merge.value]
+name = "{{pkg_name}}"
+private = true
+type = "module"
 [merge.value.scripts]
-"dev{{script_suffix}}" = "vite --config vite{{config_suffix}}.config.ts"
-"build{{script_suffix}}" = "vite build --config vite{{config_suffix}}.config.ts"
-"preview{{script_suffix}}" = "vite preview --config vite{{config_suffix}}.config.ts"
-"typecheck{{script_suffix}}" = "vue-tsc -p tsconfig{{config_suffix}}.test.json"
-"test{{script_suffix}}" = "vitest run --config vitest{{config_suffix}}.config.ts"
+dev = "cd {{app_dir}} && vite"
+build = "cd {{app_dir}} && vite build"
+preview = "cd {{app_dir}} && vite preview"
+typecheck = "cd {{app_dir}} && vue-tsc -p tsconfig.test.json"
+test = "cd {{app_dir}} && vitest run"
 
 [[merge]]
 strategy = "line-block"
 target = ".gitignore"
-lines = ["dist/", "vite.config.ts.timestamp-*"]
+lines = ["{{app_dir}}/dist/", "vite.config.ts.timestamp-*"]
 
 [[install]]
 manager = "pnpm"
 dev = false
 packages = ["vue"]
 
+# @types/node is what typecheck actually needs: vitest.config.ts imports
+# node:url and sits inside {{app_dir}}, so vue-tsc type-checks it along with
+# everything else.
 [[install]]
 manager = "pnpm"
 dev = true
@@ -39,17 +43,13 @@ packages = [
   "vitest",
   "@vue/test-utils",
   "jsdom",
+  "@types/node",
 ]
 
-# Every source file sits under src/vue-vite, which the config names as the Vite
-# root. A second Vite frontend in the same workspace gets its own directory and
-# its own config file rather than fighting over vite.config.ts.
 [[files]]
 from = "files/vite.config.ts"
-to = "vite{{config_suffix}}.config.ts"
+to = "{{app_dir}}/vite.config.ts"
 
-# The Vite root is the directory holding index.html, so the entry document lives
-# beside the sources rather than at the workspace root.
 [[files]]
 from = "files/index.html"
 to = "{{app_dir}}/index.html"
@@ -74,15 +74,9 @@ to = "{{app_dir}}/config.ts"
 from = "files/tsconfig.json"
 to = "{{app_dir}}/tsconfig.json"
 
-# A second project file rather than a wider include on the one above: it lives
-# at the workspace root so it can reach both {{app_dir}} and {{test_dir}} with a
-# forward path, which is what lets the typecheck script cover the tests too
-# without a relative '../' count that would depend on whether the selection
-# namespaced app_dir. The editor still finds the layer's own tsconfig.json
-# inside {{app_dir}} unchanged.
 [[files]]
 from = "files/tsconfig.test.json"
-to = "tsconfig{{config_suffix}}.test.json"
+to = "{{app_dir}}/tsconfig.test.json"
 
 # Without a shim TypeScript cannot resolve a .vue import at all, so the entry
 # point and everything it reaches is untyped. A meta framework generates this
@@ -93,11 +87,11 @@ to = "{{app_dir}}/env.d.ts"
 
 [[files]]
 from = "files/vitest.vue-vite.config.ts"
-to = "vitest{{config_suffix}}.config.ts"
+to = "{{app_dir}}/vitest.config.ts"
 
 [[files]]
 from = "files/App.spec.ts"
-to = "{{test_dir}}/App.spec.ts"
+to = "{{app_dir}}/test/App.spec.ts"
 
 # ESLint's default match covers .js, .mjs and .cjs only, so this layer's sources
 # would be silently unlinted. The root config finds this file by its name rather
@@ -112,4 +106,5 @@ to = "eslint.vue-vite.config.mjs"
 [[install]]
 manager = "pnpm"
 dev = true
+root = true
 packages = ["typescript-eslint", "eslint-plugin-vue"]

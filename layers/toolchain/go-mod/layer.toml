@@ -1,0 +1,30 @@
+# The Go toolchain, implied by any Go app rather than asked for.
+#
+# Under `shape = tooling-only` there is no app to imply it, so it becomes the
+# explicit answer to "tooling for which ecosystem".
+#
+# Go's own tooling needs nothing seeded at the workspace root: there is no
+# shared package.json or Cargo.toml equivalent for this layer to own, because
+# every Go app carries a complete, independent module in its own
+# {{app_dir}}/go.mod (see backend/go-chi's own comment for why no go.work is
+# needed to tie them together). So the only thing genuinely shared across
+# every Go app in a workspace, whatever shape it takes, is what git should
+# never track: Go's own build and coverage artefacts.
+#
+# No CI contribution here, unlike toolchain/rust-cargo and toolchain/node-pnpm.
+# Both of those can name one command (`cargo test --workspace`, `pnpm run
+# --if-present test`) that reaches every app because a real root manifest
+# lists them. Go has no such root manifest, so a CI step here would have to
+# name a specific app's directory, which is exactly the sibling-naming
+# decision 4 forbids. An app-owned CI step is the honest fix and is left to a
+# future layer, not invented here to look symmetrical with the other two
+# toolchains.
+
+id = "go-mod"
+category = "toolchain"
+default = false
+
+[[merge]]
+strategy = "line-block"
+target = ".gitignore"
+lines = ["*.exe", "*.test", "*.out", "vendor/"]

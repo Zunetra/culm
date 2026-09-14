@@ -180,17 +180,19 @@ fn the_version_check_can_actually_fail() {
 // == Several frontends in one workspace
 
 /// The whole reason the scripts are namespaced.
-/// Two frontends in one monorepo both write to `package.json`, and differing scalars at the same key are a hard error, so a shared `scripts.dev` would fail here.
+/// A frontend and a backend in one monorepo, both still sharing the root
+/// package.json, both write to it, and differing scalars at the same key are
+/// a hard error, so a shared `scripts.dev` would fail here.
 #[test]
-fn a_monorepo_takes_two_frontends_without_a_merge_conflict() {
+fn a_monorepo_takes_two_apps_without_a_merge_conflict() {
     let selection = vec![
         load_layer("base", "base"),
         load_layer("shape", "monorepo"),
         load_layer("runner", "nx"),
         load_layer("toolchain", "node-pnpm"),
         load_layer("quality", "eslint"),
-        load_layer("frontend", "nuxt"),
-        load_layer("frontend", "react-vite"),
+        load_layer("frontend", "next"),
+        load_layer("backend", "nestjs"),
     ];
     validate_selection(&selection).expect("the selection breaks no cardinality rule");
 
@@ -198,20 +200,20 @@ fn a_monorepo_takes_two_frontends_without_a_merge_conflict() {
         .iter()
         .map(|manifest| manifest.to_layer().expect("manifest converts to a layer"))
         .collect();
-    let set = FileSet::build(&layers).expect("two frontends merge cleanly");
+    let set = FileSet::build(&layers).expect("two apps merge cleanly");
 
     let rendered = set.render();
     let package_json = rendered
         .get(&PathBuf::from("package.json"))
-        .expect("both frontends contribute to package.json");
-    assert!(package_json.contains("dev:nuxt"));
-    assert!(package_json.contains("dev:react-vite"));
+        .expect("both apps contribute to package.json");
+    assert!(package_json.contains("dev:next"));
+    assert!(package_json.contains("dev:nestjs"));
 
     let gitignore = rendered
         .get(&PathBuf::from(".gitignore"))
-        .expect("both frontends contribute to .gitignore");
-    assert!(gitignore.contains(".nuxt/"));
-    assert!(gitignore.contains("# layer:frontend/react-vite"));
+        .expect("both apps contribute to .gitignore");
+    assert!(gitignore.contains(".next/"));
+    assert!(gitignore.contains("dist/"));
 }
 
 // == Tooling only
@@ -368,6 +370,7 @@ fn every_pair_of_backends_merges_cleanly() {
     let node = load_layer("toolchain", "node-pnpm");
     let eslint = load_layer("quality", "eslint");
     let rust = load_layer("toolchain", "rust-cargo");
+    let go = load_layer("toolchain", "go-mod");
 
     for (index, a) in backends.iter().enumerate() {
         for b in &backends[index + 1..] {
@@ -378,6 +381,7 @@ fn every_pair_of_backends_merges_cleanly() {
                 node.clone(),
                 eslint.clone(),
                 rust.clone(),
+                go.clone(),
                 a.clone(),
                 b.clone(),
             ];
@@ -404,7 +408,7 @@ fn a_full_stack_monorepo_validates_and_merges() {
         load_layer("runner", "nx"),
         load_layer("toolchain", "node-pnpm"),
         load_layer("quality", "eslint"),
-        load_layer("frontend", "nuxt"),
+        load_layer("frontend", "next"),
         load_layer("backend", "nestjs"),
         load_layer("data", "prisma"),
     ];
@@ -421,7 +425,7 @@ fn a_full_stack_monorepo_validates_and_merges() {
     let package_json = rendered
         .get(&PathBuf::from("package.json"))
         .expect("all three contribute to package.json");
-    assert!(package_json.contains("dev:nuxt"));
+    assert!(package_json.contains("dev:next"));
     assert!(package_json.contains("dev:nestjs"));
     assert!(package_json.contains("generate:prisma"));
 
@@ -574,7 +578,8 @@ fn every_frontend_declares_the_node_toolchain_and_the_two_shared_files() {
             .map(|path| path.display().to_string())
             .collect();
         assert!(
-            targets.contains(&"package.json".to_owned()),
+            targets.contains(&"package.json".to_owned())
+                || targets.contains(&format!("src/{id}/package.json")),
             "'{id}' must contribute scripts"
         );
         assert!(
@@ -770,7 +775,7 @@ fn every_layer_shipping_a_tsconfig_invokes_it() {
         }
         let payload = format!("{:?}", entry.manifest.merges);
         assert!(
-            payload.contains("typecheck:") || payload.contains("check:"),
+            payload.contains("typecheck") || payload.contains("check"),
             "{} ships a tsconfig but no script type checks against it",
             entry.dir().display()
         );

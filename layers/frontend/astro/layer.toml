@@ -7,35 +7,39 @@ default = false
 
 [[merge]]
 strategy = "json-deep"
-target = "package.json"
+target = "{{pkg_target}}"
+[merge.value]
+name = "{{pkg_name}}"
+private = true
+type = "module"
 [merge.value.scripts]
-"dev{{script_suffix}}" = "astro dev"
-"build{{script_suffix}}" = "astro build"
-"preview{{script_suffix}}" = "astro preview"
-"check{{script_suffix}}" = "astro check --tsconfig tsconfig{{config_suffix}}.test.json"
-"test{{script_suffix}}" = "vitest run --config vitest{{config_suffix}}.config.ts"
+dev = "cd {{app_dir}} && astro dev"
+build = "cd {{app_dir}} && astro build"
+preview = "cd {{app_dir}} && astro preview"
+check = "cd {{app_dir}} && astro check --tsconfig tsconfig.test.json"
+test = "cd {{app_dir}} && vitest run"
 
 [[merge]]
 strategy = "line-block"
 target = ".gitignore"
-lines = ["dist/", ".astro/"]
+lines = ["{{app_dir}}/dist/", "{{app_dir}}/.astro/"]
 
 [[install]]
 manager = "pnpm"
 dev = false
 packages = ["astro"]
 
+# @types/node is what check actually needs: vitest.config.ts imports
+# node:url and sits inside {{app_dir}}, so astro check type-checks it along
+# with everything else.
 [[install]]
 manager = "pnpm"
 dev = true
-packages = ["@astrojs/check", "typescript@<6", "vitest"]
+packages = ["@astrojs/check", "typescript@<6", "vitest", "@types/node"]
 
-# Everything Astro discovers by convention sits under src/astro, which
-# astro.config.mjs names as srcDir. A second frontend in the same workspace gets
-# its own directory rather than fighting over the root.
 [[files]]
 from = "files/astro.config.mjs"
-to = "astro.config.mjs"
+to = "{{app_dir}}/astro.config.mjs"
 
 [[files]]
 from = "files/Layout.astro"
@@ -63,21 +67,17 @@ to = "{{app_dir}}/config.ts"
 from = "files/tsconfig.json"
 to = "{{app_dir}}/tsconfig.json"
 
-# `astro check` reads the tsconfig it is pointed at to decide which files to
-# check. Left on the app's own tsconfig.json it never sees the test directory,
-# so a type error there passes silently; this one adds the test directory to
-# what gets checked, and `check{{script_suffix}}` above points at it instead.
 [[files]]
 from = "files/tsconfig.test.json"
-to = "tsconfig{{config_suffix}}.test.json"
+to = "{{app_dir}}/tsconfig.test.json"
 
 [[files]]
 from = "files/vitest.astro.config.ts"
-to = "vitest{{config_suffix}}.config.ts"
+to = "{{app_dir}}/vitest.config.ts"
 
 [[files]]
 from = "files/index.spec.ts"
-to = "{{test_dir}}/index.spec.ts"
+to = "{{app_dir}}/test/index.spec.ts"
 
 # ESLint's default match covers .js, .mjs and .cjs only, so this layer's sources
 # would be silently unlinted. The root config finds this file by its name rather
@@ -92,4 +92,5 @@ to = "eslint.astro.config.mjs"
 [[install]]
 manager = "pnpm"
 dev = true
+root = true
 packages = ["typescript-eslint", "eslint-plugin-astro"]

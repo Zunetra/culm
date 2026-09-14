@@ -1,0 +1,59 @@
+# chi, a lightweight, idiomatic router for Go's standard net/http.
+#
+# Go modules are directory scoped: {{app_dir}}/go.mod is a complete module on
+# its own, so a second Go backend in the same monorepo needs no shared root
+# manifest and no go.work tying it to this one. go.work exists to let
+# unpublished local modules that import each other build against their
+# working copies rather than a tagged release; nothing here imports a sibling
+# layer (decision 4 forbids that in any case), so there is nothing for a
+# workspace file to coordinate. `go build ./...` and `go test ./...` run
+# correctly from inside {{app_dir}} whatever else is selected beside it,
+# which is why this layer carries no [[merge]] entry at all: there is no
+# shared file for a second Go backend, or a second app of any language, to
+# collide with.
+#
+# {{test_dir}}, {{script_suffix}} and {{config_suffix}} are not named here.
+# Go tests live beside the code they test as `*_test.go` in the same package
+# and directory, so there is no separate test directory to place one in; and
+# with no [[merge]] target, there is no shared script key or config filename
+# that would ever need namespacing. {{app_dir}} is the only layout variable
+# this shape of layer needs.
+#
+id = "go-chi"
+category = "backend"
+requires = ["toolchain/go-mod"]
+default = false
+
+# `go get`, pointed at {{app_dir}}/go.mod via src/install/mod.rs's `-C`
+# handling, the same move `cargo add --manifest-path` makes for a Rust
+# workspace root that has nothing of its own to add to. No version here,
+# per decision 5: `go get` writes the resolved version into go.mod and
+# go.sum itself, the same way `cargo add`/`pnpm add` do for every other
+# backend.
+[[install]]
+manager = "go"
+packages = ["github.com/go-chi/chi/v5"]
+
+[[files]]
+from = "files/go.mod"
+to = "{{app_dir}}/go.mod"
+
+[[files]]
+from = "files/main.go"
+to = "{{app_dir}}/main.go"
+
+[[files]]
+from = "files/router.go"
+to = "{{app_dir}}/router.go"
+
+[[files]]
+from = "files/config.go"
+to = "{{app_dir}}/config.go"
+
+[[files]]
+from = "files/errors.go"
+to = "{{app_dir}}/errors.go"
+
+[[files]]
+from = "files/health_test.go"
+to = "{{app_dir}}/health_test.go"

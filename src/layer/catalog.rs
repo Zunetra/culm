@@ -259,6 +259,6 @@ mod tests {
             .by_category(Category::Toolchain)
             .map(|entry| entry.manifest.id.as_str())
             .collect();
-        assert_eq!(toolchains, vec!["node-pnpm", "rust-cargo"]);
+        assert_eq!(toolchains, vec!["go-mod", "node-pnpm", "rust-cargo"]);
     }
 }

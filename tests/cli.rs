@@ -253,8 +253,8 @@ fn no_planned_install_names_a_version() {
 fn each_preset_scaffolds() {
     for (preset, marker) in [
         ("backend", "Cargo.toml"),
-        ("frontend", "nuxt.config.ts"),
-        ("monorepo", "nuxt.config.ts"),
+        ("frontend", "src/nuxt.config.ts"),
+        ("monorepo", "src/nuxt/nuxt.config.ts"),
     ] {
         let dir = tempfile::tempdir().expect("a temp dir");
         let mut args = args("demo", &[]);
@@ -303,13 +303,13 @@ fn one_application_is_laid_out_like_an_ordinary_project() {
 
     let root = dir.path().join("demo");
     for path in [
-        "nuxt.config.ts",
+        "src/nuxt.config.ts",
         "src/app.vue",
         "src/error.vue",
         "src/pages/index.vue",
         "src/layouts/default.vue",
-        "vitest.config.ts",
-        "test/index.spec.ts",
+        "src/vitest.config.ts",
+        "src/test/index.spec.ts",
     ] {
         assert!(root.join(path).is_file(), "{path} is missing");
     }
@@ -342,21 +342,27 @@ fn a_second_application_namespaces_both_of_them() {
     let root = dir.path().join("demo");
     for path in [
         "src/nuxt/app.vue",
-        "vitest.nuxt.config.ts",
-        "test/nuxt/index.spec.ts",
+        "src/nuxt/vitest.config.ts",
+        "src/nuxt/test/index.spec.ts",
         "src/react-vite/App.tsx",
-        "vitest.react-vite.config.ts",
+        "src/react-vite/vitest.config.ts",
+        "src/react-vite/test/App.spec.tsx",
     ] {
         assert!(root.join(path).is_file(), "{path} is missing");
     }
 
-    let manifest = fs::read_to_string(root.join("package.json")).expect("a package.json");
-    assert!(manifest.contains("dev:nuxt"), "{manifest}");
-    assert!(manifest.contains("dev:react-vite"), "{manifest}");
+    let nuxt_manifest = fs::read_to_string(root.join("src/nuxt/package.json"))
+        .expect("nuxt's own package.json");
+    assert!(nuxt_manifest.contains("\"name\": \"demo-nuxt\""), "{nuxt_manifest}");
+    assert!(nuxt_manifest.contains("\"dev\""), "{nuxt_manifest}");
+
+    let react_vite_manifest = fs::read_to_string(root.join("src/react-vite/package.json"))
+        .expect("react-vite's own package.json");
     assert!(
-        !manifest.contains("\"dev\":"),
-        "an unqualified `dev` cannot mean two things: {manifest}"
+        react_vite_manifest.contains("\"name\": \"demo-react-vite\""),
+        "{react_vite_manifest}"
     );
+    assert!(react_vite_manifest.contains("\"dev\""), "{react_vite_manifest}");
 }
 
 /// The case a shape check alone gets wrong.
@@ -370,13 +376,17 @@ fn a_frontend_beside_a_backend_is_namespaced_in_a_single_app() {
     )
     .expect("the scaffold runs");
 
-    let manifest =
-        fs::read_to_string(dir.path().join("demo").join("package.json")).expect("a package.json");
-    assert!(manifest.contains("dev:nuxt"), "{manifest}");
+    let root = dir.path().join("demo");
+    let root_manifest = fs::read_to_string(root.join("package.json")).expect("a package.json");
+    assert!(root_manifest.contains("dev:fastify"), "{root_manifest}");
     assert!(
-        !manifest.contains("\"dev\":"),
-        "the frontend must not claim the bare `dev`: {manifest}"
+        !root_manifest.contains("dev:nuxt"),
+        "nuxt owns its own package.json now: {root_manifest}"
     );
+
+    let nuxt_manifest =
+        fs::read_to_string(root.join("src/nuxt/package.json")).expect("nuxt's own package.json");
+    assert!(nuxt_manifest.contains("\"dev\""), "{nuxt_manifest}");
 }
 
 /// Scaffolding on top of existing work would overwrite files the user did not name.

@@ -8,12 +8,7 @@ import tseslint from "typescript-eslint";
  * own, so the TypeScript parser has to be named for the script block explicitly. */
 export default [
   ...tseslint.config({
-    files: [
-      "{{app_dir}}/**/*.ts",
-      "{{test_dir}}/**/*.ts",
-      "vite{{config_suffix}}.config.ts",
-      "vitest{{config_suffix}}.config.ts",
-    ],
+    files: ["{{app_dir}}/**/*.ts"],
     extends: [...tseslint.configs.recommended],
   }),
   ...pluginVue.configs["flat/recommended"].map((entry) => ({

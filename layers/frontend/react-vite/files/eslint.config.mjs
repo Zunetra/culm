@@ -7,13 +7,6 @@ import tseslint from "typescript-eslint";
  * Every glob names this layer's own paths, so a second frontend in the same
  * workspace lints its files under its own fragment and the two never overlap. */
 export default tseslint.config({
-  files: [
-    "{{app_dir}}/**/*.ts",
-    "{{app_dir}}/**/*.tsx",
-    "{{test_dir}}/**/*.ts",
-    "{{test_dir}}/**/*.tsx",
-    "vite{{config_suffix}}.config.ts",
-    "vitest{{config_suffix}}.config.ts",
-  ],
+  files: ["{{app_dir}}/**/*.ts", "{{app_dir}}/**/*.tsx"],
   extends: [...tseslint.configs.recommended],
 });

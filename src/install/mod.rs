@@ -11,8 +11,10 @@ use std::process::Command;
 
 use thiserror::Error;
 
-use crate::layer::{CatalogEntry, InstallSpec};
+use crate::layer::{CatalogEntry, InstallSpec, MergeSpec};
 use crate::merge::LayerId;
+
+pub mod maven_central;
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum InstallError {
@@ -21,6 +23,9 @@ pub enum InstallError {
 
     #[error("layer `{layer}` gives features to a `{manager}` install, which has no such concept")]
     FeaturesUnsupported { layer: LayerId, manager: String },
+
+    #[error("layer `{layer}` marks a `{manager}` install as dev-only, which has no such concept")]
+    DevUnsupported { layer: LayerId, manager: String },
 
     #[error("`{command}` could not be started: {message}")]
     NotStarted { command: String, message: String },
@@ -84,9 +89,15 @@ pub fn plan(entries: &[&CatalogEntry]) -> Result<Vec<InstallCommand>, InstallErr
         for spec in &entry.manifest.installs {
             check(&layer, spec)?;
 
-            let manifest = match spec.manager.as_str() {
-                "cargo" => manifest.clone(),
-                _ => None,
+            let manifest = if spec.root {
+                None
+            } else {
+                match spec.manager.as_str() {
+                    "cargo" => manifest.clone(),
+                    "go" => go_module_dir(entry),
+                    "pnpm" => pnpm_package_dir(entry),
+                    _ => None,
+                }
             };
 
             let existing = groups.iter_mut().find(|group| {
@@ -169,6 +180,41 @@ fn cargo_manifest(entry: &CatalogEntry) -> Option<PathBuf> {
         .map(|file| file.to.clone())
 }
 
+/// Where a `go get` has to be pointed.
+///
+/// Go modules are directory scoped, and `go get` run from the workspace root
+/// has no module to add to unless the app happens to sit there. `go`'s own
+/// `-C <dir>` flag changes directory before the subcommand runs, which is
+/// the same move `cargo add --manifest-path` makes for a virtual workspace
+/// root: point the command at the file the layer already shipped, rather
+/// than growing the layer format a field whose only correct value is one it
+/// already stated.
+fn go_module_dir(entry: &CatalogEntry) -> Option<PathBuf> {
+    entry
+        .manifest
+        .files
+        .iter()
+        .find(|file| file.to.file_name().is_some_and(|name| name == "go.mod"))
+        .and_then(|file| file.to.parent().map(Path::to_path_buf))
+}
+
+/// Where a `pnpm add` has to be pointed. `None` when the layer's own
+/// package.json is the workspace root one, matching how `cargo_manifest`
+/// and `go_module_dir` both return `None` for the same case.
+fn pnpm_package_dir(entry: &CatalogEntry) -> Option<PathBuf> {
+    entry.manifest.merges.iter().find_map(|merge| match merge {
+        MergeSpec::JsonDeep { target, .. }
+            if target.file_name().is_some_and(|name| name == "package.json") =>
+        {
+            target
+                .parent()
+                .filter(|dir| !dir.as_os_str().is_empty())
+                .map(Path::to_path_buf)
+        }
+        _ => None,
+    })
+}
+
 fn check(layer: &LayerId, spec: &InstallSpec) -> Result<(), InstallError> {
     match spec.manager.as_str() {
         "cargo" => Ok(()),
@@ -182,6 +228,21 @@ fn check(layer: &LayerId, spec: &InstallSpec) -> Result<(), InstallError> {
                 })
             }
         }
+        "go" => {
+            if !spec.features.is_empty() {
+                return Err(InstallError::FeaturesUnsupported {
+                    layer: layer.clone(),
+                    manager: spec.manager.clone(),
+                });
+            }
+            if spec.dev {
+                return Err(InstallError::DevUnsupported {
+                    layer: layer.clone(),
+                    manager: spec.manager.clone(),
+                });
+            }
+            Ok(())
+        }
         _ => Err(InstallError::UnknownManager {
             layer: layer.clone(),
             manager: spec.manager.clone(),
@@ -190,7 +251,31 @@ fn check(layer: &LayerId, spec: &InstallSpec) -> Result<(), InstallError> {
 }
 
 fn command(group: &Group) -> InstallCommand {
-    let mut args = vec![String::from("add")];
+    // `go get` is not spelled `go add`, and its `-C` is a global flag that
+    // has to precede the subcommand, so it cannot share the `add`-first
+    // shape every other manager here takes.
+    if group.manager == "go" {
+        let mut args = Vec::new();
+        if let Some(dir) = &group.manifest {
+            args.push(String::from("-C"));
+            args.push(dir.display().to_string());
+        }
+        args.push(String::from("get"));
+        args.extend(group.packages.iter().cloned());
+        return InstallCommand {
+            program: group.manager.clone(),
+            args,
+        };
+    }
+
+    let mut args = Vec::new();
+    if group.manager == "pnpm"
+        && let Some(dir) = &group.manifest
+    {
+        args.push(String::from("-C"));
+        args.push(dir.display().to_string());
+    }
+    args.push(String::from("add"));
 
     match group.manager.as_str() {
         "cargo" => {
@@ -262,6 +347,7 @@ mod tests {
             dev,
             packages: packages.iter().map(|p| (*p).to_owned()).collect(),
             features: features.iter().map(|f| (*f).to_owned()).collect(),
+            root: false,
         }
     }
 
@@ -366,6 +452,54 @@ mod tests {
             lines(&plan(&[&one, &two]).unwrap()),
             vec!["pnpm add -D eslint prettier"]
         );
+    }
+
+    /* Go modules are directory scoped, the same reason a Rust workspace root
+     * needs `--manifest-path`, but `go get` spells its equivalent as a
+     * leading `-C <dir>` rather than a trailing flag. */
+    #[test]
+    fn a_go_install_is_pointed_at_the_module_its_layer_ships() {
+        let go_chi = entry(
+            "go-chi",
+            Category::Backend,
+            vec!["src/go-chi/go.mod", "src/go-chi/main.go"],
+            vec![spec("go", false, &["github.com/go-chi/chi/v5"], &[])],
+        );
+
+        assert_eq!(
+            lines(&plan(&[&go_chi]).unwrap()),
+            vec!["go -C src/go-chi get github.com/go-chi/chi/v5"]
+        );
+    }
+
+    #[test]
+    fn features_on_a_go_install_are_refused() {
+        let odd = entry(
+            "odd",
+            Category::Backend,
+            vec![],
+            vec![spec("go", false, &["x"], &["full"])],
+        );
+
+        assert!(matches!(
+            plan(&[&odd]).unwrap_err(),
+            InstallError::FeaturesUnsupported { .. }
+        ));
+    }
+
+    #[test]
+    fn dev_on_a_go_install_is_refused() {
+        let odd = entry(
+            "odd",
+            Category::Backend,
+            vec![],
+            vec![spec("go", true, &["x"], &[])],
+        );
+
+        assert!(matches!(
+            plan(&[&odd]).unwrap_err(),
+            InstallError::DevUnsupported { .. }
+        ));
     }
 
     #[test]

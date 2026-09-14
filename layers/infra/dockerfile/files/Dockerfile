@@ -18,7 +18,18 @@ FROM node:22-slim AS js-build
 # pinned (per culm decision 5's carve-out for a config shape coupled to a
 # major) and nothing narrower is.
 WORKDIR /app
-RUN corepack enable
+# `npm install -g pnpm@11` rather than `corepack enable`: corepack only
+# shims the `pnpm` command and fetches the real binary lazily, on the
+# container's first invocation, which is exactly the cold-start cost this
+# avoids. The major version is pinned deliberately, the same carve-out as
+# `node:22-slim` above: pnpm 12 (npm's unqualified "latest" the day this
+# was found) broke `husky`'s own root `prepare` script inside this exact
+# image in a way pnpm 11 does not, so this is not decision 5's normal
+# "let the tool resolve latest" case, it is a config shape coupled to a
+# major, the same reasoning that keeps the Node and Rust image tags at
+# major-only rather than unpinned. Revisit once a pnpm 12.x is confirmed
+# not to carry the same regression.
+RUN npm install -g pnpm@11
 COPY . .
 RUN if [ -f package.json ]; then \
       pnpm install --frozen-lockfile || pnpm install; \
@@ -52,7 +63,7 @@ FROM node:22-slim AS runtime
 # self-contained executable and needs no Rust toolchain to run, so this pays
 # for Node's slim image once and costs a Rust-only workspace nothing beyond
 # the binary already produced.
-RUN corepack enable \
+RUN npm install -g pnpm@11 \
     && groupadd --system app \
     && useradd --system --gid app --create-home --home-dir /app app
 
