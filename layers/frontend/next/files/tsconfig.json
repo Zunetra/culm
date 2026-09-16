@@ -1,5 +1,5 @@
 {
-  "//": "Inside src/app rather than at the workspace root. TypeScript's editor server finds a project by walking up from the open file looking for tsconfig.json and nothing else, so a root file under any other name leaves these sources with no configuration at all. next.config.ts points the compiler here.",
+  "//": "Inside app/ rather than at the app's own root. TypeScript's editor server finds a project by walking up from the open file looking for tsconfig.json and nothing else, so a root file under any other name leaves these sources with no configuration at all. next.config.ts points the compiler here.",
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["dom", "dom.iterable", "ES2022"],
@@ -24,10 +24,10 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
-    "../../{{test_dir}}/**/*.ts",
-    "../../{{test_dir}}/**/*.tsx",
-    "../../next-env.d.ts",
-    "../../.next/types/**/*.ts"
+    "../test/**/*.ts",
+    "../test/**/*.tsx",
+    "../next-env.d.ts",
+    "../.next/types/**/*.ts"
   ],
-  "exclude": ["../../node_modules"]
+  "exclude": ["../node_modules"]
 }

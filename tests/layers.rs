@@ -179,10 +179,10 @@ fn the_version_check_can_actually_fail() {
 
 // == Several frontends in one workspace
 
-/// The whole reason the scripts are namespaced.
-/// A frontend and a backend in one monorepo, both still sharing the root
-/// package.json, both write to it, and differing scalars at the same key are
-/// a hard error, so a shared `scripts.dev` would fail here.
+/// The whole reason each app gets its own real package.json (decision 23).
+/// A frontend and a backend in one monorepo each own a distinct package.json
+/// under their own directory, so neither's unnamespaced `scripts.dev` ever
+/// meets the other's at the same key.
 #[test]
 fn a_monorepo_takes_two_apps_without_a_merge_conflict() {
     let selection = vec![
@@ -203,17 +203,21 @@ fn a_monorepo_takes_two_apps_without_a_merge_conflict() {
     let set = FileSet::build(&layers).expect("two apps merge cleanly");
 
     let rendered = set.render();
-    let package_json = rendered
-        .get(&PathBuf::from("package.json"))
-        .expect("both apps contribute to package.json");
-    assert!(package_json.contains("dev:next"));
-    assert!(package_json.contains("dev:nestjs"));
+    let next_manifest = rendered
+        .get(&PathBuf::from("src/next/package.json"))
+        .expect("next owns its own package.json");
+    assert!(next_manifest.contains("\"dev\""));
+
+    let nestjs_manifest = rendered
+        .get(&PathBuf::from("src/nestjs/package.json"))
+        .expect("nestjs owns its own package.json");
+    assert!(nestjs_manifest.contains("\"dev\""));
 
     let gitignore = rendered
         .get(&PathBuf::from(".gitignore"))
         .expect("both apps contribute to .gitignore");
-    assert!(gitignore.contains(".next/"));
-    assert!(gitignore.contains("dist/"));
+    assert!(gitignore.contains("src/next/.next/"));
+    assert!(gitignore.contains("src/nestjs/dist/"));
 }
 
 // == Tooling only
@@ -399,7 +403,9 @@ fn every_pair_of_backends_merges_cleanly() {
 }
 
 /// The selection a real project actually makes, end to end.
-/// A frontend, a backend, and a data layer all write to package.json at once, which is where an unnamespaced script key would surface.
+/// The frontend and the backend each own a real package.json under their own
+/// directory (decision 23); the data layer still has no app of its own to
+/// belong to, so it remains the one contributor left at the shared root.
 #[test]
 fn a_full_stack_monorepo_validates_and_merges() {
     let selection = vec![
@@ -422,12 +428,20 @@ fn a_full_stack_monorepo_validates_and_merges() {
         .expect("a frontend, a backend, and a data layer merge cleanly")
         .render();
 
-    let package_json = rendered
+    let root_package_json = rendered
         .get(&PathBuf::from("package.json"))
-        .expect("all three contribute to package.json");
-    assert!(package_json.contains("dev:next"));
-    assert!(package_json.contains("dev:nestjs"));
-    assert!(package_json.contains("generate:prisma"));
+        .expect("the data layer still contributes to the shared root");
+    assert!(root_package_json.contains("generate:prisma"));
+
+    let next_manifest = rendered
+        .get(&PathBuf::from("src/next/package.json"))
+        .expect("next owns its own package.json");
+    assert!(next_manifest.contains("\"dev\""));
+
+    let nestjs_manifest = rendered
+        .get(&PathBuf::from("src/nestjs/package.json"))
+        .expect("nestjs owns its own package.json");
+    assert!(nestjs_manifest.contains("\"dev\""));
 
     let env_example = rendered
         .get(&PathBuf::from(".env.example"))

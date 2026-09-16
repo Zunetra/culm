@@ -16,12 +16,12 @@ name = "{{pkg_name}}"
 private = true
 type = "module"
 [merge.value.scripts]
-dev = "cd {{app_dir}} && nuxt dev"
-build = "cd {{app_dir}} && nuxt build"
-preview = "cd {{app_dir}} && nuxt preview"
-generate = "cd {{app_dir}} && nuxt generate"
-typecheck = "cd {{app_dir}} && nuxt prepare && vue-tsc -p tsconfig.json --noEmit"
-test = "cd {{app_dir}} && nuxt prepare && vitest run"
+dev = "{{cd_app_dir}}nuxt dev"
+build = "{{cd_app_dir}}nuxt build"
+preview = "{{cd_app_dir}}nuxt preview"
+generate = "{{cd_app_dir}}nuxt generate"
+typecheck = "{{cd_app_dir}}nuxt prepare && vue-tsc -p tsconfig.json --noEmit"
+test = "{{cd_app_dir}}nuxt prepare && vitest run"
 
 [[merge]]
 strategy = "line-block"

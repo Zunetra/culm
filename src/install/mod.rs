@@ -79,6 +79,16 @@ struct Group {
 /// Entries keep the selection's order, and packages keep the order their layer
 /// wrote them in, so the same selection always yields the same argv. That is
 /// what makes the plan assertable in a test.
+///
+/// A workspace-root install always runs before a per-app one, regardless of
+/// which layer's turn produced it first. A root devDependency can carry a
+/// lifecycle script (`quality/husky`'s `prepare`, say), and once a real
+/// `pnpm-workspace.yaml` exists (decision 23's `{{workspace_glob}}`), pnpm
+/// runs the root's lifecycle scripts on *any* `pnpm add` in the workspace,
+/// including a per-app one. An app layer commonly comes before the quality
+/// layers that add the root's own devDependencies in the selection order, so
+/// without this the very first per-app install could try to run a root
+/// script that has not been installed yet and fail outright.
 pub fn plan(entries: &[&CatalogEntry]) -> Result<Vec<InstallCommand>, InstallError> {
     let mut groups: Vec<Group> = Vec::new();
 
@@ -131,6 +141,11 @@ pub fn plan(entries: &[&CatalogEntry]) -> Result<Vec<InstallCommand>, InstallErr
             }
         }
     }
+
+    /* Stable, so within "root" and within "per app" the original first-seen
+     * order (and therefore the existing tests asserting it) is untouched;
+     * only the two partitions swap relative to each other. */
+    groups.sort_by_key(|group| group.manifest.is_some());
 
     Ok(groups.iter().map(command).collect())
 }
@@ -319,6 +334,26 @@ mod tests {
         files: Vec<&str>,
         installs: Vec<InstallSpec>,
     ) -> CatalogEntry {
+        entry_with_pkg_target(id, category, files, installs, None)
+    }
+
+    /// Like `entry`, but for a layer that owns its own `package.json` (a real
+    /// per-app manifest, decision 23), so its `pnpm` installs group by that
+    /// directory instead of the workspace root.
+    fn entry_with_pkg_target(
+        id: &str,
+        category: Category,
+        files: Vec<&str>,
+        installs: Vec<InstallSpec>,
+        pkg_target: Option<&str>,
+    ) -> CatalogEntry {
+        let merges = match pkg_target {
+            Some(target) => vec![MergeSpec::JsonDeep {
+                target: PathBuf::from(target),
+                value: toml::Value::Table(Default::default()),
+            }],
+            None => Vec::new(),
+        };
         CatalogEntry {
             manifest: Manifest {
                 id: id.to_owned(),
@@ -334,7 +369,7 @@ mod tests {
                         mode: None,
                     })
                     .collect(),
-                merges: Vec::new(),
+                merges,
                 installs,
             },
             source: LayerSource::Embedded(PathBuf::from(format!("{category}/{id}"))),
@@ -351,8 +386,46 @@ mod tests {
         }
     }
 
+    fn root_spec(manager: &str, dev: bool, packages: &[&str]) -> InstallSpec {
+        InstallSpec {
+            manager: manager.to_owned(),
+            dev,
+            packages: packages.iter().map(|p| (*p).to_owned()).collect(),
+            features: Vec::new(),
+            root: true,
+        }
+    }
+
     fn lines(commands: &[InstallCommand]) -> Vec<String> {
         commands.iter().map(InstallCommand::display).collect()
+    }
+
+    /* The exact scenario a real `culm new` selection hits: a per-app layer
+     * that owns its own package.json (decision 23) is chosen before the
+     * quality layers that add root devDependencies, but a root install with a
+     * lifecycle script (husky's `prepare`) has to run first once a real
+     * `pnpm-workspace.yaml` exists, or the very first per-app `pnpm add`
+     * triggers that script before it is installed. */
+    #[test]
+    fn a_root_install_runs_before_a_per_app_one_regardless_of_selection_order() {
+        let react_vite = entry_with_pkg_target(
+            "react-vite",
+            Category::Frontend,
+            vec![],
+            vec![spec("pnpm", false, &["react"], &[])],
+            Some("src/react-vite/package.json"),
+        );
+        let husky = entry(
+            "husky",
+            Category::Quality,
+            vec![],
+            vec![root_spec("pnpm", true, &["husky"])],
+        );
+
+        assert_eq!(
+            lines(&plan(&[&react_vite, &husky]).unwrap()),
+            vec!["pnpm add -D husky", "pnpm -C src/react-vite add react",]
+        );
     }
 
     #[test]

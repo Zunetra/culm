@@ -9,13 +9,6 @@ import tseslint from "typescript-eslint";
  * Disjoint globs are also what makes the load order of the fragments
  * irrelevant, which is the property the root config relies on. */
 export default tseslint.config({
-  files: [
-    "src/app/**/*.ts",
-    "src/app/**/*.tsx",
-    "{{test_dir}}/**/*.ts",
-    "{{test_dir}}/**/*.tsx",
-    "next.config.ts",
-    "vitest{{config_suffix}}.config.ts",
-  ],
+  files: ["{{app_dir}}/**/*.ts", "{{app_dir}}/**/*.tsx"],
   extends: [...tseslint.configs.recommended],
 });

@@ -132,7 +132,10 @@ pub fn run_new_to(args: &NewArgs, parent: &Path, out: &mut impl Write) -> Result
         .collect();
     let installs = install::plan(&interpolated_entries.iter().collect::<Vec<_>>())?;
 
-    summarise(out, &entries, plan.len(), merged.len(), &root)?;
+    /* A merge that rendered to nothing is never written (see scaffold::write),
+     * so it does not belong in "N files merged" either. */
+    let written_merges = merged.values().filter(|contents| !contents.is_empty()).count();
+    summarise(out, &entries, plan.len(), written_merges, &root)?;
 
     if !args.yes && !confirmed(out)? {
         writeln!(out, "Nothing was written.")?;

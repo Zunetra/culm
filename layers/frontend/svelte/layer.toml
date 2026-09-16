@@ -13,11 +13,11 @@ name = "{{pkg_name}}"
 private = true
 type = "module"
 [merge.value.scripts]
-dev = "cd {{app_dir}} && svelte-kit sync && vite dev"
-build = "cd {{app_dir}} && svelte-kit sync && vite build"
-preview = "cd {{app_dir}} && vite preview"
-test = "cd {{app_dir}} && svelte-kit sync && vitest run"
-check = "cd {{app_dir}} && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
+dev = "{{cd_app_dir}}svelte-kit sync && vite dev"
+build = "{{cd_app_dir}}svelte-kit sync && vite build"
+preview = "{{cd_app_dir}}vite preview"
+test = "{{cd_app_dir}}svelte-kit sync && vitest run"
+check = "{{cd_app_dir}}svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
 
 [[merge]]
 strategy = "line-block"

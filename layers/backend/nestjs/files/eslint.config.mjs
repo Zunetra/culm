@@ -4,7 +4,7 @@ import tseslint from "typescript-eslint";
  * only .js, .mjs and .cjs. Without this the workspace's TypeScript is not
  * linted at all and `lint` still exits 0, which is worse than no linter. */
 export default tseslint.config({
-  files: ["src/nestjs/**/*.ts", "test/nestjs*.ts"],
+  files: ["{{app_dir}}/**/*.ts"],
   extends: [...tseslint.configs.recommended],
   rules: {
     /* Nest's dependency injection is declaration-driven, and a constructor

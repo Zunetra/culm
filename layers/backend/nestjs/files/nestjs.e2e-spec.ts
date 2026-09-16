@@ -6,8 +6,8 @@ import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import request from "supertest";
 
-import { AllExceptionsFilter } from "../src/nestjs/all-exceptions.filter.js";
-import { AppModule } from "../src/nestjs/app.module.js";
+import { AllExceptionsFilter } from "../all-exceptions.filter.js";
+import { AppModule } from "../app.module.js";
 
 describe("health", () => {
   let app: INestApplication;

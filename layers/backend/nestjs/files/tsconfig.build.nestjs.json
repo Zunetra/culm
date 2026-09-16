@@ -1,9 +1,0 @@
-{
-  "//": "nest build uses this rather than tsconfig.nestjs.json directly. That file's include list also carries test/nestjs.e2e-spec.ts, so a build run through it has no single source root and tsc mirrors the full path from the workspace root, landing the entry point at dist/src/nestjs/main.js instead of dist/nestjs/main.js. This one fixes rootDir and drops the test file so the emitted layout matches what start:nestjs runs.",
-  "extends": "./tsconfig.nestjs.json",
-  "compilerOptions": {
-    "rootDir": "./src"
-  },
-  "include": ["src/nestjs/**/*"],
-  "exclude": ["test/**/*"]
-}

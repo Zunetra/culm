@@ -20,8 +20,17 @@ pub fn write(
     }
     /* A merged file carries a mode only when the strategy that built it says
      * so, which today means hooks. A hook without the executable bit is
-     * skipped by git in silence, so losing it here would be invisible. */
+     * skipped by git in silence, so losing it here would be invisible.
+     *
+     * A merge that rendered to nothing is skipped rather than written as an
+     * empty file: `yaml-list` renders "" when every layer's contribution to a
+     * target resolved to a blank entry for this selection (`pnpm-workspace.yaml`
+     * outside a monorepo, say), and a file that exists only to be empty is
+     * worse than one that was never generated. */
     for (path, contents) in merged {
+        if contents.is_empty() {
+            continue;
+        }
         write_one(root, path, contents, modes.get(path).copied())?;
     }
     Ok(())

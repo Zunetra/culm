@@ -327,12 +327,114 @@ handles the equivalent case for `go get`: a `pnpm_package_dir` lookup
 over the layer's own merges, and `-C <dir>` added to the command before
 `add`.
 
-What is left: the other ten JS layers (five frontends, three Node
-backends, two data layers), each needing the same treatment and the same
-real verification, not just the merge target moved and called done.
-`pnpm-workspace.yaml` generation itself (wiring `yaml-list` to a layer,
-so culm writes it rather than a person writing it by hand to test) has
-not started either.
+**Migration finished 2026-09-16 for nine of the ten remaining layers.**
+`vue-vite`, `nuxt`, `astro`, `svelte` followed `react-vite` through in an
+earlier pass (undated in this log, found already done at the start of
+this session). This session did the last three frontends and backends:
+`next`, `express`, `fastify`, `nestjs`. `nestjs` was the heaviest of the
+nine: it had never used the layout variable system at all, hardcoding
+`:nestjs` script suffixes and a `src/nestjs/` source path directly, so it
+was rewritten rather than migrated.
+
+**A cross-cutting bug surfaced while verifying `next`'s monorepo shape,
+and it was not new.** Every migrated layer wrote `cd {{app_dir}} &&
+<command>` for its scripts. That is correct in single-app shape, where
+the real package.json sits at the workspace root while the sources sit
+under `{{app_dir}}`. It fails outright in monorepo shape: pnpm already
+runs a package's scripts with its cwd at that package's own directory,
+which is the same directory `{{app_dir}}` names once the package.json is
+real, so the script tries to `cd` into a directory nested inside itself
+and pnpm reports `can't cd to src/<id>`. This means `react-vite`,
+`vue-vite`, `nuxt`, `astro`, and `svelte` were never actually correct in
+monorepo shape despite this log's own earlier claim of a verified
+two-app monorepo, because that hand-built proof happened to invoke
+`vite`/`nuxt` directly rather than through the package's own npm script.
+Fixed with a new layout variable, `{{cd_app_dir}}` (`src/scaffold/layout.rs`):
+`"cd src && "` in single-app, empty in monorepo, since pnpm is already
+where it needs to be there. Every script in all nine layers now writes
+`{{cd_app_dir}}<command>` instead of hardcoding the `cd`.
+
+Per-layer bugs the real verification pass also found, each the same
+shape decision 23's `react-vite` proof already warned about (a path that
+was correct before a file moved one directory deeper and was not
+recalculated): `express` and `fastify`'s test file imported the app
+module through `{{to_root}}{{app_dir}}/app.js`, stale after the test
+moved to `{{app_dir}}/test/`; the fix is the plain relative `../app.js`
+the new location actually needs. `nestjs`'s `test` script resolved jest
+through a `node_modules/jest/...` path that only exists in monorepo
+shape (single-app's `node_modules` sits at the workspace root, one level
+above `{{app_dir}}`); fixed by invoking `jest` through PATH with
+`NODE_OPTIONS=--experimental-vm-modules` instead. `next`'s own
+`typescript-eslint` install targeted `{{pkg_target}}` instead of the
+workspace root, so root `eslint .` could not resolve it once `next`
+had its own per-app manifest in monorepo shape; fixed with `root = true`,
+matching `react-vite`'s own equivalent block.
+
+**`pnpm-workspace.yaml` generation shipped 2026-09-16, monorepo shape
+only.** A single new global layout variable, `{{workspace_glob}}`
+(`"src/*"` in monorepo, blank otherwise), fed to one new
+`toolchain/node-pnpm` merge block. Computed globally rather than
+per-entry like `app_dir`, because a tooling layer is never an app and
+would otherwise always land in the namespaced branch regardless of the
+real count. Blank rather than omitted deliberately: `yaml-list`
+(`src/merge/yaml_list.rs`) now drops a blank entry rather than writing
+it, and drops the target's key entirely when every entry offered for it
+was blank, which is what makes the file simply not appear for a
+single-app or tooling-only workspace rather than appearing empty.
+`scaffold::write` gained the matching half: a merge that rendered to
+nothing is skipped rather than written as an empty file. Verified this
+does not silently start littering unrelated files: `write`'s change is
+generic (any strategy, not just `yaml-list`), covered by both an
+`an_empty_sequence_still_renders_as_a_sequence` regression test (a layer
+naming a genuinely empty sequence on purpose still gets `name: []`) and
+a new `a_blank_entry_from_an_unresolved_variable_contributes_nothing`
+one for the new case.
+
+**Enabling a real `pnpm-workspace.yaml` exposed a second, install-ordering
+bug**, found the same day while confirming the feature end to end against
+a live registry. Once pnpm recognises a real workspace, `pnpm -C <member>
+add` runs the workspace root's own lifecycle scripts too, and `culm new`
+was running each layer's installs in selection order, which commonly puts
+a frontend or backend layer before the quality layers that add the root's
+own devDependencies. The very first per-app install could therefore try
+to run `quality/husky`'s `prepare` script before `husky` itself was
+installed, failing with exit 127. `install::plan` now stable-sorts its
+groups so every workspace-root install runs before every per-app one,
+regardless of which layer's turn produced it first; within each of the
+two partitions the original first-seen order (and the existing tests
+asserting it) is untouched.
+
+**Data layers (`drizzle`, `prisma`) are deliberately out of decision
+23's scope, decided 2026-09-16.** `generate`/`migrate`/`studio` are not
+"an app's" scripts the way `dev`/`build` are: they operate on a schema
+independent of which backend process happens to be running, so there is
+no real "which backend does this belong to" question to answer even in a
+monorepo holding several. They stay namespaced (`:​<id>`-suffixed) at the
+shared root package.json, as they always have been. Two other shapes
+were considered and rejected: giving a data layer its own per-layer
+package.json (sidesteps the multi-backend question but moves
+`prisma.config.ts`/`schema.prisma` off the workspace root, fighting
+Prisma's and Drizzle's own tooling conventions for no real gain), and
+capping a data layer to workspaces with at most one backend (caps a
+selection decision 18 otherwise allows, to solve a problem that turned
+out not to exist).
+
+**An unrelated bug found incidentally while verifying `express`:** the
+boilerplate `.gitignore` (Visual Studio template) carries `[Ee]xpress/`
+for an "Installshield output folder", which also matches
+`layers/backend/express/` by directory name alone. This silently
+excluded five of that layer's six files from git since the layer was
+authored: only `server.js` was ever committed. A fresh clone was
+missing `app.js`, `config.js`, `errors.js`, `eslint.config.mjs`, and
+`health.test.js` the whole time, though the compiled binary never
+noticed because `include_dir!` reads the working tree at build time, not
+git. Fixed with a `!layers/backend/express/` negation rather than
+deleting the boilerplate rule, which is still correct everywhere else in
+the tree.
+
+**What is left of the original ten:** none. `pnpm-workspace.yaml`
+generation and the data-layer question, both called out as not started
+in this log's previous entry, are both done now too.
 
 ### Open
 
@@ -638,13 +740,14 @@ step correctly too, not only the copy plan).
 **What does not exist yet.** r0.2 onward (caching, `--affected`, parallel
 execution, remote cache) — not started, and not to be started until r0.1
 has seen more real use per the point above it. Real per-app JS packages
-for a monorepo (open
-question 4), which is what blocks `runner/turborepo` and `runner/moon`
-from ever being written; `runner/nx` is an honest stub for the same
-reason (it installs real `nx`, emits no `nx.json`, and says so). The
-Cloudflare telemetry receiver is written but not deployed. Klassivox's
-setup published as a preset (decision 17's second half) is deliberately
-not being pursued right now.
+for a monorepo (decision 23, open question 4) finished 2026-09-16, which
+is what was blocking `runner/turborepo` and `runner/moon` from ever
+being written; neither has been started yet, only unblocked. `runner/nx`
+is still an honest stub for the reason it always was (it installs real
+`nx`, emits no `nx.json`, and says so). The Cloudflare telemetry
+receiver is written but not deployed. Klassivox's setup published as a
+preset (decision 17's second half) is deliberately not being pursued
+right now.
 
 All six frontends reached the decision 19 bar on 2026-08-18. Each ships a
 runtime-configured entry page, an error boundary, a scoped tsconfig, a

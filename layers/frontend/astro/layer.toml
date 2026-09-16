@@ -13,11 +13,11 @@ name = "{{pkg_name}}"
 private = true
 type = "module"
 [merge.value.scripts]
-dev = "cd {{app_dir}} && astro dev"
-build = "cd {{app_dir}} && astro build"
-preview = "cd {{app_dir}} && astro preview"
-check = "cd {{app_dir}} && astro check --tsconfig tsconfig.test.json"
-test = "cd {{app_dir}} && vitest run"
+dev = "{{cd_app_dir}}astro dev"
+build = "{{cd_app_dir}}astro build"
+preview = "{{cd_app_dir}}astro preview"
+check = "{{cd_app_dir}}astro check --tsconfig tsconfig.test.json"
+test = "{{cd_app_dir}}vitest run"
 
 [[merge]]
 strategy = "line-block"

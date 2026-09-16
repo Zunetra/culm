@@ -195,6 +195,11 @@ AutoTest.Net/
 
 # Installshield output folder
 [Ee]xpress/
+# The rule above also matches layers/backend/express/ by directory name alone,
+# which silently excluded that whole layer's files from git. Un-ignored here
+# rather than deleting the boilerplate rule, since the rule is still correct
+# for its actual purpose everywhere else in the tree.
+!layers/backend/express/
 
 # DocProject is a documentation generator add-in
 DocProject/buildhelp/

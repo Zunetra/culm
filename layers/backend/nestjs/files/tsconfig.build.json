@@ -1,0 +1,8 @@
+{
+  "//": "nest build uses this rather than tsconfig.json directly, so the e2e spec under test/ never lands in the compiled output the start script runs.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "."
+  },
+  "exclude": ["test/**/*"]
+}

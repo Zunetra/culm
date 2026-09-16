@@ -14,5 +14,5 @@
     "baseUrl": "./",
     "sourceMap": true
   },
-  "include": ["src/nestjs/**/*", "test/nestjs.e2e-spec.ts"]
+  "include": ["**/*.ts"]
 }

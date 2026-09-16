@@ -378,15 +378,18 @@ fn a_frontend_beside_a_backend_is_namespaced_in_a_single_app() {
 
     let root = dir.path().join("demo");
     let root_manifest = fs::read_to_string(root.join("package.json")).expect("a package.json");
-    assert!(root_manifest.contains("dev:fastify"), "{root_manifest}");
     assert!(
-        !root_manifest.contains("dev:nuxt"),
-        "nuxt owns its own package.json now: {root_manifest}"
+        !root_manifest.contains("\"dev\""),
+        "nuxt and fastify each own their own package.json now: {root_manifest}"
     );
 
     let nuxt_manifest =
         fs::read_to_string(root.join("src/nuxt/package.json")).expect("nuxt's own package.json");
     assert!(nuxt_manifest.contains("\"dev\""), "{nuxt_manifest}");
+
+    let fastify_manifest = fs::read_to_string(root.join("src/fastify/package.json"))
+        .expect("fastify's own package.json");
+    assert!(fastify_manifest.contains("\"dev\""), "{fastify_manifest}");
 }
 
 /// Scaffolding on top of existing work would overwrite files the user did not name.

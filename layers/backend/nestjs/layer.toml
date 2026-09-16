@@ -5,76 +5,95 @@ category = "backend"
 requires = ["toolchain/node-pnpm", "quality/eslint"]
 default = false
 
-# Namespaced by layer id for the same reason the frontends are: a monorepo can
-# hold several backends, and two layers writing different values to one script
-# key is a hard merge error rather than a last-one-wins.
+# {{pkg_target}} and {{app_dir}} are the layout's own answer to how many
+# application layers the selection holds, per docs/CONTEXT.md decision 23: a
+# workspace holding just this one backend gets a real root package.json with
+# sources under src; a workspace holding this beside another application gets
+# its own real package.json alongside its own sources. `{{cd_app_dir}}` is what
+# makes the script correct in both shapes: in the single-app case the
+# package.json sits at the root while the sources sit under {{app_dir}}, so it
+# expands to a real `cd`; in the monorepo case pnpm already runs the script
+# with its cwd at {{app_dir}} (the same directory {{pkg_target}} lives in), so
+# a literal `cd {{app_dir}}` there would try to cd into a directory nested
+# inside itself and fail, and this expands to nothing instead.
 #
-# `test:nestjs` invokes jest through node rather than through its own binary
-# because ESM support in jest still sits behind --experimental-vm-modules, and
-# the flag cannot be passed through the wrapper. Decision 21 makes the workspace
-# ESM, so this is the cost of keeping jest as this layer's runner. If it stops
-# being worth paying, switching this layer to vitest is the alternative.
+# `test` sets NODE_OPTIONS rather than passing --experimental-vm-modules on
+# the command line because ESM support in jest still sits behind that flag,
+# and jest's own bin wrapper cannot be handed a flag ahead of its script path.
+# Resolving jest through node_modules/jest/bin/jest.js as a relative path
+# does not work here: in the single-app shape {{app_dir}} is a subdirectory
+# of the workspace root, but node_modules is installed at the root only, so
+# a path relative to {{app_dir}} never finds it. Invoking the `jest` command
+# name instead lets it resolve through the PATH pnpm already sets up, which
+# covers both shapes. Decision 21 makes the workspace ESM, so this is the
+# cost of keeping jest as this layer's runner. If it stops being worth
+# paying, switching this layer to vitest is the alternative.
 [[merge]]
 strategy = "json-deep"
-target = "package.json"
+target = "{{pkg_target}}"
+[merge.value]
+name = "{{pkg_name}}"
+private = true
+type = "module"
 [merge.value.scripts]
-"dev:nestjs" = "nest start --watch"
-"build:nestjs" = "nest build"
-"start:nestjs" = "node dist/nestjs/main.js"
-"typecheck:nestjs" = "tsc -p tsconfig.nestjs.json --noEmit"
-"test:nestjs" = "node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.nestjs.config.js"
+dev = "{{cd_app_dir}}nest start --watch"
+build = "{{cd_app_dir}}nest build"
+start = "{{cd_app_dir}}node dist/main.js"
+typecheck = "{{cd_app_dir}}tsc -p tsconfig.json --noEmit"
+test = "{{cd_app_dir}}NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.js"
 
 [[merge]]
 strategy = "line-block"
 target = ".gitignore"
-lines = ["dist/"]
+lines = ["{{app_dir}}/dist/"]
 
-# Sources sit under a directory named for the layer, so a second backend in the
-# same workspace has somewhere of its own to live.
 [[files]]
 from = "files/main.ts"
-to = "src/nestjs/main.ts"
+to = "{{app_dir}}/main.ts"
 
 [[files]]
 from = "files/app.module.ts"
-to = "src/nestjs/app.module.ts"
+to = "{{app_dir}}/app.module.ts"
 
 [[files]]
 from = "files/app.controller.ts"
-to = "src/nestjs/app.controller.ts"
+to = "{{app_dir}}/app.controller.ts"
 
 [[files]]
 from = "files/config.ts"
-to = "src/nestjs/config.ts"
+to = "{{app_dir}}/config.ts"
 
 [[files]]
 from = "files/all-exceptions.filter.ts"
-to = "src/nestjs/all-exceptions.filter.ts"
+to = "{{app_dir}}/all-exceptions.filter.ts"
 
 [[files]]
 from = "files/nest-cli.json"
-to = "nest-cli.json"
+to = "{{app_dir}}/nest-cli.json"
 
-# Namespaced rather than claiming the root tsconfig.json, which is a
+# Inside {{app_dir}} rather than at the workspace root, which is a
 # whole-workspace file this layer has no business owning. nest-cli.json points
-# the compiler at it.
+# the compiler here.
 [[files]]
-from = "files/tsconfig.nestjs.json"
-to = "tsconfig.nestjs.json"
+from = "files/tsconfig.json"
+to = "{{app_dir}}/tsconfig.json"
 
-# nest build reads this rather than tsconfig.nestjs.json directly, so the
-# emitted entry point lands at dist/nestjs/main.js and not dist/src/nestjs/main.js.
+# nest build reads this rather than tsconfig.json directly, so the e2e spec
+# under test/ never lands in the compiled output the start script runs.
 [[files]]
-from = "files/tsconfig.build.nestjs.json"
-to = "tsconfig.build.nestjs.json"
+from = "files/tsconfig.build.json"
+to = "{{app_dir}}/tsconfig.build.json"
 
 [[files]]
-from = "files/jest.nestjs.config.js"
-to = "jest.nestjs.config.js"
+from = "files/jest.config.js"
+to = "{{app_dir}}/jest.config.js"
 
+# Nested under {{app_dir}} rather than the separate {{test_dir}} variable, like
+# every migrated frontend layer: a layer that owns a real package.json owns its
+# whole directory, source and tests both.
 [[files]]
 from = "files/nestjs.e2e-spec.ts"
-to = "test/nestjs.e2e-spec.ts"
+to = "{{app_dir}}/test/nestjs.e2e-spec.ts"
 
 # @nestjs/platform-express is a peer of @nestjs/core, not a dependency of it,
 # and NestFactory.create() dynamically imports it when no adapter is given.

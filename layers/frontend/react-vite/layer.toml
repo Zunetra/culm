@@ -14,11 +14,11 @@ name = "{{pkg_name}}"
 private = true
 type = "module"
 [merge.value.scripts]
-dev = "cd {{app_dir}} && vite"
-build = "cd {{app_dir}} && vite build"
-preview = "cd {{app_dir}} && vite preview"
-typecheck = "cd {{app_dir}} && tsc -p tsconfig.test.json"
-test = "cd {{app_dir}} && vitest run"
+dev = "{{cd_app_dir}}vite"
+build = "{{cd_app_dir}}vite build"
+preview = "{{cd_app_dir}}vite preview"
+typecheck = "{{cd_app_dir}}tsc -p tsconfig.test.json"
+test = "{{cd_app_dir}}vitest run"
 
 [[merge]]
 strategy = "line-block"

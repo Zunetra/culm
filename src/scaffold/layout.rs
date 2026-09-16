@@ -41,16 +41,38 @@ pub fn variables(entries: &[&CatalogEntry], project: &str) -> Vec<Variables> {
         .filter(|entry| is_app(entry.manifest.category))
         .count();
 
+    /* Unlike app_dir/pkg_target, this is not a per-entry branch: a tooling
+     * layer (toolchain/node-pnpm) is never an app, so it would always land in
+     * the namespaced branch below regardless of how many apps are actually
+     * selected, and it is exactly the layer that needs to know the true
+     * count. Blank outside a monorepo rather than omitted, because
+     * `yaml-list` already treats a blank contribution as none at all (see
+     * `merge::yaml_list`), which is what keeps `pnpm-workspace.yaml` from
+     * being generated for a single-app or tooling-only workspace. */
+    let workspace_glob = if apps > 1 { "src/*" } else { "" };
+
     entries
         .iter()
         .map(|entry| {
-            let base = Variables::new().with("project_name", project);
+            let base = Variables::new()
+                .with("project_name", project)
+                .with("workspace_glob", workspace_glob);
             let id = &entry.manifest.id;
 
             /* Tooling layers never name these, so the value they get does not
              * matter. They are still given the namespaced form rather than the
              * bare one, so a layer that starts using a variable is wrong
-             * loudly in a monorepo rather than quietly. */
+             * loudly in a monorepo rather than quietly.
+             *
+             * `cd_app_dir` exists because `{{pkg_target}}`'s directory and
+             * `{{app_dir}}` are the same directory in the monorepo case: pnpm
+             * already sets a script's cwd to the package's own directory
+             * before running it, so `cd {{app_dir}}` from inside that very
+             * directory fails outright rather than being a harmless no-op.
+             * In the single-app case the package.json sits at the workspace
+             * root while the sources sit under `{{app_dir}}`, so the cd is
+             * genuinely needed there. A script writes `{{cd_app_dir}}<rest>`
+             * instead of hardcoding the cd itself. */
             if apps == 1 && is_app(entry.manifest.category) {
                 base.with("app_dir", "src")
                     .with("test_dir", "test")
@@ -59,6 +81,7 @@ pub fn variables(entries: &[&CatalogEntry], project: &str) -> Vec<Variables> {
                     .with("to_root", "../")
                     .with("pkg_target", "package.json")
                     .with("pkg_name", project.to_owned())
+                    .with("cd_app_dir", "cd src && ")
             } else {
                 base.with("app_dir", format!("src/{id}"))
                     .with("test_dir", format!("test/{id}"))
@@ -67,6 +90,7 @@ pub fn variables(entries: &[&CatalogEntry], project: &str) -> Vec<Variables> {
                     .with("to_root", "../../")
                     .with("pkg_target", format!("src/{id}/package.json"))
                     .with("pkg_name", format!("{project}-{id}"))
+                    .with("cd_app_dir", "")
             }
         })
         .collect()
@@ -111,6 +135,8 @@ mod tests {
         assert_eq!(vars[0].get("to_root"), Some("../"));
         assert_eq!(vars[0].get("pkg_target"), Some("package.json"));
         assert_eq!(vars[0].get("pkg_name"), Some("demo"));
+        assert_eq!(vars[0].get("cd_app_dir"), Some("cd src && "));
+        assert_eq!(vars[0].get("workspace_glob"), Some(""));
     }
 
     /* Two frontends both writing `scripts.dev` is a hard merge error, so the
@@ -126,11 +152,36 @@ mod tests {
         assert_eq!(vars[0].get("to_root"), Some("../../"));
         assert_eq!(vars[0].get("pkg_target"), Some("src/nuxt/package.json"));
         assert_eq!(vars[0].get("pkg_name"), Some("demo-nuxt"));
+        assert_eq!(vars[0].get("cd_app_dir"), Some(""));
         assert_eq!(vars[1].get("app_dir"), Some("src/next"));
         assert_eq!(vars[1].get("script_suffix"), Some(":next"));
         assert_eq!(vars[1].get("to_root"), Some("../../"));
         assert_eq!(vars[1].get("pkg_target"), Some("src/next/package.json"));
         assert_eq!(vars[1].get("pkg_name"), Some("demo-next"));
+        assert_eq!(vars[1].get("cd_app_dir"), Some(""));
+        assert_eq!(vars[0].get("workspace_glob"), Some("src/*"));
+        assert_eq!(vars[1].get("workspace_glob"), Some("src/*"));
+    }
+
+    /* The whole reason `workspace_glob` is computed globally rather than
+     * per-entry like `app_dir`: a tooling layer is never an app, so it needs
+     * the true count directly rather than inheriting whichever branch its own
+     * category happens to fall into. */
+    #[test]
+    fn a_tooling_layer_sees_the_true_application_count() {
+        let front = frontend("nuxt");
+        let single = tooling();
+        assert_eq!(
+            variables(&[&front, &single], "demo")[1].get("workspace_glob"),
+            Some("")
+        );
+
+        let back = backend("express");
+        let mono = tooling();
+        assert_eq!(
+            variables(&[&front, &back, &mono], "demo")[2].get("workspace_glob"),
+            Some("src/*")
+        );
     }
 
     /* The case a shape check alone would get wrong. A single-app workspace

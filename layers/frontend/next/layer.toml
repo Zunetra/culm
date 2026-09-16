@@ -7,18 +7,22 @@ default = false
 
 [[merge]]
 strategy = "json-deep"
-target = "package.json"
+target = "{{pkg_target}}"
+[merge.value]
+name = "{{pkg_name}}"
+private = true
+type = "module"
 [merge.value.scripts]
-"dev{{script_suffix}}" = "next dev"
-"build{{script_suffix}}" = "next build"
-"start{{script_suffix}}" = "next start"
-"typecheck{{script_suffix}}" = "tsc -p src/app/tsconfig.json"
-"test{{script_suffix}}" = "vitest run --config vitest{{config_suffix}}.config.ts"
+dev = "{{cd_app_dir}}next dev"
+build = "{{cd_app_dir}}next build"
+start = "{{cd_app_dir}}next start"
+typecheck = "{{cd_app_dir}}tsc -p app/tsconfig.json"
+test = "{{cd_app_dir}}vitest run"
 
 [[merge]]
 strategy = "line-block"
 target = ".gitignore"
-lines = [".next/", "out/", "next-env.d.ts", ".vercel/"]
+lines = ["{{app_dir}}/.next/", "{{app_dir}}/out/", "{{app_dir}}/next-env.d.ts", "{{app_dir}}/.vercel/"]
 
 [[install]]
 manager = "pnpm"
@@ -40,48 +44,50 @@ packages = [
 ]
 
 # The app directory is the one path Next will not let a project move, so this
-# layer claims src/app. A second frontend gets a directory named for its own
-# layer, and the two never overlap.
+# layer claims {{app_dir}}/app. A second frontend gets a directory named
+# for its own layer, and the two never overlap.
 [[files]]
 from = "files/next.config.ts"
-to = "next.config.ts"
+to = "{{app_dir}}/next.config.ts"
 
 [[files]]
 from = "files/layout.tsx"
-to = "src/app/layout.tsx"
+to = "{{app_dir}}/app/layout.tsx"
 
 [[files]]
 from = "files/page.tsx"
-to = "src/app/page.tsx"
+to = "{{app_dir}}/app/page.tsx"
 
 # Next renders this in place of the route that threw, so it sits beside the page
 # rather than under it.
 [[files]]
 from = "files/error.tsx"
-to = "src/app/error.tsx"
+to = "{{app_dir}}/app/error.tsx"
 
 # The environment is read in one module so a page cannot reach for a variable
 # nothing documents.
 [[files]]
 from = "files/config.ts"
-to = "src/app/config.ts"
+to = "{{app_dir}}/app/config.ts"
 
-# Inside src/app, matching every other frontend layer. The root tsconfig.json is
-# a whole-workspace file this layer has no business owning, and a root file under
-# any other name is worse than useless: an editor finds a project only by walking
-# up to a file called tsconfig.json, so these sources would get no configuration
-# at all. next.config.ts points the compiler here.
+# Inside {{app_dir}}/app, matching every other frontend layer. A root file
+# under any other name is worse than useless: an editor finds a project only by
+# walking up to a file called tsconfig.json, so these sources would get no
+# configuration at all. next.config.ts points the compiler here.
 [[files]]
 from = "files/tsconfig.json"
-to = "src/app/tsconfig.json"
+to = "{{app_dir}}/app/tsconfig.json"
 
 [[files]]
 from = "files/vitest.next.config.ts"
-to = "vitest{{config_suffix}}.config.ts"
+to = "{{app_dir}}/vitest.config.ts"
 
+# Nested under {{app_dir}} rather than the separate {{test_dir}} variable, like
+# every migrated frontend layer: a layer that owns a real package.json owns its
+# whole directory, source and tests both.
 [[files]]
 from = "files/page.spec.tsx"
-to = "{{test_dir}}/page.spec.tsx"
+to = "{{app_dir}}/test/page.spec.tsx"
 
 # ESLint's default match covers .js, .mjs and .cjs only, so this layer's sources
 # would be silently unlinted. The root config finds this file by its name rather
@@ -92,8 +98,10 @@ to = "eslint.next.config.mjs"
 
 # The parsers and rules ESLint needs for this layer's file types. Declared here
 # rather than by the eslint layer, which has no way to know what languages a
-# workspace ended up holding.
+# workspace ended up holding. Root, not {{pkg_target}}: eslint.next.config.mjs
+# runs from the workspace root, so that is where node resolution looks.
 [[install]]
 manager = "pnpm"
 dev = true
+root = true
 packages = ["typescript-eslint"]

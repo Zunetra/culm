@@ -43,12 +43,31 @@ impl YamlListDoc {
         self.extend(lists);
     }
 
+    /* Two different kinds of "nothing" here, told apart by the incoming list
+     * rather than the filtered one. A layer that names an empty sequence on
+     * purpose still claims the key, so it still renders (see
+     * `an_empty_sequence_still_renders_as_a_sequence`). A blank *entry*
+     * inside a non-empty sequence is a different thing: a layer variable that
+     * resolved to nothing for this selection (`{{workspace_glob}}` is empty
+     * outside a monorepo, for instance), not a real glob. That one is
+     * dropped, and if every entry offered for a name is blank this way, the
+     * key is never created for it at all, which is what lets the whole
+     * document stay genuinely empty and the file go unwritten rather than
+     * being written with a stray empty sequence. */
     fn extend(&mut self, lists: &BTreeMap<String, Vec<String>>) {
         for (name, entries) in lists {
-            self.lists
-                .entry(name.clone())
-                .or_default()
-                .extend(entries.iter().cloned());
+            if entries.is_empty() {
+                self.lists.entry(name.clone()).or_default();
+                continue;
+            }
+            let entries: Vec<String> = entries
+                .iter()
+                .filter(|entry| !entry.is_empty())
+                .cloned()
+                .collect();
+            if !entries.is_empty() {
+                self.lists.entry(name.clone()).or_default().extend(entries);
+            }
         }
     }
 
@@ -181,6 +200,22 @@ mod tests {
     fn every_entry_is_quoted() {
         let doc = YamlListDoc::seed(&layer("a"), &lists(&[("packages", &["*", "apps/*"])]));
         assert_eq!(doc.render(), "packages:\n  - \"*\"\n  - \"apps/*\"\n");
+    }
+
+    /* The case `pnpm-workspace.yaml` exists for: a layer names an
+     * interpolated variable rather than a literal glob, and that variable can
+     * resolve to "" for a selection where it does not apply. */
+    #[test]
+    fn a_blank_entry_from_an_unresolved_variable_contributes_nothing() {
+        let doc = YamlListDoc::seed(&layer("a"), &lists(&[("packages", &[""])]));
+        assert_eq!(doc.render(), "");
+    }
+
+    #[test]
+    fn a_blank_entry_does_not_hide_a_real_one_from_another_layer() {
+        let mut doc = YamlListDoc::seed(&layer("a"), &lists(&[("packages", &[""])]));
+        doc.add(&lists(&[("packages", &["src/*"])]));
+        assert_eq!(doc.render(), "packages:\n  - \"src/*\"\n");
     }
 
     #[test]

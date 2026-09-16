@@ -5,24 +5,30 @@ category = "backend"
 requires = ["toolchain/node-pnpm", "quality/eslint"]
 default = false
 
-# {{app_dir}}, {{test_dir}} and {{script_suffix}} are the layout's own answer
-# to how many application layers the selection holds, per docs/CONTEXT.md: a
-# layer never hardcodes its own layout. A workspace holding just this one
-# backend gets the idiomatic `src`, `test` and `dev`; a workspace holding this
-# beside another application gets the namespaced form, because two layers
-# writing different values to the same `package.json` key is a hard merge
-# error rather than a last-one-wins.
+# {{pkg_target}} and {{app_dir}} are the layout's own answer to how many
+# application layers the selection holds, per docs/CONTEXT.md decision 23: a
+# workspace holding just this one backend gets a real root package.json with
+# sources under src; a workspace holding this beside another application gets
+# its own real package.json alongside its own sources, since two apps sharing
+# one manifest is the shape decision 23 retired. `{{cd_app_dir}}` is what makes
+# the script correct in both shapes: in the single-app case the package.json
+# sits at the root while the sources sit under {{app_dir}}, so it expands to a
+# real `cd`; in the monorepo case pnpm already runs the script with its cwd at
+# {{app_dir}} (the same directory {{pkg_target}} lives in), so a literal
+# `cd {{app_dir}}` there would try to cd into a directory nested inside
+# itself and fail, and this expands to nothing instead.
 [[merge]]
 strategy = "json-deep"
-target = "package.json"
+target = "{{pkg_target}}"
+[merge.value]
+name = "{{pkg_name}}"
+private = true
+type = "module"
 [merge.value.scripts]
-"dev{{script_suffix}}" = "node --watch {{app_dir}}/server.js"
-"start{{script_suffix}}" = "node {{app_dir}}/server.js"
-"test{{script_suffix}}" = "node --test {{test_dir}}/fastify.test.js"
+dev = "{{cd_app_dir}}node --watch server.js"
+start = "{{cd_app_dir}}node server.js"
+test = "{{cd_app_dir}}node --test test/fastify.test.js"
 
-# ESM, per decision 21. This layer still sets no `type` key: that key is a
-# whole-workspace switch, and one app's module system is not a decision this
-# layer gets to make for every other app beside it.
 [[files]]
 from = "files/server.js"
 to = "{{app_dir}}/server.js"
@@ -40,9 +46,12 @@ from = "files/errors.js"
 to = "{{app_dir}}/errors.js"
 
 # Node's own test runner, so a comprehensive template costs no test dependency.
+# Nested under {{app_dir}} rather than the separate {{test_dir}} variable, like
+# every migrated frontend layer: a layer that owns a real package.json owns its
+# whole directory, source and tests both.
 [[files]]
 from = "files/health.test.js"
-to = "{{test_dir}}/fastify.test.js"
+to = "{{app_dir}}/test/fastify.test.js"
 
 # Claimed by explicit globs rather than left to the default match. The base
 # config's own match already covers .js, so without this fragment the sources
