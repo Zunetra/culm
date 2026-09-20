@@ -1,0 +1,23 @@
+# Moon as the task runner.
+# One runner among several, per decision 3: nothing here is specific to culm,
+# and swapping this layer for another runner changes no other layer. Moon
+# needs both a workspace-level `.moon/workspace.yml` and a per-project
+# `moon.yml`, and both name every application's own directory, so neither is
+# a static file this layer ships; `culm new` writes them after scaffolding,
+# from `src/runner/registration.rs`.
+
+id = "moon"
+category = "runner"
+requires = ["toolchain/node-pnpm"]
+default = false
+
+[[merge]]
+strategy = "line-block"
+target = ".gitignore"
+lines = [".moon/cache/"]
+
+[[install]]
+manager = "pnpm"
+dev = true
+root = true
+packages = ["@moonrepo/cli"]

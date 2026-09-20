@@ -1,12 +1,48 @@
 {
   "name": "culm",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Workspace tooling for polyglot repositories. One binary that scaffolds a workspace and then runs its tasks.",
+  "keywords": [
+    "workspace",
+    "monorepo",
+    "scaffold",
+    "task-runner",
+    "polyglot",
+    "nx",
+    "turborepo",
+    "moon",
+    "rust",
+    "cli"
+  ],
+  "author": "Zunetra Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zunetra/culm.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+  "bugs": {
+    "url": "https://github.com/Zunetra/culm/issues"
+  },
+  "homepage": "https://github.com/Zunetra/culm#readme",
+  "engines": {
+    "node": ">=24",
+    "pnpm": ">=10"
+  },
+  "packageManager": "pnpm@11.13.0",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "build": "cargo build",
+    "build:release": "cargo build --release",
+    "start": "cargo run --",
+    "check": "cargo check --all-targets",
+    "lint": "cargo clippy --all-targets -- -D warnings",
+    "format": "cargo fmt",
+    "format:check": "cargo fmt --check",
+    "test": "cargo test"
+  }
 }

@@ -39,6 +39,12 @@ pub enum InstallError {
         status: Option<i32>,
         stderr: String,
     },
+
+    #[error("`{}` has no `package.json` to pin a package manager into", .root.display())]
+    NoRootPackageJson { root: PathBuf },
+
+    #[error("`{}` is not valid JSON: {message}", .path.display())]
+    MalformedPackageJson { path: PathBuf, message: String },
 }
 
 /// One package manager invocation, held as argv rather than as a string.
@@ -175,6 +181,81 @@ pub fn run(commands: &[InstallCommand], root: &Path) -> Result<(), InstallError>
             });
         }
     }
+    Ok(())
+}
+
+// === Package manager pinning
+
+/* The one narrow exception to decision 5. Turborepo refuses to run at all
+ * without a `packageManager` field in the root `package.json`: it reads that
+ * field to decide which package manager's lockfile and workspace layout to
+ * trust, and a missing field is a hard error rather than a fallback. No
+ * layer template can write that value, because decision 5 forbids a version
+ * number in a layer file and this is nothing but a version number. So it is
+ * resolved from the pnpm actually on this machine, after scaffolding, and
+ * patched into the file the scaffold already wrote. */
+
+/// Asks the pnpm on `PATH` for its own version and returns it as the
+/// `packageManager` field's value (`pnpm@<version>`), the exact string
+/// corepack and Turborepo expect.
+pub fn pin_pnpm_version() -> Result<String, InstallError> {
+    let output = Command::new("pnpm")
+        .arg("--version")
+        .output()
+        .map_err(|error| InstallError::NotStarted {
+            command: "pnpm --version".to_owned(),
+            message: error.to_string(),
+        })?;
+
+    if !output.status.success() {
+        return Err(InstallError::Failed {
+            command: "pnpm --version".to_owned(),
+            status: output.status.code(),
+            stderr: String::from_utf8_lossy(&output.stderr).trim().to_owned(),
+        });
+    }
+
+    let version = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    Ok(format!("pnpm@{version}"))
+}
+
+/// Patches `root/package.json`'s `packageManager` field in place with
+/// whatever `pin_pnpm_version` resolves. The rest of the file is left
+/// untouched, so this must run after the scaffold has already written the
+/// merged `package.json`, never before.
+pub fn apply_package_manager_pin(root: &Path) -> Result<(), InstallError> {
+    let path = root.join("package.json");
+    if !path.exists() {
+        return Err(InstallError::NoRootPackageJson {
+            root: root.to_owned(),
+        });
+    }
+
+    let raw = std::fs::read_to_string(&path).map_err(|error| InstallError::NotStarted {
+        command: format!("read {}", path.display()),
+        message: error.to_string(),
+    })?;
+
+    let mut doc: serde_json::Value =
+        serde_json::from_str(&raw).map_err(|error| InstallError::MalformedPackageJson {
+            path: path.clone(),
+            message: error.to_string(),
+        })?;
+
+    let pinned = pin_pnpm_version()?;
+    doc["packageManager"] = serde_json::Value::String(pinned);
+
+    let rendered = serde_json::to_string_pretty(&doc).map_err(|error| {
+        InstallError::MalformedPackageJson {
+            path: path.clone(),
+            message: error.to_string(),
+        }
+    })?;
+    std::fs::write(&path, rendered + "\n").map_err(|error| InstallError::NotStarted {
+        command: format!("write {}", path.display()),
+        message: error.to_string(),
+    })?;
+
     Ok(())
 }
 

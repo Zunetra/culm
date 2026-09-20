@@ -35,15 +35,18 @@ pub fn run(order: &[&Task], root: &Path, out: &mut impl Write) -> Result<(), Run
     Ok(())
 }
 
+/// Shared with `runner::parallel`, which runs the same shell invocation
+/// concurrently instead of one after another; the two only ever differ in
+/// scheduling, never in how a single command is actually started.
 #[cfg(unix)]
-fn shell(command: &str) -> Command {
+pub(super) fn shell(command: &str) -> Command {
     let mut process = Command::new("sh");
     process.arg("-c").arg(command);
     process
 }
 
 #[cfg(windows)]
-fn shell(command: &str) -> Command {
+pub(super) fn shell(command: &str) -> Command {
     let mut process = Command::new("cmd");
     process.arg("/C").arg(command);
     process

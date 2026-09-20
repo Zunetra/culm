@@ -6,6 +6,10 @@
 /// Prints nothing when stdout is not a terminal, so a scripted run and a captured one stay clean.
 pub mod banner;
 
+/// The content-addressable store the runner's cache is built on.
+/// Decision 11: a module here, not a crate, unless a second real consumer ever needs it.
+pub mod cas;
+
 /// The commands, as functions.
 /// `main.rs` parses arguments and calls in here, so every command is reachable from a test without a subprocess.
 pub mod cli;
@@ -23,7 +27,7 @@ pub mod layer;
 pub mod preset;
 
 /// The task runner.
-/// Parses `culm.toml`, builds the dependency graph, and runs tasks in topological order. r0.1: sequential, no caching.
+/// Parses `culm.toml`, builds the dependency graph, and runs tasks in topological order, with `cas`-backed caching, `--affected`, parallel execution by graph level, and real Turborepo/Moon/Nx backends.
 pub mod runner;
 
 /// Copying a layer's own files into the generated workspace.

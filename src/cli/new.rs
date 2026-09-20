@@ -11,9 +11,10 @@ use anyhow::{Context, Result, bail};
 use clap::Args;
 
 use crate::install;
-use crate::layer::{Catalog, CatalogEntry, LayerSource, Manifest, resolve};
+use crate::layer::{Catalog, CatalogEntry, Category, LayerSource, Manifest, resolve};
 use crate::merge::{FileSet, LayerId};
 use crate::preset;
+use crate::runner;
 use crate::scaffold::{self, CopyPlan, Variables, write};
 
 #[derive(Debug, Args)]
@@ -144,8 +145,28 @@ pub fn run_new_to(args: &NewArgs, parent: &Path, out: &mut impl Write) -> Result
 
     write(&root, &plan, &merged, &modes)?;
 
+    /* After the scaffold itself, never before: a backend needs to see each
+     * application's final `app_dir`, which is only known once the layout in
+     * `variables` above has already been decided. Decision 3's own reason
+     * these backends exist at all: `none` must stay a legitimate answer, so
+     * a selection without a real backend writes nothing here. */
+    runner::write_root_config(&entries, &variables, &root)?;
+
     writeln!(out, "\nScaffolded {} into {}", project, root.display())?;
     finish_installs(out, &installs, &root, args.no_install)?;
+
+    if selected_runner_id(&entries) == Some("turborepo") {
+        if args.no_install {
+            writeln!(
+                out,
+                "\nTurborepo needs a `packageManager` field pinned in package.json.\n\
+                 Run `pnpm --version` and add \"packageManager\": \"pnpm@<version>\" yourself."
+            )?;
+        } else {
+            install::apply_package_manager_pin(&root)
+                .context("cannot pin the package manager Turborepo requires")?;
+        }
+    }
 
     if let Some(name) = &args.save_preset {
         let layers = entries
@@ -226,6 +247,17 @@ fn project_name(raw: &str) -> Result<&str> {
         bail!("the project name `{name}` must not start with a dash");
     }
     Ok(name)
+}
+
+/// The bare id of whichever `runner/*` layer this selection carries, or
+/// `None` when for some reason it carries none (never happens for a real
+/// selection, since `Category::Runner` is `ExactlyOne`, but `resolve` is
+/// what enforces that, not this function).
+fn selected_runner_id<'a>(entries: &'a [&CatalogEntry]) -> Option<&'a str> {
+    entries
+        .iter()
+        .find(|entry| entry.manifest.category == Category::Runner)
+        .map(|entry| entry.manifest.id.as_str())
 }
 
 fn ids(raw: &[String]) -> Vec<LayerId> {

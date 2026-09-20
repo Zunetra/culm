@@ -508,3 +508,7 @@ $RECYCLE.BIN/
 
 
 
+
+# === AI agent / editor tool directories
+.kilo/
+.agents/

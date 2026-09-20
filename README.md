@@ -11,11 +11,14 @@ workspace and then runs its tasks.
 ![Version](https://img.shields.io/badge/version-0.1.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-> **Status: pre-alpha, library only.** The layer format, the merge
-> engine, and the scaffold writer exist and are tested. `src/main.rs` is
-> still a hello-world stub, so **there is no working `culm` command
-> yet**. Nothing in this README describes a CLI you can run today. See
-> [Roadmap](#-roadmap) for what is built and what is not.
+> **Status: pre-alpha.** The `culm` binary exists with four commands:
+> `new`, `run`, `cache`, and `graph`. The scaffolder is the most complete
+> part: 38 layers, a merge engine, a wizard, and presets. The runner is
+> earlier. It runs a task and its dependencies, with `--affected` and
+> `--parallel`, but **task results are not cached yet**: the content
+> store and the remote cache client exist in the source and no run path
+> uses them. Nothing is published. See [Roadmap](#-roadmap) for exactly
+> what is built and what is not.
 
 ---
 
@@ -142,8 +145,17 @@ Everything in this section is implemented in `src/` and covered by tests.
 ```
 culm/
 ├── src/
-│   ├── lib.rs                     # Crate root, forbids unsafe, declares the three modules
-│   ├── main.rs                    # Binary entry point, still a hello-world stub
+│   ├── lib.rs                     # Crate root, forbids unsafe, declares the modules
+│   ├── main.rs                    # Binary entry point: new, run, cache, graph
+│   ├── banner.rs                  # Terminal banner, silenced by NO_COLOR or CULM_NO_BANNER
+│   ├── cli/                       # new, run, cache, and graph, each callable from a test
+│   ├── wizard/                    # The ratatui prompts, falling back to flags off a terminal
+│   ├── preset/                    # Git URL, local file, and saved presets
+│   ├── install/                   # Runs [[install]] entries through pnpm, cargo, and go
+│   ├── telemetry/                 # The published payload, opt out with CULM_TELEMETRY=0
+│   ├── cas/                       # Content-addressable store, blake3 addressed
+│   ├── runner/                    # culm.toml, task graph, exec, affected, parallel, remote cache
+│   │                              #   plus the nx, turborepo, and moon config writers
 │   ├── layer/                     # The layer format
 │   │   ├── mod.rs                 # Declares and re-exports, holds no logic
 │   │   ├── category.rs            # The ten categories, Shape, and shape-dependent cardinality
@@ -172,7 +184,7 @@ culm/
 │   ├── data/                      # drizzle, prisma, sqlx
 │   ├── toolchain/                 # node-pnpm, rust-cargo
 │   ├── quality/                   # clippy, eslint, prettier, rustfmt
-│   └── runner/                    # none, nx
+│   └── runner/                    # none, nx, turborepo, moon
 ├── tests/
 │   ├── layers.rs                  # Exercises every shipped layer, discovered by walking layers/
 │   ├── scaffold.rs                # End-to-end scaffolds into a temporary directory
@@ -181,8 +193,12 @@ culm/
 ├── docs/
 │   ├── CONTEXT.md                 # Decisions, conventions, and context worth keeping. Read first.
 │   ├── 01-scaffolder.md           # The v0.1 product design
-│   ├── 02-runner.md               # The second half, higher risk, not built
+│   ├── 02-runner.md               # The second half, higher risk, partly built
+│   ├── BENCHMARK.md               # Benchmark methodology, every figure still a TODO
 │   └── TELEMETRY.md               # The exact payload, published verbatim
+├── presets/                       # First-party presets: backend, frontend, monorepo
+├── telemetry/worker/              # The receiver, written and not deployed
+├── .github/workflows/             # ci, templates (weekly), release
 ├── Cargo.toml                     # Single package, edition 2024
 └── LICENSE                        # MIT
 ```
@@ -312,7 +328,7 @@ that would have arrived as a default.
 
 ## 📚 Shipped layers
 
-Thirty-six layers live under `layers/`. Every one of them is loaded,
+Thirty-eight layers live under `layers/`. Every one of them is loaded,
 parsed, and merge-tested by `tests/layers.rs`, which discovers them by
 walking the tree rather than reading a list, so a layer added tomorrow is
 covered without anybody remembering to register it.
@@ -435,11 +451,13 @@ flat config, so ignores live inside `eslint.config.mjs`.
 script, because Cargo already ships the command and there is no
 `package.json` in a Rust-only repository to hang one on.
 
-### runner (2)
+### runner (4)
 
 | Layer | Requires | Contributes |
 | --- | --- | --- |
 | `runner/nx` | `toolchain/node-pnpm` | `.nx/cache` and `.nx/workspace-data` ignores, installs `nx` |
+| `runner/turborepo` | `toolchain/node-pnpm` | `.turbo/` ignore, installs `turbo`. `turbo.json` is written by `culm new` from the final app layout |
+| `runner/moon` | `toolchain/node-pnpm` | `.moon/cache/` ignore, installs `@moonrepo/cli`. The workspace and per-project files are written by `culm new` |
 | `runner/none` | | Nothing, and that is the point |
 
 `runner/none` has to be a real selectable answer rather than an absence
@@ -874,7 +892,7 @@ file set.
 
 | Command | What it does |
 | --- | --- |
-| `cargo build` | Builds the library and the stub binary |
+| `cargo build` | Builds the library and the `culm` binary |
 | `cargo test` | Runs unit tests beside each module plus the integration tests |
 | `cargo test --test layers` | Only the shipped-layer suite |
 | `cargo test --test order_independence` | Only the merge proptest |
@@ -958,13 +976,14 @@ so re-verify before relying on it.
   parsing, selection validation, and selection resolution.
 - The layer catalog, which walks a directory tree and loads every
   `layer.toml` it finds.
-- The merge engine, all four strategies: `json-deep`, `line-block`,
+- The merge engine, all six strategies: `json-deep`, `line-block`,
   `toml-members`, `yaml-list`, `yaml-steps`, and `hook-script`.
 - Order independence, covered by a proptest over every permutation.
 - The scaffold module: the copy plan, `{{name}}` interpolation, path
   containment, and the disk writer.
-- **The CLI.** `culm new` and `culm run`, both callable as a function from
-  a test without spawning a process.
+- **The CLI.** `culm new`, `culm run`, `culm cache stats|clear`, and
+  `culm graph --format list|dot`, each callable as a function from a test
+  without spawning a process.
 - **The wizard**, `src/wizard/` (`ratatui` + `crossterm`). Falls back to
   flags on anything that is not a real terminal, so scripted and CI use
   are unaffected.
@@ -985,15 +1004,33 @@ so re-verify before relying on it.
 - **The runner, milestone r0.1.** `culm.toml` parsing, a `petgraph` task
   graph, named-cycle detection, sequential topological execution of one
   task's dependency closure. Dogfooded against a real scaffolded
-  monorepo, no caching yet.
+  monorepo.
+- **Runner, r0.2 to r0.4, as source modules.**
+  - `cas`: a blake3 content-addressable store, with `culm cache stats`
+    and `culm cache clear` operating on it.
+  - `culm run --affected <REF>`: a `git2` diff against a base ref matched
+    to each task's `inputs` globs, then a walk to downstream tasks.
+  - `culm run --parallel`: the resolved order grouped into dependency
+    levels, with each level run concurrently.
+  - A remote cache HTTP client, configured by `CULM_REMOTE_CACHE_URL` and
+    an optional `CULM_REMOTE_CACHE_TOKEN`. No server ships.
+- **Runner backends written by `culm new`.** After scaffolding, the
+  selected `runner/*` layer's real config is generated from the final app
+  layout: `nx.json`, `turbo.json`, or the Moon workspace and per-project
+  files. Turborepo also gets a pinned `packageManager` field.
 - Unit tests beside every module plus five integration suites.
 
 ### Not built
 
-- **The runner past r0.1.** Content hashing, local caching via `cas`,
-  `--affected`, parallel execution, remote cache. Not started, and not
-  started until r0.1 has seen more real use. See
-  [docs/02-runner.md](docs/02-runner.md).
+- **Task result caching in `culm run`.** The `cas` store and the remote
+  client exist, but `exec` and `parallel` run every task with
+  `cacheable: false`, and nothing reads or writes the store during a run.
+  `culm cache stats` therefore reports what was stored by other means,
+  not by `culm run`. See [docs/02-runner.md](docs/02-runner.md).
+- **A remote cache server.** Only the client exists.
+- **A benchmark result.** [docs/BENCHMARK.md](docs/BENCHMARK.md) is the
+  methodology against Nx on the real Klassivox workspace. Every figure in
+  it is a placeholder, so no performance claim is made anywhere.
 - **JVM and C/C++ layers**, per [decision 7](docs/CONTEXT.md#decisions)'s
   ordering: JS/TS and Rust first, then Go (shipped), then JVM, then
   C/C++.
@@ -1003,9 +1040,10 @@ so re-verify before relying on it.
 - **The telemetry receiver deployment.** The Cloudflare Worker and D1
   schema are written; `DEFAULT_ENDPOINT` does not resolve to anything
   yet.
-- **`runner/turborepo` and `runner/moon`.** Blocked on open question 4,
-  real per-app JS packages for a monorepo. `runner/nx` is an honest stub
-  for the same reason: it installs real `nx` and emits no `nx.json`.
+- **Verification of the newer runner backends.** The Nx, Turborepo, and
+  Moon config writers are unit tested, but unlike the frontend and
+  backend layers they have not been verified against a real install and
+  build under [decision 19](docs/CONTEXT.md#decisions).
 - **Klassivox's setup as a preset**, decision 17's second half.
   Deliberately not pursued right now.
 
@@ -1016,8 +1054,9 @@ so re-verify before relying on it.
    add`/`pnpm add`, neither Gradle nor Maven has a first-party "add a
    dependency and write its version" command, so `install::plan` needs a
    real answer here before a JVM layer can follow the Go pattern.
-2. More real use of the runner at r0.1 before r0.2 (caching) starts, per
-   the methodology in [docs/02-runner.md](docs/02-runner.md).
+2. Wire the cache into `culm run`, so a cacheable task is skipped on a
+   hit and a wrong hit is impossible, per the methodology in
+   [docs/02-runner.md](docs/02-runner.md).
 3. Deploy the telemetry receiver, closing the last piece of decision 9.
 4. Version resolution and nightly CI over the preset matrix.
 

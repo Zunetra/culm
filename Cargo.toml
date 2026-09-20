@@ -12,9 +12,12 @@ needless_return = "allow"
 
 [dependencies]
 anyhow = "1"
+blake3 = "1"
 clap = { version = "4", features = ["derive"] }
 crossterm = "0.29.0"
 dirs = "7.0.0"
+git2 = "0.19"
+globset = "0.4"
 include_dir = "0.7.4"
 petgraph = "0.7"
 ratatui = "0.30.2"

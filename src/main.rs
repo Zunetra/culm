@@ -6,7 +6,7 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use culm::banner;
-use culm::cli::{NewArgs, RunArgs, run_new, run_task};
+use culm::cli::{CacheArgs, GraphArgs, NewArgs, RunArgs, run_cache, run_graph, run_new, run_task};
 use culm::telemetry;
 
 #[derive(Parser)]
@@ -23,6 +23,12 @@ enum Command {
 
     /// Run a task from `culm.toml`, respecting `depends_on`.
     Run(RunArgs),
+
+    /// Inspect or clear the local task cache.
+    Cache(CacheArgs),
+
+    /// Print the task graph, as a list or as Graphviz dot.
+    Graph(GraphArgs),
 }
 
 /* An `ExitCode` rather than `Result`, because the `Termination` impl for
@@ -44,6 +50,11 @@ fn main() -> ExitCode {
             Ok(cwd) => run_task(args, &cwd),
             Err(e) => Err(anyhow::Error::new(e).context("cannot read the working directory")),
         },
+        Command::Cache(args) => run_cache(args),
+        Command::Graph(args) => match std::env::current_dir() {
+            Ok(cwd) => run_graph(args, &cwd),
+            Err(e) => Err(anyhow::Error::new(e).context("cannot read the working directory")),
+        },
     };
 
     /* Here, never in `cli::new`: this binary is the one caller a test never
@@ -53,13 +64,13 @@ fn main() -> ExitCode {
      * whether or not the confirmation prompt was accepted: a run without
      * `--yes` still named its layers before asking, and that naming is what
      * decision 9 calls the selection. */
-    /* `Run` sends nothing: decision 9 explicitly refuses task names and
-     * command strings, and a `run` payload has no other field worth
-     * reporting yet. */
+    /* `Run`, `Cache`, and `Graph` send nothing: decision 9 explicitly
+     * refuses task names and command strings, and none of the three has any
+     * other field worth reporting. */
     if result.is_ok() {
         match &cli.command {
             Command::New(args) => telemetry::record("new", &args.layers, args.preset.as_deref()),
-            Command::Run(_) => {}
+            Command::Run(_) | Command::Cache(_) | Command::Graph(_) => {}
         }
     }
 

@@ -30,4 +30,10 @@ pub enum RunnerError {
 
     #[error("task `{task}` failed{}", .status.map(|code| format!(" with exit code {code}")).unwrap_or_else(|| " (terminated by a signal)".to_owned()))]
     TaskFailed { task: String, status: Option<i32> },
+
+    #[error("cannot read the git repository at `{}`: {message}", .path.display())]
+    GitUnavailable { path: PathBuf, message: String },
+
+    #[error("`{git_ref}` is not a ref this repository knows about: {message}")]
+    UnknownRef { git_ref: String, message: String },
 }

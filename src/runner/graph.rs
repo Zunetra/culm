@@ -70,18 +70,64 @@ impl TaskGraph {
             })?;
 
         let closure = ancestors_of(&self.graph, *target);
+        Ok(self.ordered(&closure))
+    }
 
-        /* The whole graph is already known to be acyclic (`build` checked
-         * it), so this always succeeds; restricting a topological order to a
-         * subset of its nodes is still a valid topological order for the
-         * subgraph they induce. */
+    /// Every task in the graph, in a valid dependency order. Used by `culm
+    /// graph`, which shows the whole workspace rather than one task's
+    /// closure.
+    pub fn all_in_order(&self) -> Vec<&Task> {
+        let every_node: HashSet<NodeIndex> = self.graph.node_indices().collect();
+        self.ordered(&every_node)
+    }
+
+    /// `--affected`, r0.3: every `seed` task (one whose declared inputs a
+    /// changed file matched), each seed's own dependency closure (still
+    /// needed to build it, cache or not), and every task that transitively
+    /// depends on a seed (what "downstream" means, per
+    /// docs/02-runner.md section 6). Unknown seed names are refused the same
+    /// way `execution_order` refuses an unknown task, rather than being
+    /// silently dropped from the run.
+    pub fn affected_order(
+        &self,
+        seeds: &[&str],
+        config_path: &std::path::Path,
+    ) -> Result<Vec<&Task>, RunnerError> {
+        let mut closure = HashSet::new();
+        for seed in seeds {
+            let index = self
+                .index_of
+                .get(*seed)
+                .ok_or_else(|| RunnerError::UnknownTask {
+                    task: (*seed).to_owned(),
+                    path: config_path.to_owned(),
+                })?;
+            closure.extend(ancestors_of(&self.graph, *index));
+            closure.extend(descendants_of(&self.graph, *index));
+        }
+        Ok(self.ordered(&closure))
+    }
+
+    /// A valid topological order restricted to `closure`. The whole graph is
+    /// already known to be acyclic (`build` checked it), so `toposort`
+    /// always succeeds; restricting that order to a subset of its nodes is
+    /// still a valid topological order for the subgraph they induce.
+    fn ordered(&self, closure: &HashSet<NodeIndex>) -> Vec<&Task> {
         let order = toposort(&self.graph, None).expect("cycles are rejected in build");
-
-        Ok(order
+        order
             .into_iter()
             .filter(|index| closure.contains(index))
             .map(|index| &self.graph[index])
-            .collect())
+            .collect()
+    }
+
+    /// `culm graph --format dot`: the whole graph as Graphviz DOT text, one
+    /// node per task labelled by name, one edge per `depends_on` pointing
+    /// from the dependency to its dependent, matching this graph's own edge
+    /// direction.
+    pub fn to_dot(&self) -> String {
+        let labelled = self.graph.map(|_, task| task.name.clone(), |_, _| "");
+        format!("{}", petgraph::dot::Dot::new(&labelled))
     }
 }
 
@@ -93,6 +139,22 @@ fn ancestors_of(graph: &DiGraph<Task, ()>, start: NodeIndex) -> HashSet<NodeInde
         if seen.insert(node) {
             for dependency in graph.neighbors_directed(node, Direction::Incoming) {
                 stack.push(dependency);
+            }
+        }
+    }
+    seen
+}
+
+/// Every node reachable by walking dependency edges forward from `start`,
+/// `start` included: everything that (transitively) depends on it, which is
+/// what `--affected` means by "downstream".
+fn descendants_of(graph: &DiGraph<Task, ()>, start: NodeIndex) -> HashSet<NodeIndex> {
+    let mut seen = HashSet::new();
+    let mut stack = vec![start];
+    while let Some(node) = stack.pop() {
+        if seen.insert(node) {
+            for dependent in graph.neighbors_directed(node, Direction::Outgoing) {
+                stack.push(dependent);
             }
         }
     }
@@ -274,6 +336,68 @@ mod tests {
             }
             other => panic!("expected a cycle error, got {other}"),
         }
+    }
+
+    #[test]
+    fn affected_includes_the_seed_its_deps_and_its_dependents() {
+        let graph = TaskGraph::build(
+            vec![
+                task("build", &[]),
+                task("test", &["build"]),
+                task("deploy", &["test"]),
+                task("lint", &[]),
+            ],
+            &path(),
+        )
+        .unwrap();
+
+        let order = graph.affected_order(&["test"], &path()).unwrap();
+        let names: Vec<&str> = order.iter().map(|t| t.name.as_str()).collect();
+
+        assert!(names.contains(&"build"));
+        assert!(names.contains(&"test"));
+        assert!(names.contains(&"deploy"));
+        assert!(!names.contains(&"lint"));
+        assert!(
+            names.iter().position(|n| *n == "build").unwrap()
+                < names.iter().position(|n| *n == "test").unwrap()
+        );
+        assert!(
+            names.iter().position(|n| *n == "test").unwrap()
+                < names.iter().position(|n| *n == "deploy").unwrap()
+        );
+    }
+
+    #[test]
+    fn an_unknown_affected_seed_is_refused() {
+        let graph = TaskGraph::build(vec![task("build", &[])], &path()).unwrap();
+        let error = graph.affected_order(&["missing"], &path()).unwrap_err();
+        assert!(matches!(error, RunnerError::UnknownTask { .. }));
+    }
+
+    #[test]
+    fn all_in_order_includes_every_task_in_the_graph() {
+        let graph =
+            TaskGraph::build(vec![task("build", &[]), task("lint", &[])], &path()).unwrap();
+        let names: Vec<&str> = graph
+            .all_in_order()
+            .iter()
+            .map(|t| t.name.as_str())
+            .collect();
+        assert_eq!(names.len(), 2);
+        assert!(names.contains(&"build"));
+        assert!(names.contains(&"lint"));
+    }
+
+    #[test]
+    fn to_dot_names_every_task_and_every_dependency_edge() {
+        let graph =
+            TaskGraph::build(vec![task("build", &[]), task("test", &["build"])], &path())
+                .unwrap();
+        let dot = graph.to_dot();
+        assert!(dot.contains("build"));
+        assert!(dot.contains("test"));
+        assert!(dot.contains("->"));
     }
 
     #[test]
