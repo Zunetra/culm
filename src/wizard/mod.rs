@@ -7,7 +7,7 @@
  * in `cli::new`, which is what keeps the merge engine, validation, and
  * install logic from needing to know a human was involved.
  *
- * Order follows docs/01-scaffolder.md section 5, minus the project name step:
+ * Order follows docs/DESIGN.md section 2.4, minus the project name step:
  * that is still a required positional argument, so by the time this runs it
  * is already known. Toolchain is asked only under `tooling-only`, the one
  * shape where nothing else implies it (decision 4); every other shape never
@@ -22,31 +22,37 @@ use anyhow::{Context, Result};
 
 use crate::layer::{Cardinality, Catalog, Category, Shape, shape_of};
 
-/// Runs the wizard, or returns `Ok(None)` if the user cancelled (Esc/q at any
-/// screen). Never partially commits: cancelling at the last screen throws
-/// away every earlier answer, the same as cancelling at the first, since
-/// nothing is scaffolded until the whole selection exists.
-pub fn run(catalog: &Catalog) -> Result<Option<Vec<String>>> {
+/// How a wizard session ended.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Outcome {
+    /// Every screen was answered; the qualified layer ids chosen.
+    Chosen(Vec<String>),
+    /// Esc/q on the screen for this category.
+    /// Named so telemetry can say where people give up, never what they had picked.
+    Cancelled(Category),
+}
+
+/// Runs the wizard. Never partially commits: cancelling at the last screen
+/// throws away every earlier answer, the same as cancelling at the first,
+/// since nothing is scaffolded until the whole selection exists.
+pub fn run(catalog: &Catalog) -> Result<Outcome> {
     let mut terminal = ratatui::init();
     let outcome = run_inner(&mut terminal, catalog);
     ratatui::restore();
     outcome
 }
 
-fn run_inner(
-    terminal: &mut ratatui::DefaultTerminal,
-    catalog: &Catalog,
-) -> Result<Option<Vec<String>>> {
+fn run_inner(terminal: &mut ratatui::DefaultTerminal, catalog: &Catalog) -> Result<Outcome> {
     let mut chosen: Vec<String> = Vec::new();
 
     let Some((shape_id, shape)) = pick_shape(terminal, catalog)? else {
-        return Ok(None);
+        return Ok(Outcome::Cancelled(Category::Shape));
     };
     chosen.push(shape_id);
 
     for category in [Category::Frontend, Category::Backend] {
         let Some(mut picked) = pick_category(terminal, catalog, category, shape, "app")? else {
-            return Ok(None);
+            return Ok(Outcome::Cancelled(category));
         };
         chosen.append(&mut picked);
     }
@@ -55,7 +61,7 @@ fn run_inner(
         let Some(mut picked) =
             pick_category(terminal, catalog, Category::Toolchain, shape, "toolchain")?
         else {
-            return Ok(None);
+            return Ok(Outcome::Cancelled(Category::Toolchain));
         };
         chosen.append(&mut picked);
     }
@@ -66,18 +72,18 @@ fn run_inner(
         (Category::Editor, "editor"),
     ] {
         let Some(mut picked) = pick_category(terminal, catalog, category, shape, noun)? else {
-            return Ok(None);
+            return Ok(Outcome::Cancelled(category));
         };
         chosen.append(&mut picked);
     }
 
     let Some(runner) = pick_single_category(terminal, catalog, Category::Runner, shape, "runner")?
     else {
-        return Ok(None);
+        return Ok(Outcome::Cancelled(Category::Runner));
     };
     chosen.push(runner);
 
-    Ok(Some(chosen))
+    Ok(Outcome::Chosen(chosen))
 }
 
 /// Every shape is a real choice: it is `ExactlyOne` in every case, so a plain

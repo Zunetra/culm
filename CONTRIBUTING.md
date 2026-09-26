@@ -44,8 +44,8 @@ settled decision gets re-litigated in review.
    conventions, the modularity rules, the total order invariant, and the
    traps section. That last one exists so the same bug is not found
    twice.
-3. **[docs/01-scaffolder.md](docs/01-scaffolder.md)**, the v0.1 product,
-   and **[docs/02-runner.md](docs/02-runner.md)**, the second half.
+3. **[docs/DESIGN.md](docs/DESIGN.md)**, how both halves work and what
+   is left to build.
 
 State lives in the code and in git history, not in a document. If a doc
 and the code disagree, the code is what is true and the doc is a bug.

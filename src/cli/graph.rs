@@ -1,6 +1,6 @@
 // === culm graph
 
-/* r1.0, per docs/02-runner.md section 3's own interface: `culm graph`, and
+/* r1.0, per docs/DESIGN.md section 3.2's own interface: `culm graph`, and
  * section 6's `culm graph --format dot`. Prints the whole task graph, not
  * one task's closure, which is what `TaskGraph::all_in_order` is for rather
  * than reusing `execution_order`. */
@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Result, bail};
 use clap::{Args, ValueEnum};
 
-use crate::runner::{RunnerConfig, TaskGraph, tasks_of};
+use crate::runner::{TaskGraph, workspace};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum GraphFormat {
@@ -36,11 +36,9 @@ pub fn run_graph(args: &GraphArgs, cwd: &Path) -> Result<()> {
 }
 
 pub fn run_graph_to(args: &GraphArgs, cwd: &Path, out: &mut impl Write) -> Result<()> {
-    let config_path = args.config.clone().unwrap_or_else(|| cwd.join("culm.toml"));
-
-    let config = RunnerConfig::load(&config_path)?;
-    let project = project_name(cwd);
-    let tasks = tasks_of(&config, &project);
+    let loaded = workspace::load(cwd, args.config.as_deref())?;
+    let config_path = loaded.config_path;
+    let tasks = loaded.tasks;
 
     if tasks.is_empty() {
         bail!("`{}` defines no tasks", config_path.display());
@@ -59,12 +57,6 @@ pub fn run_graph_to(args: &GraphArgs, cwd: &Path, out: &mut impl Write) -> Resul
         }
     }
     Ok(())
-}
-
-fn project_name(cwd: &Path) -> String {
-    cwd.file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_else(|| ".".to_owned())
 }
 
 // === Tests

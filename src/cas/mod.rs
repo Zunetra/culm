@@ -4,14 +4,14 @@
  * than as its own crate, extracted only if a second real consumer ever
  * needs it. It hashes a file's bytes, stores the file under that hash, and
  * hands the hash back; a build cache is exactly that shape, which is what
- * docs/02-runner.md section 5 explains at length. r0.2 milestone. */
+ * docs/DESIGN.md section 3.4 explains at length. r0.2 milestone. */
 
 pub mod entry;
 pub mod error;
 pub mod key;
 pub mod store;
 
-pub use entry::CacheEntry;
+pub use entry::{CacheEntry, Captured, OutputFile, write_outputs};
 pub use error::CasError;
 pub use key::CacheKey;
 pub use store::Store;

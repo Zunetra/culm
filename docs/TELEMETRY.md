@@ -1,10 +1,12 @@
 # Telemetry
 
 culm sends anonymous usage data. This page is the complete specification,
-not a summary. If something is not listed here, it is not sent.
+not a summary. If something is not listed here, it is not sent. The code
+that builds the payload is `src/telemetry/payload.rs`, and a test there
+fails if a key is added without this page changing too.
 
-**Opt out:** set `CULM_TELEMETRY=0`, or run `culm config set
-telemetry false`. No feature is degraded when telemetry is off.
+**Opt out:** set `CULM_TELEMETRY=0` (or `false`, `off`, `no`), or
+`DO_NOT_TRACK=1`. No feature is degraded when telemetry is off.
 
 ---
 
@@ -18,39 +20,80 @@ because growing it means editing this file.
 
 ## The exact payload
 
+One event per command. Every key is always present, `null` where it
+does not apply.
+
 ```json
 {
-  "schema": 1,
-  "anonymous_id": "9f2c1e7a-4b3d-4a51-9c8e-2f0d6b7a1e33",
+  "schema": 2,
+  "id": "9f2c1e7a-4b3d-4a51-9c8e-2f0d6b7a1e33",
   "version": "0.1.0",
   "os": "linux",
   "arch": "x86_64",
   "command": "new",
-  "duration_ms": 4210,
   "exit": "ok",
+  "error_kind": null,
+  "duration_ms": 4210,
   "scaffold": {
     "shape": "monorepo",
-    "preset": "polyglot-monorepo",
-    "layers": ["nuxt", "axum", "prettier", "eslint", "rustfmt", "husky"],
-    "runner": "nx"
-  }
+    "layers": ["base/base", "shape/monorepo", "frontend/nuxt", "backend/axum"],
+    "selected_via": "wizard",
+    "preset": null,
+    "install": "ok",
+    "install_failed_manager": null,
+    "saved_preset": false,
+    "cancelled_at": null
+  },
+  "run": null
+}
+```
+
+For `culm run`, `scaffold` is `null` and `run` is:
+
+```json
+{
+  "projects": 3,
+  "tasks": 7,
+  "cacheable": 5,
+  "hits": 4,
+  "misses": 1,
+  "parallel": true,
+  "affected": false,
+  "remote_cache": false
 }
 ```
 
 | Field | Meaning |
 | --- | --- |
-| `schema` | Payload version. Incremented when this document changes. |
-| `anonymous_id` | Random UUID v4, generated once, stored in the config directory. |
+| `schema` | Payload version. Incremented when this page changes. |
+| `id` | Random UUID v4, generated once per machine. |
 | `version` | culm's own version. |
 | `os`, `arch` | Platform only. Not a kernel version, not a hostname. |
-| `command` | The subcommand name alone. `new`, `run`, `graph`, `cache`. |
+| `command` | The subcommand name alone: `new`, `run`, `cache`, `graph`. |
+| `exit` | `ok`, `error`, or `cancelled`. |
+| `error_kind` | On `error` only, the stage that failed, from a closed set: `select`, `preset_fetch`, `resolve`, `merge`, `write`, `install`, `version_resolve`, `config`, `graph`, `task_failed`, `cache`, `other`. **Never an error message.** |
 | `duration_ms` | Wall-clock time of the invocation. |
-| `exit` | `ok`, `error`, or `cancelled`. Never an error message. |
-| `scaffold` | Present only for `culm new`. Which layers were chosen. |
+| `scaffold.shape` | `single-app`, `monorepo`, or `tooling-only`. |
+| `scaffold.layers` | The resolved layer ids, defaults included. **Only layers that ship in culm**; a layer from `--layers-dir` or a typo is dropped. |
+| `scaffold.selected_via` | `flags`, `preset`, or `wizard`. |
+| `scaffold.preset` | A first-party preset's name, otherwise only `file`, `git`, or `unknown`. **Never the path or URL.** |
+| `scaffold.install` | `ok`, `failed`, `skipped` (`--no-install`), or `none` (nothing to install). |
+| `scaffold.install_failed_manager` | `pnpm`, `cargo`, or `go`. Never its arguments. |
+| `scaffold.saved_preset` | Whether `--save-preset` was used. Never its name. |
+| `scaffold.cancelled_at` | The wizard screen (`shape`, `frontend`, ...) or `confirm` where the user backed out. |
+| `run.*` | Counts and flags only. Never a task name, project name, or command. |
 
-The `scaffold` block is the only field with genuine product value. Which
-layers people actually select decides what gets maintained and what gets
-cut when the nightly matrix grows too wide.
+## What it is for
+
+- **Which layers matter:** what gets maintained, and what gets cut when
+  the template CI matrix grows too wide.
+- **Where scaffolds break:** `error_kind` and `install_failed_manager`
+  say which stage and which package manager, without any error text.
+- **Where people give up:** `cancelled_at`.
+- **Whether the runner earns its place:** `run` says whether anyone uses
+  it and whether the cache hits, which the runner's kill criteria need.
+
+It cannot say why someone stopped using culm. That comes from issues.
 
 ## Never sent
 
@@ -58,60 +101,62 @@ This list is binding.
 
 - Repository names, directory names, or any filesystem path
 - File contents of any kind
-- Task names, target names, or command strings from `culm.yaml`
+- Task names, project names, or command strings from `culm.toml`
+- Error messages or package manager output
+- Preset sources: no git URL, no file path, no saved preset name
 - Environment variable names or values
 - Git remotes, branch names, commit hashes, or author information
 - IP addresses beyond what the transport unavoidably exposes, which is
   not stored
 - Anything derived from hostname, MAC address, username, or serial number
 
-`culm.yaml` contains user-authored shell commands. Sending them "to
+`culm.toml` contains user-authored shell commands. Sending them "to
 debug failures" would be the obvious next request, and it is refused here
-in advance so it does not get added quietly later.
+in advance. `error_kind` is the answer to that request.
 
 ## The anonymous id
 
 - UUID v4 from a cryptographic RNG. Not derived from any machine
   property, so it cannot be reversed to a machine.
-- Written once to `$XDG_CONFIG_HOME/culm/id` or the platform
-  equivalent.
+- Written once to `culm/telemetry_id` in the platform's config directory
+  (`$XDG_CONFIG_HOME` on Linux).
 - Deleting that file produces a new, unlinkable id. Deleting it is
   supported, not a workaround.
-- It identifies a machine, not a person. Two developers sharing a laptop
-  are one id. One developer on three machines is three.
+- It identifies a machine, not a person.
 
 ## First-run notice
 
-Printed once, before the first payload is ever sent:
+Printed to stderr once, before the first payload is sent, with the
+payload itself:
 
 ```
-culm sends anonymous usage data: a random id, the version, your OS and
-architecture, which subcommand ran, and which layers you selected. It
-never sends paths, file contents, environment variables, or commands.
-
-Full payload: https://culm.dev/telemetry
-Opt out:      CULM_TELEMETRY=0
+culm sends anonymous usage data. This is the exact payload:
+{ ...the JSON above, for this run... }
+Full specification: https://github.com/Zunetra/culm/blob/main/docs/TELEMETRY.md
+Opt out:            CULM_TELEMETRY=0
 ```
+
+## When it is off
+
+- `CULM_TELEMETRY` set to `0`, `false`, `off`, or `no`.
+- `DO_NOT_TRACK=1`.
+- `CI` set, unless `CULM_TELEMETRY=1` is explicit. CI runs would
+  otherwise dominate the numbers and make them meaningless.
+- No config directory to keep the id in.
 
 ## Transport
 
-- Sent after the command completes, never blocking it.
+- Sent after the command completes, never blocking it for more than
+  500ms.
 - Failure is silent and never retried. Telemetry must not be able to slow
-  down or break a scaffold.
-- Disabled automatically when `CI` is set, unless `CULM_TELEMETRY=1` is
-  explicit. CI runs would otherwise dominate the numbers and make them
-  meaningless.
+  down or break a command.
+- The receiver (`telemetry/worker/`) rejects any key not on this page.
 
 ## What this does and does not measure
 
 **Does:** how many machines run culm, which layers matter, which
-commands are used, and which platforms need binaries.
+commands are used, where they fail, and which platforms need binaries.
 
 **Does not:** how many humans, how many companies, or anything about
-revenue. Registry download counts are worse still: CI inflates them and
-mirrors undercount them.
-
-The number that matters commercially comes from accounts on the hosted
-remote cache, which are exact and non-inferred. Telemetry measures the
-free top of the funnel. Accounts measure the business. See
-[CONTEXT.md](CONTEXT.md#decisions) decision 9.
+revenue. The number that matters commercially comes from accounts on the
+hosted remote cache. See [CONTEXT.md](CONTEXT.md#decisions) decision 9.

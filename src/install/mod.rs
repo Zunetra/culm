@@ -14,7 +14,10 @@ use thiserror::Error;
 use crate::layer::{CatalogEntry, InstallSpec, MergeSpec};
 use crate::merge::LayerId;
 
+pub mod crates_io;
+pub mod go_proxy;
 pub mod maven_central;
+pub mod release_age;
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum InstallError {
@@ -53,6 +56,9 @@ pub enum InstallError {
 pub struct InstallCommand {
     pub program: String,
     pub args: Vec<String>,
+    /// How many of `args`, counted from the end, are package specs. The
+    /// release age guard rewrites exactly those.
+    pub packages: usize,
 }
 
 impl InstallCommand {
@@ -361,6 +367,7 @@ fn command(group: &Group) -> InstallCommand {
         return InstallCommand {
             program: group.manager.clone(),
             args,
+            packages: group.packages.len(),
         };
     }
 
@@ -399,6 +406,7 @@ fn command(group: &Group) -> InstallCommand {
     InstallCommand {
         program: group.manager.clone(),
         args,
+        packages: group.packages.len(),
     }
 }
 

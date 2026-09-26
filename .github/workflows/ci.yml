@@ -53,10 +53,38 @@ jobs:
         continue-on-error: true
         run: cargo clippy --all-targets -- -D warnings
 
+      # Single-threaded because tests/cache_correctness.rs drives real
+      # subprocesses and filesystem state, per docs/DESIGN.md section 3.6.
+      # The whole suite takes seconds, so one flag for all of it is simpler
+      # than running that file twice.
       - name: Tests
         id: tests
         continue-on-error: true
-        run: cargo test --all-targets
+        run: cargo test --all-targets -- --test-threads=1
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny,cargo-audit
+
+      # Licenses, sources, and advisories, per deny.toml. Every advisory
+      # fails, unsound and unmaintained included.
+      - name: Dependency policy
+        id: deny
+        continue-on-error: true
+        run: cargo deny check
+
+      - name: Security advisories
+        id: audit
+        continue-on-error: true
+        run: cargo audit
+
+      # Proves the crate packages: `include` names every file the build
+      # needs, `layers/` and `presets/` among them, since `include_dir!`
+      # reads them at compile time.
+      - name: Package
+        id: package
+        continue-on-error: true
+        run: cargo publish --dry-run --locked
 
       # The layer tree is compiled into the binary, so a template that exists on
       # disk but was never declared is only caught by building the real artefact.
@@ -68,12 +96,15 @@ jobs:
       - name: Report
         run: |
           fail=0
-          for step in fmt clippy tests build; do
+          for step in fmt clippy tests deny audit package build; do
             case "$step" in
-              fmt)    outcome="${{ steps.fmt.outcome }}" ;;
-              clippy) outcome="${{ steps.clippy.outcome }}" ;;
-              tests)  outcome="${{ steps.tests.outcome }}" ;;
-              build)  outcome="${{ steps.build.outcome }}" ;;
+              fmt)     outcome="${{ steps.fmt.outcome }}" ;;
+              clippy)  outcome="${{ steps.clippy.outcome }}" ;;
+              tests)   outcome="${{ steps.tests.outcome }}" ;;
+              deny)    outcome="${{ steps.deny.outcome }}" ;;
+              audit)   outcome="${{ steps.audit.outcome }}" ;;
+              package) outcome="${{ steps.package.outcome }}" ;;
+              build)   outcome="${{ steps.build.outcome }}" ;;
             esac
             if [ "$outcome" = "success" ]; then
               echo "PASS $step" >> "$GITHUB_STEP_SUMMARY"
@@ -84,3 +115,34 @@ jobs:
             fi
           done
           exit "$fail"
+
+  # The platforms release.yml ships binaries for. macOS runs the whole suite.
+  # Windows builds and runs only the tests that do not shell out: the runner
+  # and cache tests drive `sh` commands, and `cmd` is a different language.
+  platforms:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --locked --all-targets
+
+      - name: Tests
+        if: runner.os == 'macOS'
+        run: cargo test --all-targets -- --test-threads=1
+
+      - name: Tests that do not shell out
+        if: runner.os == 'Windows'
+        run: cargo test --locked --test layers --test order_independence --test scaffold

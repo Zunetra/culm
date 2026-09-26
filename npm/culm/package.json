@@ -1,0 +1,26 @@
+{
+  "name": "culm",
+  "version": "0.0.0",
+  "description": "Workspace tooling for polyglot repositories: scaffold a workspace from composable layers, then run its tasks.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zunetra/culm.git"
+  },
+  "homepage": "https://github.com/Zunetra/culm#readme",
+  "keywords": ["workspace", "monorepo", "scaffold", "task-runner", "polyglot"],
+  "bin": {
+    "culm": "bin/culm.js"
+  },
+  "files": ["bin"],
+  "engines": {
+    "node": ">=18"
+  },
+  "optionalDependencies": {
+    "@zunetra/culm-linux-x64": "0.0.0",
+    "@zunetra/culm-linux-arm64": "0.0.0",
+    "@zunetra/culm-darwin-x64": "0.0.0",
+    "@zunetra/culm-darwin-arm64": "0.0.0",
+    "@zunetra/culm-win32-x64": "0.0.0"
+  }
+}

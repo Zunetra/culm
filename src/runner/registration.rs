@@ -17,6 +17,7 @@ use anyhow::{Context, Result};
 use crate::layer::{Category, CatalogEntry};
 use crate::scaffold::Variables;
 
+use super::culm_toml::{self, CulmApp, Toolchain};
 use super::moon::{MoonApp, MoonTask, generate_project, generate_workspace};
 use super::nx::{NxApp, generate as generate_nx};
 use super::turborepo::{TurboApp, generate as generate_turbo};
@@ -89,6 +90,7 @@ pub fn write_root_config(
         "turborepo" => write_turborepo(entries, variables, root),
         "moon" => write_moon(entries, variables, root),
         "nx" => write_nx(entries, variables, root),
+        "culm" => write_culm(entries, variables, root),
         _ => Ok(()),
     }
 }
@@ -152,6 +154,53 @@ fn write_moon(entries: &[&CatalogEntry], variables: &[Variables], root: &Path) -
             .with_context(|| format!("cannot write {}", project_path.display()))?;
     }
 
+    Ok(())
+}
+
+fn write_culm(entries: &[&CatalogEntry], variables: &[Variables], root: &Path) -> Result<()> {
+    let path = root.join("culm.toml");
+    fs::write(&path, culm_toml::generate_root(&root_tasks(entries)))
+        .with_context(|| format!("cannot write {}", path.display()))?;
+
+    for (entry, vars) in apps(entries, variables) {
+        let requires = |toolchain: &str| entry.manifest.requires.iter().any(|id| id == toolchain);
+        let toolchain = if requires("toolchain/rust-cargo") {
+            Toolchain::Rust
+        } else if requires("toolchain/go-mod") {
+            Toolchain::Go
+        } else {
+            Toolchain::Node
+        };
+        /* A Rust app is a workspace member wherever its own `Cargo.toml`
+         * lands, `crates/<id>`, not under `{{app_dir}}`. */
+        let app_dir = match toolchain {
+            Toolchain::Rust => entry
+                .manifest
+                .files
+                .iter()
+                .find_map(|file| {
+                    (file.to.file_name()? == "Cargo.toml")
+                        .then(|| file.to.parent())
+                        .flatten()
+                })
+                .map(|dir| dir.to_string_lossy().into_owned())
+                .unwrap_or_else(|| format!("crates/{}", entry.manifest.id)),
+            _ => vars.get("app_dir").unwrap_or("src").to_owned(),
+        };
+        let depth = std::path::Path::new(&app_dir).components().count();
+        let app = CulmApp {
+            to_root: "../".repeat(depth),
+            app_dir,
+            toolchain,
+        };
+
+        let project_dir = root.join(&app.app_dir);
+        fs::create_dir_all(&project_dir)
+            .with_context(|| format!("cannot create {}", project_dir.display()))?;
+        let project_path = project_dir.join("culm.toml");
+        fs::write(&project_path, culm_toml::generate_project(&app))
+            .with_context(|| format!("cannot write {}", project_path.display()))?;
+    }
     Ok(())
 }
 

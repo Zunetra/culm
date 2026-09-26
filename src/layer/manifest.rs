@@ -7,7 +7,7 @@ use serde::Deserialize;
 
 use super::category::Category;
 use super::error::LayerError;
-use crate::merge::{Contribution, Layer, LayerId, Step};
+use crate::merge::{Contribution, Layer, LayerId, Step, YamlScalar};
 
 /// One `layer.toml`, as written on disk.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -60,7 +60,13 @@ pub enum MergeSpec {
     /// `pnpm-workspace.yaml` holds both `packages` and `onlyBuiltDependencies`, and a strategy that assumed one sequence per file could express neither without naming the other.
     YamlList {
         target: PathBuf,
+        #[serde(default)]
         lists: BTreeMap<String, Vec<String>>,
+        /// Single settings, such as pnpm's `minimumReleaseAge`.
+        /// Integers and booleans only: both render unquoted in YAML with no
+        /// parser needed, and a string setting would need one to quote safely.
+        #[serde(default)]
+        scalars: BTreeMap<String, YamlScalar>,
     },
     /// A body placed in a shell hook at a declared order.
     /// `order` is explicit because sequence is observable here: a formatter that rewrites files and a linter that reads them produce different results depending on which ran first.
@@ -165,9 +171,17 @@ impl Manifest {
                 MergeSpec::TomlMembers { target, members } => {
                     (target.clone(), Contribution::TomlMembers(members.clone()))
                 }
-                MergeSpec::YamlList { target, lists } => {
-                    (target.clone(), Contribution::YamlList(lists.clone()))
-                }
+                MergeSpec::YamlList {
+                    target,
+                    lists,
+                    scalars,
+                } => (
+                    target.clone(),
+                    Contribution::YamlList {
+                        lists: lists.clone(),
+                        scalars: scalars.clone(),
+                    },
+                ),
                 MergeSpec::HookScript {
                     target,
                     order,
@@ -273,7 +287,7 @@ onlyBuiltDependencies = ["esbuild"]
             .get(&PathBuf::from("pnpm-workspace.yaml"))
             .expect("the target is claimed");
 
-        let Contribution::YamlList(lists) = contribution else {
+        let Contribution::YamlList { lists, .. } = contribution else {
             panic!("expected a yaml-list contribution");
         };
         assert_eq!(lists["packages"], vec!["apps/*", "libs/*"]);

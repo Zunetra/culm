@@ -4,6 +4,14 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/Zunetra/culm"
+homepage = "https://github.com/Zunetra/culm"
+readme = "README.md"
+description = "Workspace tooling for polyglot repositories: scaffold a workspace from composable layers, then run its tasks with a content-addressed cache."
+keywords = ["monorepo", "scaffold", "workspace", "task-runner", "polyglot"]
+categories = ["command-line-utilities", "development-tools", "development-tools::build-utils"]
+# `include_dir!` compiles `layers/` and `presets/` into the binary, so the
+# published crate has to carry them; nothing else outside `src/` is needed.
+include = ["src/**/*", "layers/**/*", "presets/**/*", "README.md", "LICENSE"]
 
 # An explicit `return` is a deliberate style choice here, not an oversight the
 # clippy gate should keep correcting.
@@ -16,11 +24,13 @@ blake3 = "1"
 clap = { version = "4", features = ["derive"] }
 crossterm = "0.29.0"
 dirs = "7.0.0"
-git2 = "0.19"
+git2 = "0.21"
 globset = "0.4"
+ignore = "0.4.33"
 include_dir = "0.7.4"
 petgraph = "0.7"
 ratatui = "0.30.2"
+semver = "1.0.28"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"

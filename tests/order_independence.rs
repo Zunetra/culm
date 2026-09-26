@@ -138,7 +138,13 @@ fn build_layer(index: usize, plan: &Plan) -> Layer {
     Layer::new(id)
         .with_merge("package.json", Contribution::JsonDeep(Value::Object(root)))
         .with_merge(".gitignore", Contribution::LineBlock(lines))
-        .with_merge("pnpm-workspace.yaml", Contribution::YamlList(yaml))
+        .with_merge(
+            "pnpm-workspace.yaml",
+            Contribution::YamlList {
+                lists: yaml,
+                scalars: BTreeMap::new(),
+            },
+        )
 }
 
 /* Every permutation, not a sample: with at most five layers the full set is 120

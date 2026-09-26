@@ -16,6 +16,7 @@ use crate::merge::{FileSet, LayerId};
 use crate::preset;
 use crate::runner;
 use crate::scaffold::{self, CopyPlan, Variables, write};
+use crate::telemetry::{ErrorKind, Install, Scaffold, SelectedVia};
 
 #[derive(Debug, Args)]
 pub struct NewArgs {
@@ -48,10 +49,27 @@ pub struct NewArgs {
     #[arg(long)]
     pub no_install: bool,
 
+    /// Never install a release younger than this many days (decision 5's
+    /// supply-chain guard). pnpm enforces it through `pnpm-workspace.yaml`;
+    /// for Cargo and Go, culm picks the version itself. 0 turns it off.
+    #[arg(long, value_name = "DAYS", default_value_t = install::release_age::DEFAULT_DAYS)]
+    pub min_release_age: u64,
+
     /// Save the resolved layer selection as `<NAME>.toml`, next to where this was run.
     /// The local half of decision 6: no network, no registry, just the file this run already resolved, written out so a second `culm new --preset ./NAME.toml`-shaped workflow does not have to re-list every layer by hand.
     #[arg(long, value_name = "NAME")]
     pub save_preset: Option<String>,
+}
+
+/// What a `culm new` run learned about itself, for telemetry.
+/// Filled as the run goes, so a failure still reports how far it got.
+#[derive(Debug, Default)]
+pub struct NewReport {
+    pub scaffold: Scaffold,
+    /// The stage the run is in; the stage it failed in, if it failed.
+    pub stage: ErrorKind,
+    /// The user backed out, in the wizard or at the confirmation prompt.
+    pub cancelled: bool,
 }
 
 /// Scaffolds a new workspace into `parent/<project>`.
@@ -69,6 +87,18 @@ pub fn run_new(args: &NewArgs, parent: &Path) -> Result<()> {
 /// landed on disk. The `--no-install` plan is the case that matters: its whole
 /// output is the report.
 pub fn run_new_to(args: &NewArgs, parent: &Path, out: &mut impl Write) -> Result<()> {
+    run_new_reporting(args, parent, out, &mut NewReport::default())
+}
+
+/// The same run, also filling `report` for telemetry.
+/// Only `main.rs` reads the report; tests go through `run_new_to`.
+pub fn run_new_reporting(
+    args: &NewArgs,
+    parent: &Path,
+    out: &mut impl Write,
+    report: &mut NewReport,
+) -> Result<()> {
+    report.stage = ErrorKind::Select;
     let project = project_name(&args.project)?;
 
     let catalog = match &args.layers_dir {
@@ -77,10 +107,21 @@ pub fn run_new_to(args: &NewArgs, parent: &Path, out: &mut impl Write) -> Result
         None => Catalog::embedded().context("the compiled-in layer catalog is unreadable")?,
     };
 
-    let chosen = chosen_layers(args, &catalog)?;
+    let chosen = chosen_layers(args, &catalog, report)?;
+    report.scaffold.layers = first_party(chosen.iter().map(LayerId::to_string));
 
+    report.stage = ErrorKind::Resolve;
     let opt_outs = ids(&args.without);
     let entries = resolve(&catalog, &chosen, &opt_outs)?;
+    report.scaffold.layers = first_party(
+        entries
+            .iter()
+            .map(|entry| entry.manifest.qualified_id().to_string()),
+    );
+    report.scaffold.shape = entries
+        .iter()
+        .find(|entry| entry.manifest.category == Category::Shape)
+        .map(|entry| entry.manifest.id.clone());
 
     let root = parent.join(project);
     check_destination(&root)?;
@@ -101,6 +142,7 @@ pub fn run_new_to(args: &NewArgs, parent: &Path, out: &mut impl Write) -> Result
         .map(|(entry, vars)| entry.interpolated(vars))
         .collect::<Result<Vec<Manifest>, _>>()?;
 
+    report.stage = ErrorKind::Merge;
     let layers = manifests
         .iter()
         .map(Manifest::to_layer)
@@ -139,11 +181,15 @@ pub fn run_new_to(args: &NewArgs, parent: &Path, out: &mut impl Write) -> Result
     summarise(out, &entries, plan.len(), written_merges, &root)?;
 
     if !args.yes && !confirmed(out)? {
+        report.cancelled = true;
+        report.scaffold.cancelled_at = Some("confirm".to_owned());
         writeln!(out, "Nothing was written.")?;
         return Ok(());
     }
 
+    report.stage = ErrorKind::Write;
     write(&root, &plan, &merged, &modes)?;
+    set_pnpm_release_age(&root, args.min_release_age)?;
 
     /* After the scaffold itself, never before: a backend needs to see each
      * application's final `app_dir`, which is only known once the layout in
@@ -153,7 +199,7 @@ pub fn run_new_to(args: &NewArgs, parent: &Path, out: &mut impl Write) -> Result
     runner::write_root_config(&entries, &variables, &root)?;
 
     writeln!(out, "\nScaffolded {} into {}", project, root.display())?;
-    finish_installs(out, &installs, &root, args.no_install)?;
+    finish_installs(out, &installs, &root, args, report)?;
 
     if selected_runner_id(&entries) == Some("turborepo") {
         if args.no_install {
@@ -173,7 +219,9 @@ pub fn run_new_to(args: &NewArgs, parent: &Path, out: &mut impl Write) -> Result
             .iter()
             .map(|entry| entry.manifest.qualified_id().to_string())
             .collect();
+        report.stage = ErrorKind::Write;
         let saved = save_preset(name, layers, parent)?;
+        report.scaffold.saved_preset = true;
         writeln!(out, "\nSaved this selection as {}", saved.display())?;
     }
 
@@ -203,18 +251,22 @@ fn save_preset(name: &str, layers: Vec<String>, parent: &Path) -> Result<PathBuf
 ///
 /// Printing the exact argv rather than a sentence about package managers is
 /// what makes `--no-install` useful: the output is something to paste, and it
-/// is the same thing culm would have run.
+/// is the same thing culm would have run, less the versions the release age
+/// guard would have chosen, since choosing them needs the network.
 fn finish_installs(
     out: &mut impl Write,
     commands: &[install::InstallCommand],
     root: &Path,
-    skip: bool,
+    args: &NewArgs,
+    report: &mut NewReport,
 ) -> Result<()> {
     if commands.is_empty() {
+        report.scaffold.install = Some(Install::None);
         return Ok(());
     }
 
-    if skip {
+    if args.no_install {
+        report.scaffold.install = Some(Install::Skipped);
         writeln!(out, "\nInstalls skipped. Run these in {}:", root.display())?;
         for command in commands {
             writeln!(out, "  {}", command.display())?;
@@ -222,12 +274,79 @@ fn finish_installs(
         return Ok(());
     }
 
+    let (commands, cargo_locks) = if args.min_release_age == 0 {
+        (commands.to_vec(), Vec::new())
+    } else {
+        report.stage = ErrorKind::VersionResolve;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|elapsed| i64::try_from(elapsed.as_secs()).unwrap_or(i64::MAX))
+            .unwrap_or(0);
+        let pinned = install::release_age::pin(commands, args.min_release_age, now).map_err(|message| {
+            anyhow::anyhow!(
+                "{message}\nThe workspace is on disk. Pass --min-release-age 0 to install without the guard."
+            )
+        })?;
+        (pinned.commands, pinned.cargo_locks)
+    };
+
+    report.stage = ErrorKind::Install;
     writeln!(out, "\nInstalling dependencies:")?;
-    for command in commands {
+    for command in &commands {
         writeln!(out, "  {}", command.display())?;
     }
-    install::run(commands, root)?;
+    run_each(&commands, root, &mut report.scaffold)?;
+
+    /* After every add, when `Cargo.lock` exists: move each crate the guard
+     * chose back to that version, since the lockfile resolved the newest. */
+    if !cargo_locks.is_empty() {
+        let (updates, skipped) = install::release_age::precise_updates(root, &cargo_locks);
+        for command in &updates {
+            writeln!(out, "  {}", command.display())?;
+        }
+        run_each(&updates, root, &mut report.scaffold)?;
+        for name in skipped {
+            writeln!(
+                out,
+                "  note: `{name}` is locked at more than one version, so the release age guard left its lockfile entry alone"
+            )?;
+        }
+    }
+    report.scaffold.install = Some(Install::Ok);
     Ok(())
+}
+
+/* One at a time, so the manager that failed is known without reading the
+ * error text: only its program name is reported, never its arguments. */
+fn run_each(commands: &[install::InstallCommand], root: &Path, report: &mut Scaffold) -> Result<()> {
+    for command in commands {
+        if let Err(error) = install::run(std::slice::from_ref(command), root) {
+            report.install = Some(Install::Failed);
+            report.install_failed_manager = Some(command.program.clone());
+            return Err(error.into());
+        }
+    }
+    Ok(())
+}
+
+/// `toolchain/node-pnpm` writes decision 5's default guard into
+/// `pnpm-workspace.yaml`; a different `--min-release-age` replaces it, in
+/// minutes, which is the unit pnpm reads.
+fn set_pnpm_release_age(root: &Path, days: u64) -> Result<()> {
+    if days == install::release_age::DEFAULT_DAYS {
+        return Ok(());
+    }
+    let path = root.join("pnpm-workspace.yaml");
+    let Ok(contents) = std::fs::read_to_string(&path) else {
+        return Ok(());
+    };
+    let default = format!(
+        "minimumReleaseAge: {}\n",
+        install::release_age::DEFAULT_DAYS * 1440
+    );
+    let chosen = format!("minimumReleaseAge: {}\n", days * 1440);
+    std::fs::write(&path, contents.replace(&default, &chosen))
+        .with_context(|| format!("cannot write {}", path.display()))
 }
 
 /// Rejects a project name that is not a single, plain directory segment.
@@ -278,15 +397,33 @@ fn ids(raw: &[String]) -> Vec<LayerId> {
 /// nothing will send. This is also what keeps `cargo test` from ever
 /// launching it, the same way `banner::print` never draws under a test
 /// harness.
-fn chosen_layers(args: &NewArgs, catalog: &Catalog) -> Result<Vec<LayerId>> {
+fn chosen_layers(
+    args: &NewArgs,
+    catalog: &Catalog,
+    report: &mut NewReport,
+) -> Result<Vec<LayerId>> {
     match (&args.preset, args.layers.is_empty()) {
         (Some(_), false) => bail!("--preset and --layer cannot be combined"),
-        (Some(source), true) => Ok(resolve_preset(source)?.ids()),
-        (None, false) => Ok(ids(&args.layers)),
-        (None, true) if is_interactive() => match crate::wizard::run(catalog)? {
-            Some(chosen) => Ok(ids(&chosen)),
-            None => bail!("cancelled: nothing was chosen"),
-        },
+        (Some(source), true) => {
+            report.scaffold.selected_via = Some(SelectedVia::Preset);
+            report.scaffold.preset = Some(preset_label(source));
+            Ok(resolve_preset(source, report)?.ids())
+        }
+        (None, false) => {
+            report.scaffold.selected_via = Some(SelectedVia::Flags);
+            Ok(ids(&args.layers))
+        }
+        (None, true) if is_interactive() => {
+            report.scaffold.selected_via = Some(SelectedVia::Wizard);
+            match crate::wizard::run(catalog)? {
+                crate::wizard::Outcome::Chosen(chosen) => Ok(ids(&chosen)),
+                crate::wizard::Outcome::Cancelled(step) => {
+                    report.cancelled = true;
+                    report.scaffold.cancelled_at = Some(step.to_string());
+                    bail!("cancelled: nothing was chosen")
+                }
+            }
+        }
         (None, true) => bail!(
             "no layers chosen: pass --preset NAME, or at least one --layer, for example --layer backend/axum"
         ),
@@ -304,7 +441,7 @@ fn is_interactive() -> bool {
 /// one (ends in `.toml`, and a first-party preset never does since it is
 /// named bare), so a real preset called `team` is never shadowed by a
 /// same-named file sitting in the working directory by coincidence.
-fn resolve_preset(source: &str) -> Result<preset::Preset> {
+fn resolve_preset(source: &str, report: &mut NewReport) -> Result<preset::Preset> {
     if source.ends_with(".toml") {
         let contents = std::fs::read_to_string(source)
             .with_context(|| format!("cannot read preset file `{source}`"))?;
@@ -313,6 +450,7 @@ fn resolve_preset(source: &str) -> Result<preset::Preset> {
     }
 
     if let Some(remote) = preset::remote::parse_source(source) {
+        report.stage = ErrorKind::PresetFetch;
         let cache_root = preset::remote::default_cache_root()
             .context("cannot find a cache directory for a remote preset on this platform")?;
         return preset::remote::fetch(&remote, &cache_root)
@@ -320,6 +458,36 @@ fn resolve_preset(source: &str) -> Result<preset::Preset> {
     }
 
     Ok(preset::get(source)?)
+}
+
+/// How a preset is reported: its name when it is first-party, otherwise only
+/// whether it came from a file or a git URL. The source string itself can be
+/// a repository name or a path, both of which decision 9 forbids sending.
+fn preset_label(source: &str) -> String {
+    if source.ends_with(".toml") {
+        return "file".to_owned();
+    }
+    if preset::remote::parse_source(source).is_some() {
+        return "git".to_owned();
+    }
+    if preset::get(source).is_ok() {
+        return source.to_owned();
+    }
+    /* Neither a file, a git URL, nor a shipped preset: the run is about to
+     * fail, and the string is whatever the user typed, so it is not sent. */
+    "unknown".to_owned()
+}
+
+/// Keeps only layer ids that ship in the binary.
+/// A `--layers-dir` catalog or a typo can name anything, and a private
+/// layer's id is nobody else's business.
+fn first_party(ids: impl IntoIterator<Item = String>) -> Vec<String> {
+    let Ok(shipped) = Catalog::embedded() else {
+        return Vec::new();
+    };
+    ids.into_iter()
+        .filter(|id| shipped.get(&LayerId::new(id)).is_some())
+        .collect()
 }
 
 /// Refuses anything that would scaffold on top of existing work.
@@ -405,5 +573,25 @@ mod tests {
     #[test]
     fn a_name_starting_with_a_dash_is_refused() {
         assert!(project_name("-rf").is_err());
+    }
+
+    /* Decision 9: a preset source can be a repository name or a path, so
+     * only a first-party name ever leaves the machine as itself. */
+    #[test]
+    fn a_preset_is_reported_without_its_source() {
+        assert_eq!(preset_label("monorepo"), "monorepo");
+        assert_eq!(preset_label("github:someone/private-repo"), "git");
+        assert_eq!(preset_label("./team/our-setup.toml"), "file");
+        assert_eq!(preset_label("not-a-real-preset"), "unknown");
+    }
+
+    #[test]
+    fn only_shipped_layers_are_reported() {
+        let reported = first_party(
+            ["frontend/nuxt", "frontend/acme-internal", "typo"]
+                .into_iter()
+                .map(str::to_owned),
+        );
+        assert_eq!(reported, vec!["frontend/nuxt".to_owned()]);
     }
 }

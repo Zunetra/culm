@@ -18,8 +18,10 @@ strategy = "toml-members"
 target = "Cargo.toml"
 members = ["crates/actix"]
 
+# Stored as `.template` because `cargo package` drops any directory holding
+# a `Cargo.toml`, which would leave this layer out of the published crate.
 [[files]]
-from = "files/Cargo.toml"
+from = "files/Cargo.toml.template"
 to = "crates/actix/Cargo.toml"
 
 [[files]]

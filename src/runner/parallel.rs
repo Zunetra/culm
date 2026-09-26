@@ -1,6 +1,6 @@
 // === Parallel execution
 
-/* r0.3, per docs/02-runner.md section 6: parallel execution respecting the
+/* r0.3, per docs/DESIGN.md section 3.5: parallel execution respecting the
  * dependency graph. A topological order alone (what `exec::run` already
  * takes) is enough for correctness but leaves independent tasks running one
  * after another for no reason; grouping that same order into levels, where
@@ -17,10 +17,9 @@
 
 use std::collections::HashMap;
 use std::io::Write;
-use std::path::Path;
 
+use super::cache::{self, Plan, Session, Status};
 use super::error::RunnerError;
-use super::exec::shell;
 use super::task::Task;
 
 /// Groups a topologically ordered slice into levels: level 0 holds every
@@ -55,16 +54,33 @@ pub fn levels<'a>(order: &[&'a Task]) -> Vec<Vec<&'a Task>> {
 /// reports a task as still "running" when the process actually exits; tasks
 /// in a level after the failing one never start at all, matching
 /// `exec::run`'s own "stop at the first failure" contract.
-pub fn run(order: &[&Task], root: &Path, out: &mut impl Write) -> Result<(), RunnerError> {
+///
+/// A level is planned on this thread before anything in it starts, so cache
+/// hits are restored up front and only real work is spread across threads.
+pub fn run(order: &[&Task], session: &mut Session, out: &mut impl Write) -> Result<(), RunnerError> {
     for level in levels(order) {
+        let mut to_run = Vec::new();
         for task in &level {
-            writeln!(out, "> {} ({})", task.name, task.command).ok();
+            match session.plan(task, out)? {
+                Plan::Restored => session.count(Status::Hit),
+                Plan::Run(pending) => to_run.push((*task, pending)),
+            }
         }
 
-        let results: Vec<Result<(), RunnerError>> = std::thread::scope(|scope| {
-            let handles: Vec<_> = level
+        let store = session.cache();
+        let results: Vec<Result<Status, RunnerError>> = std::thread::scope(|scope| {
+            let handles: Vec<_> = to_run
                 .iter()
-                .map(|task| scope.spawn(|| run_one(task, root)))
+                .map(|(task, pending)| {
+                    scope.spawn(move || {
+                        cache::run(
+                            task,
+                            store,
+                            pending.key.as_ref(),
+                            pending.previous.as_ref(),
+                        )
+                    })
+                })
                 .collect();
             handles
                 .into_iter()
@@ -73,26 +89,8 @@ pub fn run(order: &[&Task], root: &Path, out: &mut impl Write) -> Result<(), Run
         });
 
         for result in results {
-            result?;
+            session.count(result?);
         }
-    }
-    Ok(())
-}
-
-fn run_one(task: &Task, root: &Path) -> Result<(), RunnerError> {
-    let status = shell(&task.command)
-        .current_dir(root)
-        .status()
-        .map_err(|e| RunnerError::NotStarted {
-            command: task.command.clone(),
-            message: e.to_string(),
-        })?;
-
-    if !status.success() {
-        return Err(RunnerError::TaskFailed {
-            task: task.name.clone(),
-            status: status.code(),
-        });
     }
     Ok(())
 }
@@ -107,6 +105,7 @@ mod tests {
         Task {
             name: name.to_owned(),
             project: "demo".to_owned(),
+            dir: std::path::PathBuf::from("."),
             command: command.to_owned(),
             inputs: Vec::new(),
             outputs: Vec::new(),
@@ -156,7 +155,7 @@ mod tests {
         let b = task("b", &format!("touch {}", b_marker.display()), &[]);
 
         let mut out: Vec<u8> = Vec::new();
-        run(&[&a, &b], dir.path(), &mut out).unwrap();
+        run(&[&a, &b], &mut Session::new(None), &mut out).unwrap();
 
         assert!(a_marker.exists());
         assert!(b_marker.exists());
@@ -170,7 +169,8 @@ mod tests {
         let never = task("never", &format!("touch {}", marker.display()), &["fails"]);
 
         let mut out: Vec<u8> = Vec::new();
-        let error = run(&[&fails, &never], dir.path(), &mut out).unwrap_err();
+        let error = run(&[&fails, &never], &mut Session::new(None), &mut out)
+            .unwrap_err();
 
         assert!(matches!(error, RunnerError::TaskFailed { .. }));
         assert!(!marker.exists());

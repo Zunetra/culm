@@ -1,6 +1,6 @@
 // === Affected
 
-/* r0.3, per docs/02-runner.md section 6: `--affected` via `git diff` against
+/* r0.3, per docs/DESIGN.md section 3.5: `--affected` via `git diff` against
  * a base ref, then walking the graph for downstream tasks. Two separate
  * questions live here on purpose: which files changed (git's job, this
  * module) and which of a task's declared `inputs` globs those files match
@@ -13,13 +13,13 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use git2::{DiffOptions, Repository};
-use globset::{Glob, GlobSetBuilder};
 
 use super::error::RunnerError;
+use super::inputs;
 use super::task::Task;
 
-/// Every file that differs between `base_ref` and the working tree, relative
-/// to the repository root. Covers both what changed since `base_ref` and
+/// Every file that differs between `base_ref` and the working tree, as an
+/// absolute path, so each task can match it from its own directory. Covers both what changed since `base_ref` and
 /// anything still uncommitted, because "what do I need to run before I
 /// commit this" is the question `--affected` is actually asked to answer,
 /// not only "what changed since the last commit".
@@ -30,6 +30,10 @@ pub fn changed_files(repo_root: &Path, base_ref: &str) -> Result<HashSet<PathBuf
     };
 
     let repo = Repository::discover(repo_root).map_err(|e| unavailable(e.message().to_owned()))?;
+    let workdir = repo
+        .workdir()
+        .ok_or_else(|| unavailable("a bare repository has no working tree".to_owned()))?;
+    let workdir = std::fs::canonicalize(workdir).unwrap_or_else(|_| workdir.to_owned());
 
     let base_object =
         repo.revparse_single(base_ref)
@@ -52,10 +56,10 @@ pub fn changed_files(repo_root: &Path, base_ref: &str) -> Result<HashSet<PathBuf
     diff.foreach(
         &mut |delta, _progress| {
             if let Some(path) = delta.new_file().path() {
-                files.insert(path.to_path_buf());
+                files.insert(workdir.join(path));
             }
             if let Some(path) = delta.old_file().path() {
-                files.insert(path.to_path_buf());
+                files.insert(workdir.join(path));
             }
             true
         },
@@ -72,34 +76,31 @@ pub fn changed_files(repo_root: &Path, base_ref: &str) -> Result<HashSet<PathBuf
 /// declared `inputs` glob patterns matches a changed file. This is only the
 /// seed set; `TaskGraph::affected_order` is what expands it to the tasks
 /// each seed needs and the tasks that need each seed.
-pub fn seed_tasks<'a>(tasks: &'a [Task], changed: &HashSet<PathBuf>) -> Vec<&'a str> {
-    tasks
-        .iter()
-        .filter(|task| task_matches(task, changed))
-        .map(|task| task.name.as_str())
-        .collect()
+pub fn seed_tasks<'a>(tasks: &'a [Task], changed: &HashSet<PathBuf>) -> Result<Vec<&'a str>, RunnerError> {
+    let mut seeds = Vec::new();
+    for task in tasks {
+        if task_matches(task, changed)? {
+            seeds.push(task.name.as_str());
+        }
+    }
+    Ok(seeds)
 }
 
 /// A task with no declared `inputs` is treated as always affected. Guessing
 /// it is unaffected is the dangerous direction: a stale skip is exactly the
-/// wrong-cache-hit failure mode docs/02-runner.md section 1 names as worse
+/// wrong-cache-hit failure mode docs/DESIGN.md section 3.1 names as worse
 /// than no cache at all, so an under-specified task errs toward running.
-fn task_matches(task: &Task, changed: &HashSet<PathBuf>) -> bool {
+fn task_matches(task: &Task, changed: &HashSet<PathBuf>) -> Result<bool, RunnerError> {
     if task.inputs.is_empty() {
-        return true;
+        return Ok(true);
     }
-
-    let mut builder = GlobSetBuilder::new();
-    for pattern in &task.inputs {
-        if let Ok(glob) = Glob::new(pattern) {
-            builder.add(glob);
+    let dir = std::fs::canonicalize(&task.dir).unwrap_or_else(|_| task.dir.clone());
+    for path in changed {
+        if inputs::input_matches(&dir, &task.inputs, path)? {
+            return Ok(true);
         }
     }
-    let Ok(set) = builder.build() else {
-        return true;
-    };
-
-    changed.iter().any(|path| set.is_match(path))
+    Ok(false)
 }
 
 // === Tests
@@ -112,6 +113,7 @@ mod tests {
         Task {
             name: name.to_owned(),
             project: "demo".to_owned(),
+            dir: PathBuf::from("/repo"),
             command: "echo".to_owned(),
             inputs: inputs.iter().map(|s| (*s).to_owned()).collect(),
             outputs: Vec::new(),
@@ -122,27 +124,27 @@ mod tests {
     }
 
     fn changed(paths: &[&str]) -> HashSet<PathBuf> {
-        paths.iter().map(PathBuf::from).collect()
+        paths.iter().map(|path| Path::new("/repo").join(path)).collect()
     }
 
     #[test]
     fn a_task_whose_glob_matches_a_changed_file_is_a_seed() {
         let tasks = vec![task("build", &["src/**/*.rs"])];
-        let seeds = seed_tasks(&tasks, &changed(&["src/main.rs"]));
+        let seeds = seed_tasks(&tasks, &changed(&["src/main.rs"])).unwrap();
         assert_eq!(seeds, vec!["build"]);
     }
 
     #[test]
     fn a_task_whose_glob_does_not_match_anything_changed_is_not_a_seed() {
         let tasks = vec![task("build", &["src/**/*.rs"])];
-        let seeds = seed_tasks(&tasks, &changed(&["README.md"]));
+        let seeds = seed_tasks(&tasks, &changed(&["README.md"])).unwrap();
         assert!(seeds.is_empty());
     }
 
     #[test]
     fn a_task_with_no_declared_inputs_is_always_a_seed() {
         let tasks = vec![task("build", &[])];
-        let seeds = seed_tasks(&tasks, &changed(&["anything.txt"]));
+        let seeds = seed_tasks(&tasks, &changed(&["anything.txt"])).unwrap();
         assert_eq!(seeds, vec!["build"]);
     }
 
@@ -152,7 +154,7 @@ mod tests {
             task("rust", &["src/**/*.rs"]),
             task("node", &["web/**/*.ts"]),
         ];
-        let seeds = seed_tasks(&tasks, &changed(&["web/app.ts"]));
+        let seeds = seed_tasks(&tasks, &changed(&["web/app.ts"])).unwrap();
         assert_eq!(seeds, vec!["node"]);
     }
 }

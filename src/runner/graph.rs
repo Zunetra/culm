@@ -1,10 +1,9 @@
 // === Task graph
 
-/* petgraph, per docs/02-runner.md section 8. An edge points from a
- * dependency to the task that depends on it, so a topological order of the
- * whole graph already runs dependencies before dependents; `execution_order`
- * below only has to restrict that order to the tasks one target actually
- * needs. */
+/* An edge points from a dependency to the task that depends on it, so a
+ * topological order of the whole graph already runs dependencies before
+ * dependents; `execution_order` below only has to restrict that order to the
+ * tasks one target actually needs. */
 
 use std::collections::{HashMap, HashSet};
 
@@ -61,15 +60,27 @@ impl TaskGraph {
         task: &str,
         config_path: &std::path::Path,
     ) -> Result<Vec<&Task>, RunnerError> {
-        let target = self
-            .index_of
-            .get(task)
-            .ok_or_else(|| RunnerError::UnknownTask {
-                task: task.to_owned(),
-                path: config_path.to_owned(),
-            })?;
+        self.execution_order_of(&[task], config_path)
+    }
 
-        let closure = ancestors_of(&self.graph, *target);
+    /// Several targets at once, such as `build` in every workspace project:
+    /// the union of their closures, each task once, in one valid order.
+    pub fn execution_order_of(
+        &self,
+        targets: &[&str],
+        config_path: &std::path::Path,
+    ) -> Result<Vec<&Task>, RunnerError> {
+        let mut closure = HashSet::new();
+        for task in targets {
+            let target = self
+                .index_of
+                .get(*task)
+                .ok_or_else(|| RunnerError::UnknownTask {
+                    task: (*task).to_owned(),
+                    path: config_path.to_owned(),
+                })?;
+            closure.extend(ancestors_of(&self.graph, *target));
+        }
         Ok(self.ordered(&closure))
     }
 
@@ -85,7 +96,7 @@ impl TaskGraph {
     /// changed file matched), each seed's own dependency closure (still
     /// needed to build it, cache or not), and every task that transitively
     /// depends on a seed (what "downstream" means, per
-    /// docs/02-runner.md section 6). Unknown seed names are refused the same
+    /// docs/DESIGN.md section 3.5). Unknown seed names are refused the same
     /// way `execution_order` refuses an unknown task, rather than being
     /// silently dropped from the run.
     pub fn affected_order(
@@ -231,6 +242,7 @@ mod tests {
         Task {
             name: name.to_owned(),
             project: "demo".to_owned(),
+            dir: std::path::PathBuf::from("."),
             command: format!("echo {name}"),
             inputs: Vec::new(),
             outputs: Vec::new(),

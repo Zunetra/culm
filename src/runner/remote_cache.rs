@@ -1,6 +1,6 @@
 // === Remote cache client (r0.4)
 
-/* docs/02-runner.md section 6's r0.4: a thin HTTP client, no server
+/* docs/DESIGN.md section 3.5's r0.4: a thin HTTP client, no server
  * component ships from this repository. It uploads and downloads `cas`
  * objects by the same blake3 digest `cas::Store` already addresses them by
  * on disk, so the wire format is exactly the local format, nothing extra to
@@ -97,7 +97,7 @@ impl RemoteCache {
     /// Uploads `bytes` under `digest`. Best-effort by the caller's own
     /// choice, never by this function: a failed upload here is a real error,
     /// because a "successful" push that silently did nothing is exactly the
-    /// class of wrong-cache-hit failure docs/02-runner.md section 1 exists
+    /// class of wrong-cache-hit failure docs/DESIGN.md section 3.1 exists
     /// to prevent, just on the write side instead of the read side.
     pub fn upload(&self, digest: &Hash, bytes: &[u8]) -> Result<(), RemoteCacheError> {
         let url = self.object_url(digest);

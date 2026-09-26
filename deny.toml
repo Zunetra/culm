@@ -1,0 +1,45 @@
+# cargo-deny: what culm's own dependency tree may contain.
+# Run by ci.yml beside `cargo audit`. docs/DESIGN.md section 3.6.
+
+[graph]
+all-features = false
+
+[advisories]
+version = 2
+# Every advisory fails the gate, including unsound and unmaintained ones.
+# An exception goes here with the advisory id and the reason it does not
+# reach culm's own code, never silently.
+ignore = []
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+# Permissive licenses, plus MPL-2.0, which is file-level copyleft and
+# asks nothing of a binary that links an unmodified copy (`option-ext`,
+# through `dirs`). Each is here because a real dependency needs it; see
+# `cargo deny list` before adding another.
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

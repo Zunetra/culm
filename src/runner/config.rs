@@ -1,9 +1,8 @@
 // === culm.toml
 
 /* One `culm.toml` per project directory, decision 22. Parsing only ever adds
- * a field, per docs/02-runner.md section 8's own instruction, so a config
- * written against a later milestone still loads here: `cache` is stored and
- * ignored, since r0.1 has no cache to consult. */
+ * a field, per docs/DESIGN.md section 3.2, so a config written against a
+ * later milestone still loads here. */
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -14,16 +13,35 @@ use serde::Deserialize;
 use super::error::RunnerError;
 
 /// The raw shape of `culm.toml`, before it becomes a `Task` per project.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 pub struct RunnerConfig {
+    /// Present only in the workspace root's `culm.toml`. Every other
+    /// `culm.toml` under that root is then a project of the workspace.
+    #[serde(default)]
+    pub workspace: Option<WorkspaceSpec>,
+    #[serde(default)]
+    pub project: ProjectSpec,
+    #[serde(default)]
     pub tasks: BTreeMap<String, TaskSpec>,
+}
+
+/// `[workspace]`. Empty for now: its presence is what marks the root.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+pub struct WorkspaceSpec {}
+
+/// `[project]`, in a workspace member.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+pub struct ProjectSpec {
+    /// Other projects this one builds on, by path from the workspace root.
+    /// A `^build` in `depends_on` means `build` in each of these.
+    #[serde(default)]
+    pub dependencies: Vec<String>,
 }
 
 /// One `[tasks.<name>]` table.
 ///
-/// `cache` and `inputs`/`outputs` are parsed and kept even though r0.1 does
-/// not act on them, so a `culm.toml` written today is not a migration once
-/// r0.2 adds hashing. `depends_on` is what r0.1 actually uses.
+/// `depends_on` orders the run; `cache`, `inputs`, `outputs` and
+/// `declared_env` decide whether and how the task is cached.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct TaskSpec {
     pub command: String,

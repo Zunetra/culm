@@ -1,6 +1,6 @@
 // === culm cache
 
-/* r0.2, per docs/02-runner.md section 3's own interface: `culm cache
+/* r0.2, per docs/DESIGN.md section 3.2's own interface: `culm cache
  * stats|clear`, inspecting or emptying the local `cas` store this machine
  * keeps. Neither subcommand touches a `culm.toml`: the cache is one store
  * per machine, not one per project, so both work from anywhere. */

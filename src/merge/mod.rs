@@ -14,7 +14,7 @@ pub mod yaml_steps;
 pub use hook_script::{HOOK_MODE, HookScriptDoc};
 pub use json_deep::ValueKind;
 pub use toml_members::TomlMembersDoc;
-pub use yaml_list::YamlListDoc;
+pub use yaml_list::{YamlListDoc, YamlScalar};
 pub use yaml_steps::{Step, YamlStepsDoc};
 
 use json_deep::JsonDoc;
@@ -153,8 +153,11 @@ pub enum Contribution {
     LineBlock(Vec<String>),
     /// Crates appended to a Cargo workspace's `members`, unioned then sorted.
     TomlMembers(Vec<String>),
-    /// Named YAML sequences, each unioned then sorted. The workspace globs in `pnpm-workspace.yaml`.
-    YamlList(BTreeMap<String, Vec<String>>),
+    /// Named YAML sequences, each unioned then sorted, plus single settings. The workspace globs and settings in `pnpm-workspace.yaml`.
+    YamlList {
+        lists: BTreeMap<String, Vec<String>>,
+        scalars: BTreeMap<String, YamlScalar>,
+    },
     /// A shell hook body placed at a declared order. Sequence is observable here, so it is declared rather than inferred.
     HookScript { order: u32, body: Vec<String> },
     /// CI steps placed in a named job at a declared order.
@@ -172,7 +175,7 @@ impl Contribution {
             Self::JsonDeep(_) => Strategy::JsonDeep,
             Self::LineBlock(_) => Strategy::LineBlock,
             Self::TomlMembers(_) => Strategy::TomlMembers,
-            Self::YamlList(_) => Strategy::YamlList,
+            Self::YamlList { .. } => Strategy::YamlList,
             Self::HookScript { .. } => Strategy::HookScript,
             Self::YamlSteps { .. } => Strategy::YamlSteps,
         }
@@ -332,8 +335,8 @@ impl FileSet {
                     Contribution::TomlMembers(members) => {
                         FileContent::TomlMembers(TomlMembersDoc::seed(layer, members))
                     }
-                    Contribution::YamlList(lists) => {
-                        FileContent::YamlList(YamlListDoc::seed(layer, lists))
+                    Contribution::YamlList { lists, scalars } => {
+                        FileContent::YamlList(YamlListDoc::seed(layer, lists, scalars))
                     }
                     Contribution::HookScript { order, body } => {
                         FileContent::HookScript(HookScriptDoc::seed(layer, *order, body))
@@ -382,9 +385,8 @@ impl FileSet {
                 }),
             },
             Some(FileContent::YamlList(doc)) => match contribution {
-                Contribution::YamlList(lists) => {
-                    doc.add(lists);
-                    Ok(())
+                Contribution::YamlList { lists, scalars } => {
+                    doc.add(target, layer, lists, scalars)
                 }
                 other => Err(MergeError::StrategyMismatch {
                     target: target.to_path_buf(),

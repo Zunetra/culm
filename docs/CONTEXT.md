@@ -2,6 +2,8 @@
 
 **The one document for culm.** Settled decisions, coding conventions, and
 the things a fresh session would otherwise rediscover the hard way.
+[DESIGN.md](DESIGN.md) is the only other one: how culm works and what is
+left to build.
 
 State is not tracked here. The code and the git history track state.
 Org-level decisions live in
@@ -10,11 +12,32 @@ repeated.
 
 **How to use this file:** when the owner corrects something, the
 correction is appended under the section it belongs to. Corrections are
-authoritative and outrank anything stated elsewhere, including
-[../CLAUDE.md](../CLAUDE.md).
+authoritative and outrank anything stated elsewhere. `CLAUDE.md` only
+points here.
 
-**Last updated:** 2026-08-15. `DECISIONS.md` was folded into this file on
-that date. **Decision numbers are preserved**, because comments in
+## Before doing anything
+
+- **Read the Decisions below first.** `LOCKED` entries are settled and
+  closed: do not re-litigate or work around them. The `Open` list is the
+  only place a decision is still available.
+- **The name is culm**, the stalk of a grain plant. Plain ASCII
+  everywhere a machine reads it (decision 15): never a diacritic in a
+  path, identifier, package name, or command.
+- **Two rules outrank convenience.** The scaffolder must be able to emit
+  Nx, Turborepo, Moon, or nothing, and never configuration only culm's
+  runner can consume (decision 3). No version numbers in layer template
+  files; package managers write versions (decision 5).
+- **Klassivox is not modified** by work here unless the owner asks for a
+  Klassivox change, naming it. Keeping documentation in sync is not a
+  reason, and a generic instruction that merely sounds repository-wide
+  does not authorise it (decision 13).
+- **Committing and pushing are each a separate explicit instruction.**
+  See [Git](#git).
+
+**Last updated:** 2026-09-25, when `CLAUDE.md` was folded in and
+`01-scaffolder.md`, `02-runner.md` and `BENCHMARK.md` became
+[DESIGN.md](DESIGN.md). `DECISIONS.md` was folded in on 2026-08-15.
+**Decision numbers are preserved**, because comments in
 `src/`, in `layers/*/*/layer.toml`, and in `tests/` cite them by number.
 
 ---
@@ -59,7 +82,7 @@ language" question. **The real work is the merge engine**, not the
 layers: patching `package.json`, `Cargo.toml` members, `pnpm-workspace`
 globs, `tsconfig` paths, `.gitignore`, hook bodies and CI yaml from N
 independent layers, deterministically, in any order. Everything else is
-copying files. Full spec in [01-scaffolder.md](01-scaffolder.md).
+copying files. Full spec in [DESIGN.md](DESIGN.md#2-the-scaffolder).
 
 **5. Template files never contain version numbers.** Pinned versions are
 the single biggest cause of scaffolders rotting. Shell out to `pnpm add`
@@ -102,12 +125,25 @@ anonymous per-machine UUID generated once, tool version, OS and
 architecture, command name, and which layers and preset were selected.
 That last field is the genuinely valuable product data. **Never sent:**
 repository names, file paths, task names, environment variable values,
-command strings, git remotes. `culm.yaml` contains user commands, so the
+command strings, git remotes. `culm.toml` contains user commands, so the
 temptation to send them "for debugging" is real and is refused here in
 advance. The exact JSON is printed on first run, not summarised as
 "anonymous usage data"; every other tool in this category is quietly
 cagey about it, and being the one that is not is cheap. Opt out with
 `CULM_TELEMETRY=0`. Full payload in [TELEMETRY.md](TELEMETRY.md).
+**Amended 2026-09-26 by the owner (schema 2).** Schema 1 could not
+improve the product: wizard and preset runs sent no layers, failures were
+never sent, CI was not filtered, and a git or file preset sent its raw
+source string, which is a repository name or a path. Schema 2 adds, per
+command: the exit (`ok`, `error`, `cancelled`), the failing stage from a
+closed set (never the error text), and the duration; for `new`, the
+shape, the resolved first-party layers, how they were chosen, the preset
+reduced to a first-party name or just `file`/`git`, the install outcome
+and failing package manager, whether a preset was saved, and the wizard
+step where the user backed out; for `run`, counts and flags only. Off in
+CI unless `CULM_TELEMETRY=1`, and `DO_NOT_TRACK=1` is honoured. The
+"never sent" list is unchanged and now also names error messages and
+preset sources. The receiver rejects any key not in the spec.
 
 **10. This project is culm, and ipile is the bootstrap tool.** Grain was
 abandoned for colliding with the Grain programming language. Four
@@ -610,169 +646,10 @@ body, no bullets, no trailers, no co-authorship attribution.
 
 ---
 
-## What is being built, and in what order
+## Two rules that shape every layer
 
-**The goal.** A user picks a stack and gets a workspace they would have
-been happy to write themselves. The quality bar is decision 19:
-configuration loading, error types, a health check, an integration test,
-real tooling config.
-
-**What exists.** The merge engine, complete: `json-deep`, `line-block`,
-`toml-members`, `yaml-list`, `hook-script`, `yaml-steps`. The layer
-format with categories, shape-dependent cardinality, manifest parsing,
-and selection validation. The scaffold module: interpolation, copy plan,
-disk writing, and the layout system (`{{app_dir}}`, `{{test_dir}}`,
-`{{script_suffix}}`, `{{config_suffix}}`, `{{to_root}}`) that lets a
-layer never hardcode its own depth. Thirty four layers across base,
-shape, frontend, backend, data, toolchain, quality, runner, infra, and
-editor, compiled into the binary by `include_dir` with `Catalog::load`
-kept as the `--layers-dir` escape hatch. `culm new`, non-interactive, in
-`src/cli/`. The install step in `src/install/`, running `pnpm add` and
-`cargo add` in the generated workspace, with `--no-install` printing the
-plan. Presets in `src/preset/`, TOML, compiled in the same way. The
-startup banner in `src/banner.rs`, printed after argument parsing and
-suppressed when stdout is not a terminal, when `NO_COLOR` is set, or when
-`CULM_NO_BANNER` is set. Two GitHub Actions workflows: `templates.yml`
-(weekly, proves every shipped layer that emits an application still
-installs and builds against a live registry) and `ci.yml` (every push and
-PR: build, `cargo install`, clippy).
-
-**Proven, not just parsed, as of 2026-09-07.** Every one of the thirty
-four layers has been scaffolded, installed with real registry packages,
-and built by hand, in both `single-app` and `monorepo` shape. This
-surfaced and fixed a systemic bug class: several layers hardcoded a
-relative-path depth (a `../` count, a fixed `src/<id>` path) that was
-correct for single-app and silently wrong the moment a second app layer
-forced namespacing. `{{to_root}}` exists because of this. It also
-surfaced and fixed a run of smaller, real defects the merge engine and a
-reading could not catch on their own: a `.gitignore` contribution that
-stopped matching its own build output once namespaced, `svelte-check`
-leaking into a sibling frontend's files under monorepo, `astro check`
-never type-checking the shipped test file at all, three frontend
-component parsers not being told about TypeScript, missing Node globals
-failing `lint` before any user code was written, a missing HTTP platform
-adapter that would have crashed NestJS at boot, and an npm dist-tag trap
-where `prisma@latest` currently resolves to a broken pre-release (see
-"Traps already identified" for the version caps this forced).
-
-**The scaffolder (v0.1) is complete as of 2026-09-08.** Every item that
-was on this list is done:
-
-- **The wizard**, `src/wizard/` (`ratatui` + `crossterm`). Triggers on
-  `culm new <name>` with no `--layer`/`--preset` given, only when both
-  stdin and stdout are real terminals; falls through to the same error a
-  script has always gotten otherwise, so nothing about scripted or CI use
-  changed. Walks shape, frontend, backend, (toolchain, only under
-  `tooling-only`), quality, infra, editor, runner, using the real
-  `Category::cardinality`/`shape_of` logic rather than a second copy of
-  either. Data layers (`sqlx`, `prisma`, `drizzle`) are deliberately not
-  in the wizard flow: they are not in `01-scaffolder.md`'s documented
-  order either, so none was invented for them. Verified live via a real
-  pty: the cancel path, the "accept every default" path (which correctly
-  hits the existing cross-category validation error rather than the
-  wizard trying to re-implement that rule), and a real successful
-  scaffold.
-- **Git URL presets**, `src/preset/remote.rs`. `--preset github:user/repo`,
-  `gitlab:user/repo`, an optional `/path/to/file.toml` and `@ref`, or a raw
-  git URL, fetched via a real `git clone` into a local cache keyed by the
-  clone URL. Tested against real local git repositories standing in for
-  "remote" (`git clone` treats a filesystem path exactly like a URL), so
-  `cargo test` stays fully offline. `--preset ./file.toml` also works, no
-  git involved, added because the feature was already half-built once the
-  local-file case was considered.
-- **Saving a run as a preset**, `--save-preset NAME` on `culm new`. Writes
-  the fully resolved layer list (every default included, not just what
-  was typed) to `<NAME>.toml` beside the generated workspace, in the same
-  shape a first-party preset already parses, so `--preset ./NAME.toml`
-  reads it straight back.
-- **Telemetry**, `src/telemetry/`. The Rust side only: UUID persistence
-  (`dirs`), the exact decision-9 payload and nothing else, opt-out via
-  `CULM_TELEMETRY=0`, a 500ms best-effort send on a detached thread so a
-  dead network never adds visible latency. Wired into `main.rs` only,
-  never into `cli::new` itself, specifically because `tests/cli.rs` calls
-  `run_new` directly to avoid spawning a process, and that must never
-  touch the network or this machine's real telemetry id as a side effect
-  of `cargo test` — the same reasoning that already keeps `banner::print`
-  out of `cli::new`. The receiver is written but not deployed:
-  `telemetry/worker/` is a complete Cloudflare Worker + D1 schema with a
-  step-by-step `README.md`; `DEFAULT_ENDPOINT` in `src/telemetry/mod.rs`
-  still points at a domain that does not resolve to anything yet.
-
-**Decision 22 settled 2026-09-07**: the config file is `culm.toml`,
-closing open question 2.
-
-**The runner (v0.2) has started, milestone r0.1 done.** `src/runner/`:
-`culm.toml` parsing, a `petgraph` task graph, named-cycle detection,
-topological execution of one task's dependency closure, sequential, no
-caching, per `docs/02-runner.md` section 6's own scope for this
-milestone. Dogfooded for real 2026-09-08 against a genuine scaffolded
-`monorepo` (Nuxt + Axum): `culm run build`/`culm run test` correctly
-ordered and ran the real `cargo`/`pnpm` commands, and a real injected
-compile error in the backend crate stopped the run at the right task with
-the right exit code, without ever reaching the tasks that depended on it.
-No bugs found. Per the doc's own methodology this is the evidence r0.2
-(content hashing, local caching via `cas`) wants before it starts, not a
-substitute for the two-week real-use check r0.2 itself requires once it
-exists.
-
-**Go exists as of 2026-09-08**: `backend/go-chi` (the `go-chi/chi` router)
-and `toolchain/go-mod`, decision 7's "then Go." No `go.work`: Go modules
-are directory scoped, so `{{app_dir}}/go.mod` is a complete module on its
-own and a second Go backend needs no shared root file to collide with —
-`backend/go-chi` carries no `[[merge]]` entry at all. `src/install/mod.rs`
-gained a `"go"` manager (`go get`, pointed at the right module via a
-leading `-C {{app_dir}}` the same way `cargo add` uses `--manifest-path`
-for a virtual workspace root) rather than leaving the dependency to be
-added by hand, which is what every other backend already gets for free.
-Building this exposed a real, previously-latent bug: `install::plan` was
-reading the **uninterpolated** `CatalogEntry` list, so a `[[files]] to`
-path containing a placeholder (`{{app_dir}}/go.mod`) reached it as literal
-text instead of the resolved path. This never surfaced before because
-every Rust layer's `Cargo.toml` sits at a literal `crates/<id>/` rather
-than a templated location — `backend/go-chi` was the first layer whose
-install-relevant path was ever templated. Fixed in `src/cli/new.rs`: the
-already-interpolated manifests are what `install::plan` reads now.
-Verified for real: `go get` resolving and writing a real version into
-`go.mod`, `go build`/`go test` passing, in both single-app and monorepo
-shape (the latter proving `{{app_dir}}` namespacing reaches the install
-step correctly too, not only the copy plan).
-
-**What does not exist yet.** r0.2 onward (caching, `--affected`, parallel
-execution, remote cache) — not started, and not to be started until r0.1
-has seen more real use per the point above it. Real per-app JS packages
-for a monorepo (decision 23, open question 4) finished 2026-09-16, which
-is what was blocking `runner/turborepo` and `runner/moon` from ever
-being written; neither has been started yet, only unblocked. `runner/nx`
-is still an honest stub for the reason it always was (it installs real
-`nx`, emits no `nx.json`, and says so). The Cloudflare telemetry
-receiver is written but not deployed. Klassivox's setup published as a
-preset (decision 17's second half) is deliberately not being pursued
-right now.
-
-All six frontends reached the decision 19 bar on 2026-08-18. Each ships a
-runtime-configured entry page, an error boundary, a scoped tsconfig, a
-vitest config named for the layer, and one component test.
-
-The order actually followed so far was an interleave rather than a
-sequence: layers to the quality bar, then the CLI, then the installs,
-then one frontend, then presets, then every layer to the proof-by-build
-bar, then the infra/editor gap, then the wizard and remote presets and
-telemetry and runner r0.1 together in one session. Doing the CLI before
-every layer was finished meant no CLI test was written against a surface
-that then had to change.
-
-**A process trap, not a design one.** 2026-09-08: a background agent
-working on the runner ran a bare `git stash` to isolate its own changes
-while debugging, which stashed every tracked-file change in the working
-tree indiscriminately, including unrelated concurrent work from another
-session. Recovered without loss because `git stash` stashes rather than
-discards, but the lesson generalises: **never run `git stash`, `reset`,
-`checkout`, or `clean` against a shared working tree without checking
-`git status` first**, and scope a stash to specific paths
-(`git stash push -- <paths>`) rather than a bare `git stash` when there
-might be work outside the files actually being edited.
-
-**Two rules that shape every layer authored from here.**
+Project state (what is built, what is left) lives in
+[DESIGN.md](DESIGN.md#5-status), not here.
 
 - **An app layer never hardcodes its own layout.** It names
   `{{app_dir}}`, `{{test_dir}}`, `{{script_suffix}}` and
@@ -780,15 +657,11 @@ might be work outside the files actually being edited.
   the selection: a workspace holding exactly one application gets `src`,
   `test`, `dev` and `vitest.config.ts`, and a workspace holding two or
   more gets `src/<id>`, `test/<id>`, `dev:<id>` and
-  `vitest.<id>.config.ts` each. Two layers writing different values to
-  the same `package.json` key is a hard merge error, so the namespaced
-  form is not optional once there is company; hardcoding it when there is
-  none makes every single-app workspace look like a monorepo, which is
-  the common case paying for the rare one. **The count of application
-  layers decides, never the shape**: a `single-app` workspace still takes
-  one frontend beside one backend, which is two layers wanting `dev`.
+  `vitest.<id>.config.ts` each. **The count of application layers
+  decides, never the shape**: a `single-app` workspace still takes one
+  frontend beside one backend, which is two layers wanting `dev`.
   Quality layers take no suffix at all, since at most one of each is
-  selected and `format` has a single owner.
+  selected.
 - **The ESLint fragment is the one filename that stays namespaced
   always.** `quality/eslint` owns the root `eslint.config.mjs` and
   discovers fragments by the pattern `eslint.<something>.config.mjs`, so
@@ -876,7 +749,25 @@ upstream, which would make a red run mean nothing.
 - **Never modify Klassivox unless explicitly told to**, naming it.
   Decision 13.
 - **The runner is expected to possibly die at r0.2.** Planned, not
-  failure. [02-runner.md](02-runner.md), section 10.
+  failure. [DESIGN.md](DESIGN.md#37-kill-criteria), section 3.7.
+- **No file under `layers/` is ever named `Cargo.toml`.** Found
+  2026-09-26: `cargo package` silently drops any directory holding one,
+  treating it as a nested crate, so `backend/axum` and `backend/actix`
+  would have shipped to crates.io without their templates. They are
+  stored as `Cargo.toml.template`; `[[files]] to` still writes
+  `Cargo.toml`. `tests/layers.rs` refuses the name.
+- **Rust block comments nest.** A glob such as `src/**/*.rs` inside a
+  `/* ... */` comment opens a second comment at `/*` and the file stops
+  compiling. Describe the glob in words, or use `//`.
+- **pnpm already defaults `minimumReleaseAge` to one day** (confirmed on
+  pnpm 11 and 12, 2026-09-26). `toolchain/node-pnpm` writes three days
+  explicitly so the guard is visible. A `pnpm-workspace.yaml` holding only
+  settings is valid for a single package and does not trigger
+  `ERR_PNPM_ADDING_TO_ROOT`.
+- **Never run `git stash`, `reset`, `checkout`, or `clean` against a
+  shared working tree without checking `git status` first.** 2026-09-08:
+  a background agent's bare `git stash` swept up another session's
+  unrelated work. Scope a stash to paths: `git stash push -- <paths>`.
 - **`typescript` is capped `<6` in every layer that adds it.** Discovered
   2026-09-05 proving `monorepo` builds end to end: unranged `typescript`
   resolved to `7.0.2`, and `typescript-eslint@8.69.0` refuses to run

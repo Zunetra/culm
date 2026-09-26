@@ -13,12 +13,12 @@ workspace and then runs its tasks.
 
 > **Status: pre-alpha.** The `culm` binary exists with four commands:
 > `new`, `run`, `cache`, and `graph`. The scaffolder is the most complete
-> part: 38 layers, a merge engine, a wizard, and presets. The runner is
-> earlier. It runs a task and its dependencies, with `--affected` and
-> `--parallel`, but **task results are not cached yet**: the content
-> store and the remote cache client exist in the source and no run path
-> uses them. Nothing is published. See [Roadmap](#-roadmap) for exactly
-> what is built and what is not.
+> part: 39 layers, a merge engine, a wizard, presets, and a release age
+> guard on every install. The runner caches task results by content,
+> across multi-project workspaces, with `--affected`, `--parallel`, and
+> `--verify`; it is in its r0.2 checkpoint, two weeks of real use before
+> anything else is built on it. Nothing is published. See
+> [Roadmap](#-roadmap) for exactly what is built and what is not.
 
 ---
 
@@ -61,9 +61,9 @@ that ships broken code. They ship as one tool because the scaffolder is
 the acquisition channel and the runner is what retains.
 
 **The scaffolder ships first**, per [decision 2](docs/CONTEXT.md#decisions). It
-is cheaper, lower risk, and it is how anyone finds the runner. The runner
-is designed in [docs/02-runner.md](docs/02-runner.md) and none of it is
-built.
+is cheaper, lower risk, and it is how anyone finds the runner. Both
+halves are designed in [docs/DESIGN.md](docs/DESIGN.md); the runner is
+partly built and does not cache yet.
 
 ## 🕳️ The gap it exists to fill
 
@@ -154,8 +154,9 @@ culm/
 │   ├── install/                   # Runs [[install]] entries through pnpm, cargo, and go
 │   ├── telemetry/                 # The published payload, opt out with CULM_TELEMETRY=0
 │   ├── cas/                       # Content-addressable store, blake3 addressed
-│   ├── runner/                    # culm.toml, task graph, exec, affected, parallel, remote cache
-│   │                              #   plus the nx, turborepo, and moon config writers
+│   ├── runner/                    # culm.toml, workspaces, task graph, the cache, affected,
+│   │                              #   parallel, remote cache client, and the nx, turborepo,
+│   │                              #   moon, and culm config writers
 │   ├── layer/                     # The layer format
 │   │   ├── mod.rs                 # Declares and re-exports, holds no logic
 │   │   ├── category.rs            # The ten categories, Shape, and shape-dependent cardinality
@@ -184,20 +185,23 @@ culm/
 │   ├── data/                      # drizzle, prisma, sqlx
 │   ├── toolchain/                 # node-pnpm, rust-cargo
 │   ├── quality/                   # clippy, eslint, prettier, rustfmt
-│   └── runner/                    # none, nx, turborepo, moon
+│   └── runner/                    # none, nx, turborepo, moon, culm
 ├── tests/
 │   ├── layers.rs                  # Exercises every shipped layer, discovered by walking layers/
 │   ├── scaffold.rs                # End-to-end scaffolds into a temporary directory
 │   ├── order_independence.rs      # The proptest: any permutation renders identical bytes
+│   ├── cache_correctness.rs       # Runs tasks twice and compares restored bytes, not log lines
 │   └── order_independence.proptest-regressions  # Seeds for failures already found
 ├── docs/
 │   ├── CONTEXT.md                 # Decisions, conventions, and context worth keeping. Read first.
-│   ├── 01-scaffolder.md           # The v0.1 product design
-│   ├── 02-runner.md               # The second half, higher risk, partly built
-│   ├── BENCHMARK.md               # Benchmark methodology, every figure still a TODO
+│   ├── DESIGN.md                  # How both halves work, the benchmark method, and what is left
 │   └── TELEMETRY.md               # The exact payload, published verbatim
 ├── presets/                       # First-party presets: backend, frontend, monorepo
 ├── telemetry/worker/              # The receiver, written and not deployed
+├── npm/                           # The npm launcher and the script that stages platform packages
+├── packaging/homebrew/            # The formula template release.yml renders into the tap
+├── installer.sh                   # The shell installer, verifies SHA256SUMS
+├── deny.toml                      # cargo deny policy: licenses, sources, advisories
 ├── .github/workflows/             # ci, templates (weekly), release
 ├── Cargo.toml                     # Single package, edition 2024
 └── LICENSE                        # MIT
@@ -319,7 +323,7 @@ forget to check it. The rules, in order:
 4. **A runner is filled in** if none was chosen. No runner layer is a
    default, because the right answer is not a property of the runner:
    `runner/nx` requires `toolchain/node-pnpm`, so a Rust-only workspace
-   has exactly one legal runner and it is `runner/none`.
+   can only take `runner/none` or `runner/culm`, which requires nothing.
 5. **Conflicts are checked symmetrically**, so one layer declaring the
    pair is enough and the two manifests cannot drift.
 
@@ -458,6 +462,7 @@ script, because Cargo already ships the command and there is no
 | `runner/nx` | `toolchain/node-pnpm` | `.nx/cache` and `.nx/workspace-data` ignores, installs `nx` |
 | `runner/turborepo` | `toolchain/node-pnpm` | `.turbo/` ignore, installs `turbo`. `turbo.json` is written by `culm new` from the final app layout |
 | `runner/moon` | `toolchain/node-pnpm` | `.moon/cache/` ignore, installs `@moonrepo/cli`. The workspace and per-project files are written by `culm new` |
+| `runner/culm` | | Nothing to install. `culm new` writes a root `culm.toml` with `[workspace]` and one per app; `test` is cached, `build` and `dev` are not |
 | `runner/none` | | Nothing, and that is the point |
 
 `runner/none` has to be a real selectable answer rather than an absence
@@ -943,21 +948,27 @@ first:
 
 ## 📦 Distribution
 
-> **None of this is published.** Every row below is a plan. There is no
-> `culm` on npm, no `culm` on crates.io, no `culm.dev`, and no Homebrew
-> tap. Do not paste these commands expecting them to work.
+> **None of this is published yet.** The code for every channel is in
+> this repository; the registries, the tap, and the first release are
+> not. Do not paste these commands expecting them to work.
 
-| Channel | Planned command | Audience |
-| --- | --- | --- |
-| npm | `pnpm create culm` / `npx culm@latest new` | Primary funnel, zero install |
-| crates.io | `cargo install culm` | Rust-native developers |
-| Shell | `curl -fsSL https://culm.dev/install.sh \| sh` | CI and Docker |
-| Homebrew | `brew install zunetra/tap/culm` | Only if v1.0 is reached |
+| Channel | Command | Audience | In this repository |
+| --- | --- | --- | --- |
+| npm | `npx culm@latest new` | Primary funnel, zero install | `npm/` |
+| crates.io | `cargo install culm` | Rust-native developers | `Cargo.toml` |
+| Shell | `curl -fsSL https://github.com/Zunetra/culm/releases/latest/download/installer.sh \| sh` | CI and Docker | `installer.sh` |
+| Homebrew | `brew install zunetra/tap/culm` | macOS and Linux | `packaging/homebrew/` |
 
-The Rust binary is the product. The npm package is planned as a launcher
-shipping prebuilt binaries as platform-specific `optionalDependencies`
-with `os` and `cpu` fields, the pattern esbuild, Biome, `@swc/core`, and
-Rspack use. The package manager installs exactly one.
+The Rust binary is the product. The npm package is a launcher shipping
+prebuilt binaries as platform-specific `optionalDependencies` with `os`
+and `cpu` fields, the pattern esbuild, Biome, `@swc/core`, and Rspack use.
+The package manager installs exactly one. The shell installer verifies
+every download against the release's `SHA256SUMS` before installing it.
+
+Every tag builds five binaries and attaches them with `SHA256SUMS` and
+`installer.sh` (`.github/workflows/release.yml`). Publishing to npm,
+crates.io, or the tap happens only when that workflow is run by hand on
+a tag, with its `publish` input set.
 
 **Not a postinstall downloader.** Those break under `--ignore-scripts`,
 offline CI, corporate proxies, and sandboxed environments. See
@@ -970,95 +981,9 @@ so re-verify before relying on it.
 
 ## 🗺️ Roadmap
 
-### Built
-
-- The layer format: ten categories, shape-dependent cardinality, manifest
-  parsing, selection validation, and selection resolution.
-- The layer catalog, which walks a directory tree and loads every
-  `layer.toml` it finds.
-- The merge engine, all six strategies: `json-deep`, `line-block`,
-  `toml-members`, `yaml-list`, `yaml-steps`, and `hook-script`.
-- Order independence, covered by a proptest over every permutation.
-- The scaffold module: the copy plan, `{{name}}` interpolation, path
-  containment, and the disk writer.
-- **The CLI.** `culm new`, `culm run`, `culm cache stats|clear`, and
-  `culm graph --format list|dot`, each callable as a function from a test
-  without spawning a process.
-- **The wizard**, `src/wizard/` (`ratatui` + `crossterm`). Falls back to
-  flags on anything that is not a real terminal, so scripted and CI use
-  are unaffected.
-- **Git URL presets and `--save-preset`.** `--preset github:user/repo`,
-  `gitlab:user/repo`, a raw git URL, or a local `./file.toml`.
-- **Install execution.** `[[install]]` entries run for real: `pnpm`,
-  `cargo`, and `go`.
-- **Telemetry**, the Rust side. The decision 9 payload, opt-out via
-  `CULM_TELEMETRY=0`, sent best-effort on a detached thread. The
-  Cloudflare receiver is written but not deployed.
-- **`infra` and `editor` layers**: `docker-compose`, `dockerfile`,
-  `github-actions`, `husky`, `commitlint`, `editorconfig`, `vscode`,
-  `zed`.
-- Thirty-six layers across base, shape, frontend, backend, data,
-  toolchain, quality, infra, editor, and runner, all six frontends and
-  every shipped layer verified against a real install and build, per
-  [decision 19](docs/CONTEXT.md#decisions).
-- **The runner, milestone r0.1.** `culm.toml` parsing, a `petgraph` task
-  graph, named-cycle detection, sequential topological execution of one
-  task's dependency closure. Dogfooded against a real scaffolded
-  monorepo.
-- **Runner, r0.2 to r0.4, as source modules.**
-  - `cas`: a blake3 content-addressable store, with `culm cache stats`
-    and `culm cache clear` operating on it.
-  - `culm run --affected <REF>`: a `git2` diff against a base ref matched
-    to each task's `inputs` globs, then a walk to downstream tasks.
-  - `culm run --parallel`: the resolved order grouped into dependency
-    levels, with each level run concurrently.
-  - A remote cache HTTP client, configured by `CULM_REMOTE_CACHE_URL` and
-    an optional `CULM_REMOTE_CACHE_TOKEN`. No server ships.
-- **Runner backends written by `culm new`.** After scaffolding, the
-  selected `runner/*` layer's real config is generated from the final app
-  layout: `nx.json`, `turbo.json`, or the Moon workspace and per-project
-  files. Turborepo also gets a pinned `packageManager` field.
-- Unit tests beside every module plus five integration suites.
-
-### Not built
-
-- **Task result caching in `culm run`.** The `cas` store and the remote
-  client exist, but `exec` and `parallel` run every task with
-  `cacheable: false`, and nothing reads or writes the store during a run.
-  `culm cache stats` therefore reports what was stored by other means,
-  not by `culm run`. See [docs/02-runner.md](docs/02-runner.md).
-- **A remote cache server.** Only the client exists.
-- **A benchmark result.** [docs/BENCHMARK.md](docs/BENCHMARK.md) is the
-  methodology against Nx on the real Klassivox workspace. Every figure in
-  it is a placeholder, so no performance claim is made anywhere.
-- **JVM and C/C++ layers**, per [decision 7](docs/CONTEXT.md#decisions)'s
-  ordering: JS/TS and Rust first, then Go (shipped), then JVM, then
-  C/C++.
-- **Version resolution**, including the `compat` range and the
-  minimum-release-age guard.
-- **Nightly CI** over the preset matrix.
-- **The telemetry receiver deployment.** The Cloudflare Worker and D1
-  schema are written; `DEFAULT_ENDPOINT` does not resolve to anything
-  yet.
-- **Verification of the newer runner backends.** The Nx, Turborepo, and
-  Moon config writers are unit tested, but unlike the frontend and
-  backend layers they have not been verified against a real install and
-  build under [decision 19](docs/CONTEXT.md#decisions).
-- **Klassivox's setup as a preset**, decision 17's second half.
-  Deliberately not pursued right now.
-
-### The order from here
-
-1. JVM layers, the next step in decision 7's language ordering, once the
-   dependency-write question is settled: unlike `go get`/`cargo
-   add`/`pnpm add`, neither Gradle nor Maven has a first-party "add a
-   dependency and write its version" command, so `install::plan` needs a
-   real answer here before a JVM layer can follow the Go pattern.
-2. Wire the cache into `culm run`, so a cacheable task is skipped on a
-   hit and a wrong hit is impossible, per the methodology in
-   [docs/02-runner.md](docs/02-runner.md).
-3. Deploy the telemetry receiver, closing the last piece of decision 9.
-4. Version resolution and nightly CI over the preset matrix.
+What is built, what is left in code, and what is left for the owner is
+kept in one place, [docs/DESIGN.md section 5](docs/DESIGN.md#5-status),
+so this README cannot drift from it.
 
 ## 🔧 Troubleshooting
 
@@ -1157,8 +1082,7 @@ where warnings accumulate unseen.
 | Doc | What it covers |
 | --- | --- |
 | [docs/CONTEXT.md](docs/CONTEXT.md) | Every settled decision, the coding conventions, and the traps. Read first. |
-| [docs/01-scaffolder.md](docs/01-scaffolder.md) | The v0.1 product: layers, the merge engine, the wizard, presets. |
-| [docs/02-runner.md](docs/02-runner.md) | The task graph and build cache. Higher risk, ships second. |
+| [docs/DESIGN.md](docs/DESIGN.md) | Both halves, the benchmark method, and what is left to build. |
 | [docs/TELEMETRY.md](docs/TELEMETRY.md) | The exact payload that would be sent, published verbatim. |
 | [handbook/naming/NAMING.md](../handbook/naming/NAMING.md) | Why culm, what was eliminated, what is reserved. |
 

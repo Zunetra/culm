@@ -207,10 +207,118 @@ jobs:
           fi
           echo "All steps passed." >> "$GITHUB_STEP_SUMMARY"
 
+  # What a user actually runs: each first-party preset, on both platforms a
+  # user is likely to scaffold on. Per-layer coverage is the job above; this
+  # one proves the combinations the presets ship still build together.
+  presets:
+    name: preset ${{ matrix.preset }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [monorepo, frontend, backend]
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Build culm
+        run: cargo build --release
+
+      - name: Scaffold
+        run: |
+          mkdir -p "$RUNNER_TEMP/scaffold"
+          cd "$RUNNER_TEMP/scaffold"
+          "$GITHUB_WORKSPACE/target/release/culm" new demo --preset "${{ matrix.preset }}" --yes
+
+      # Every JS package's own build and test, then the Rust workspace's, if
+      # the preset has either. Failures are collected rather than stopping at
+      # the first, for the same reason as the job above.
+      - name: Build and test
+        run: |
+          cd "$RUNNER_TEMP/scaffold/demo"
+          failed=""
+          if [ -f package.json ]; then
+            pnpm -r --if-present run build || failed="$failed js-build"
+            pnpm -r --if-present run test || failed="$failed js-test"
+            pnpm run --if-present lint || failed="$failed lint"
+          fi
+          if [ -f Cargo.toml ]; then
+            cargo build --workspace || failed="$failed rust-build"
+            cargo test --workspace || failed="$failed rust-test"
+          fi
+          echo "### preset ${{ matrix.preset }} on ${{ matrix.os }}" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$failed" ]; then
+            echo "Failed:$failed" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "All steps passed." >> "$GITHUB_STEP_SUMMARY"
+
+  # Decision 19's bar for the runner backends: the config culm writes has to
+  # drive the real tool, not just parse. Each runs `build` across a two-app
+  # monorepo through the tool itself.
+  runners:
+    name: runner/${{ matrix.runner }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: nx
+            build: pnpm exec nx run-many -t build
+          - runner: turborepo
+            build: pnpm exec turbo run build
+          - runner: moon
+            build: pnpm exec moon run :build
+          - runner: culm
+            build: '"$GITHUB_WORKSPACE/target/release/culm" run build'
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Build culm
+        run: cargo build --release
+
+      - name: Scaffold
+        run: |
+          mkdir -p "$RUNNER_TEMP/scaffold"
+          cd "$RUNNER_TEMP/scaffold"
+          "$GITHUB_WORKSPACE/target/release/culm" new demo \
+            --layer shape/monorepo \
+            --layer frontend/react-vite \
+            --layer frontend/vue-vite \
+            --layer "runner/${{ matrix.runner }}" \
+            --yes
+
+      - name: Build through the runner
+        run: |
+          cd "$RUNNER_TEMP/scaffold/demo"
+          ${{ matrix.build }}
+
   report:
     name: report drift
     runs-on: ubuntu-latest
-    needs: scaffold
+    needs: [scaffold, presets, runners]
     # Only on a scheduled run. A manual run is somebody watching the logs, and
     # filing an issue at them would be noise.
     if: failure() && github.event_name == 'schedule'

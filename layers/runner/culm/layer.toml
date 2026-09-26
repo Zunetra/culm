@@ -1,0 +1,13 @@
+# culm's own task runner.
+# One runner among several, per decision 3, and never the default until it
+# passes its own correctness check (the r0.2 checkpoint in docs/DESIGN.md).
+# The root `culm.toml` declares the workspace and each application gets its
+# own; both name every application's directory, so neither is a static file
+# this layer ships. `culm new` writes them after scaffolding, from
+# `src/runner/registration.rs`. Nothing to install: the runner is the culm
+# binary itself, and its cache lives in the OS cache directory, not the
+# workspace.
+
+id = "culm"
+category = "runner"
+default = false

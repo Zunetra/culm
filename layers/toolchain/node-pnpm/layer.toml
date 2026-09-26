@@ -25,16 +25,26 @@ type = "module"
 # `{{workspace_glob}}` is `src/*` in a monorepo (every namespaced app's own
 # package.json lives at exactly that depth, per docs/CONTEXT.md decision 23)
 # and blank otherwise, and a blank entry is one `yaml-list` drops rather than
-# writes, so this file simply does not appear for a single-app or
+# writes, so `packages` simply does not appear for a single-app or
 # tooling-only workspace, where there is no second package.json for it to
 # name. Owned here rather than by each app layer individually, since every JS
 # app layer already requires this one and the glob is the same no matter
 # which apps are actually selected.
+#
+# `minimumReleaseAge` is decision 5's supply-chain guard: `pnpm add` and
+# `pnpm install` never pick a release younger than three days (in minutes),
+# which is how long a compromised publish usually survives before it is
+# pulled. pnpm already defaults to one day; writing it makes the setting
+# visible in the workspace rather than a default nobody knows about. Because
+# of it, this file is written for every JS workspace, not only a monorepo:
+# a settings-only `pnpm-workspace.yaml` is valid for a single package.
 [[merge]]
 strategy = "yaml-list"
 target = "pnpm-workspace.yaml"
 [merge.lists]
 packages = ["{{workspace_glob}}"]
+[merge.scalars]
+minimumReleaseAge = 4320
 
 [[merge]]
 strategy = "line-block"

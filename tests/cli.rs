@@ -26,6 +26,7 @@ fn args(project: &str, layers: &[&str]) -> NewArgs {
         yes: true,
         layers_dir: None,
         no_install: true,
+        min_release_age: culm::install::release_age::DEFAULT_DAYS,
         save_preset: None,
     }
 }
@@ -442,4 +443,21 @@ fn the_root_package_json_is_named_after_the_project() {
         !manifest.contains("{{project_name}}"),
         "a placeholder survived into a merged file"
     );
+}
+
+/* Decision 5's guard is written into every JS workspace, and a different
+ * `--min-release-age` replaces it in pnpm's own unit, minutes. */
+#[test]
+fn every_js_workspace_carries_the_release_age_guard() {
+    let dir = tempfile::tempdir().unwrap();
+    report(&args("demo", &["frontend/react-vite"]), dir.path());
+    let written = fs::read_to_string(dir.path().join("demo/pnpm-workspace.yaml")).unwrap();
+    assert!(written.contains("minimumReleaseAge: 4320"), "{written}");
+
+    let other = tempfile::tempdir().unwrap();
+    let mut week = args("demo", &["frontend/react-vite"]);
+    week.min_release_age = 7;
+    report(&week, other.path());
+    let written = fs::read_to_string(other.path().join("demo/pnpm-workspace.yaml")).unwrap();
+    assert!(written.contains("minimumReleaseAge: 10080"), "{written}");
 }

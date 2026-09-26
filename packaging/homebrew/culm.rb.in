@@ -1,0 +1,40 @@
+# Rendered by release.yml into zunetra/homebrew-tap as Formula/culm.rb:
+#   brew install zunetra/tap/culm
+# The @VERSION@ and @SHA_*@ placeholders are filled from the release's own
+# SHA256SUMS, so the formula can never name a binary the release does not have.
+class Culm < Formula
+  desc "Workspace tooling for polyglot repositories"
+  homepage "https://github.com/Zunetra/culm"
+  version "@VERSION@"
+  license "MIT"
+
+  on_macos do
+    on_arm do
+      url "https://github.com/Zunetra/culm/releases/download/v@VERSION@/culm-aarch64-apple-darwin"
+      sha256 "@SHA_AARCH64_APPLE_DARWIN@"
+    end
+    on_intel do
+      url "https://github.com/Zunetra/culm/releases/download/v@VERSION@/culm-x86_64-apple-darwin"
+      sha256 "@SHA_X86_64_APPLE_DARWIN@"
+    end
+  end
+
+  on_linux do
+    on_arm do
+      url "https://github.com/Zunetra/culm/releases/download/v@VERSION@/culm-aarch64-unknown-linux-gnu"
+      sha256 "@SHA_AARCH64_UNKNOWN_LINUX_GNU@"
+    end
+    on_intel do
+      url "https://github.com/Zunetra/culm/releases/download/v@VERSION@/culm-x86_64-unknown-linux-gnu"
+      sha256 "@SHA_X86_64_UNKNOWN_LINUX_GNU@"
+    end
+  end
+
+  def install
+    bin.install Dir["culm-*"].first => "culm"
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/culm --version")
+  end
+end

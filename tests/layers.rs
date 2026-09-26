@@ -1192,3 +1192,28 @@ fn every_json_template_parses() {
         }
     }
 }
+
+// == Publishing
+
+/* `cargo package` silently drops any directory holding a `Cargo.toml`,
+ * treating it as a nested crate, so a template by that name would vanish
+ * from the published binary's layer tree with nothing failing here. */
+#[test]
+fn no_layer_file_is_named_cargo_toml() {
+    let mut stack = vec![layers_root()];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                stack.push(path);
+            } else {
+                assert_ne!(
+                    path.file_name().unwrap(),
+                    "Cargo.toml",
+                    "{} would be dropped from the published crate; name it Cargo.toml.template",
+                    path.display()
+                );
+            }
+        }
+    }
+}

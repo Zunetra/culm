@@ -54,17 +54,13 @@ impl Store {
         if path.exists() {
             return Ok(digest);
         }
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(|error| CasError::Io {
-                path: parent.to_owned(),
-                message: error.to_string(),
-            })?;
-        }
-        fs::write(&path, bytes).map_err(|error| CasError::Io {
-            path,
-            message: error.to_string(),
-        })?;
+        write_atomically(&path, bytes)?;
         Ok(digest)
+    }
+
+    /// The directory this store lives in.
+    pub fn root(&self) -> &Path {
+        &self.root
     }
 
     /// Reads the bytes stored under `digest` back out, verifying they still
@@ -155,6 +151,31 @@ impl Store {
         let hex = hex.as_str();
         self.root.join(&hex[..2]).join(&hex[2..])
     }
+}
+
+/// Writes to a sibling temporary file, then renames it into place.
+/// Parallel tasks can store the same object at once, and a reader must
+/// never see a half-written file under a name that claims a complete digest.
+/// A rename within one directory is atomic on every platform culm ships for.
+pub(super) fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), CasError> {
+    let io = |path: &Path, error: std::io::Error| CasError::Io {
+        path: path.to_owned(),
+        message: error.to_string(),
+    };
+    let parent = path.parent().unwrap_or(Path::new("."));
+    fs::create_dir_all(parent).map_err(|error| io(parent, error))?;
+
+    let unique = format!(
+        ".tmp-{}-{:?}",
+        std::process::id(),
+        std::thread::current().id()
+    );
+    let temporary = parent.join(unique);
+    fs::write(&temporary, bytes).map_err(|error| io(&temporary, error))?;
+    fs::rename(&temporary, path).map_err(|error| {
+        let _ = fs::remove_file(&temporary);
+        io(path, error)
+    })
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

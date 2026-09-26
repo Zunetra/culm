@@ -1,12 +1,10 @@
 // === culm run
 
-/* r0.1 covered `culm run <task>`: read the `culm.toml` in the working
- * directory, resolve the task and its dependency closure, run them in
- * order, no caching. r0.3 (docs/02-runner.md section 6) adds `--affected`,
- * git2-based against a base ref instead of a named task, and `--parallel`,
- * which runs the resolved order through `runner::parallel` instead of
- * `runner::exec` so independent tasks in the same graph level actually run
- * at once. */
+/* `culm run <task>`: read the `culm.toml` in the working directory, resolve
+ * the task and its dependency closure, and run them in order (r0.1), each
+ * restored from or recorded to the local cache (r0.2). `--affected` picks
+ * the tasks from a git diff instead of a name, and `--parallel` runs each
+ * dependency level at once (r0.3). docs/DESIGN.md section 3.5. */
 
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -14,7 +12,10 @@ use std::path::{Path, PathBuf};
 use anyhow::{Result, bail};
 use clap::Args;
 
-use crate::runner::{RunnerConfig, Task, TaskGraph, affected, exec, parallel, tasks_of};
+use crate::cas::Store;
+use crate::runner::remote_cache::RemoteCache;
+use crate::runner::{Cache, CacheMode, Session, TaskGraph, affected, exec, parallel, workspace};
+use crate::telemetry::{ErrorKind, RunStats};
 
 #[derive(Debug, Args)]
 pub struct RunArgs {
@@ -33,6 +34,19 @@ pub struct RunArgs {
     #[arg(long)]
     pub parallel: bool,
 
+    /// Run every task for real, reading and writing no cache.
+    #[arg(long, conflicts_with = "verify")]
+    pub no_cache: bool,
+
+    /// Run every task for real, and fail if a cacheable task's output differs
+    /// from what its cache entry holds. The check behind the r0.2 checkpoint.
+    #[arg(long)]
+    pub verify: bool,
+
+    /// Use this directory as the cache instead of the OS cache directory.
+    #[arg(long, value_name = "PATH")]
+    pub cache_dir: Option<PathBuf>,
+
     /// Read a `culm.toml` at this path instead of the one in the working directory.
     /// For the tests, the same way `--layers-dir` lets `culm new` be pointed elsewhere.
     #[arg(long, value_name = "PATH")]
@@ -44,21 +58,47 @@ pub fn run_task(args: &RunArgs, cwd: &Path) -> Result<()> {
     run_task_to(args, cwd, &mut io::stdout())
 }
 
+/// What a `culm run` learned about itself, for telemetry: counts and flags only.
+#[derive(Debug, Default)]
+pub struct RunReport {
+    pub run: RunStats,
+    /// The stage the run is in; the stage it failed in, if it failed.
+    pub stage: ErrorKind,
+}
+
 /// The same run, reporting into a writer the caller owns, so a test can assert what ran.
 pub fn run_task_to(args: &RunArgs, cwd: &Path, out: &mut impl Write) -> Result<()> {
-    let config_path = args.config.clone().unwrap_or_else(|| cwd.join("culm.toml"));
+    run_task_reporting(args, cwd, out, &mut RunReport::default())
+}
 
-    let config = RunnerConfig::load(&config_path)?;
-    let project = project_name(cwd);
-    let tasks: Vec<Task> = tasks_of(&config, &project);
+/// The same run, also filling `report` for telemetry.
+pub fn run_task_reporting(
+    args: &RunArgs,
+    cwd: &Path,
+    out: &mut impl Write,
+    report: &mut RunReport,
+) -> Result<()> {
+    report.run.parallel = args.parallel;
+    report.run.affected = args.affected.is_some();
+    report.run.remote_cache = RemoteCache::from_env().is_some();
 
-    let graph = TaskGraph::build(tasks.clone(), &config_path)?;
+    report.stage = ErrorKind::Config;
+    let loaded = workspace::load(cwd, args.config.as_deref())?;
+    let config_path = loaded.config_path.clone();
+    report.run.projects = count(loaded.projects);
+
+    report.stage = ErrorKind::Graph;
+    let graph = TaskGraph::build(loaded.tasks.clone(), &config_path)?;
 
     let order = match (&args.task, &args.affected) {
-        (Some(task), None) => graph.execution_order(task, &config_path)?,
+        (Some(task), None) => {
+            let targets = loaded.targets(task)?;
+            let targets: Vec<&str> = targets.iter().map(String::as_str).collect();
+            graph.execution_order_of(&targets, &config_path)?
+        }
         (None, Some(base_ref)) => {
             let changed = affected::changed_files(cwd, base_ref)?;
-            let seeds = affected::seed_tasks(&tasks, &changed);
+            let seeds = affected::seed_tasks(&loaded.tasks, &changed)?;
             if seeds.is_empty() {
                 writeln!(out, "Nothing affected since {base_ref}.").ok();
                 return Ok(());
@@ -69,19 +109,39 @@ pub fn run_task_to(args: &RunArgs, cwd: &Path, out: &mut impl Write) -> Result<(
         (Some(_), Some(_)) => unreachable!("clap already refuses task and --affected together"),
     };
 
-    if args.parallel {
-        parallel::run(&order, cwd, out)?;
+    report.run.tasks = count(order.len());
+    report.run.cacheable = count(order.iter().filter(|task| task.cacheable).count());
+
+    report.stage = ErrorKind::Cache;
+    let mode = if args.no_cache {
+        CacheMode::Off
+    } else if args.verify {
+        CacheMode::Verify
     } else {
-        exec::run(&order, cwd, out)?;
-    }
+        CacheMode::ReadWrite
+    };
+    let cache_root = match &args.cache_dir {
+        Some(dir) => dir.clone(),
+        None => Store::default_root()?,
+    };
+    let cache = Cache::open(&cache_root, mode)?;
+    let mut session = Session::new(Some(&cache));
+
+    report.stage = ErrorKind::TaskFailed;
+    let result = if args.parallel {
+        parallel::run(&order, &mut session, out)
+    } else {
+        exec::run(&order, &mut session, out)
+    };
+    report.run.hits = session.hits;
+    report.run.misses = session.misses;
+    result?;
+    session.summarise(out);
     Ok(())
 }
 
-/// The directory name culm is run in, used only to label tasks in error output.
-fn project_name(cwd: &Path) -> String {
-    cwd.file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_else(|| ".".to_owned())
+fn count(n: usize) -> u32 {
+    u32::try_from(n).unwrap_or(u32::MAX)
 }
 
 // === Tests
@@ -96,6 +156,10 @@ mod tests {
             task: Some(task.to_owned()),
             affected: None,
             parallel: false,
+            no_cache: false,
+            verify: false,
+            /* Never the machine's real cache, from a test. */
+            cache_dir: Some(config.with_file_name(".culm-cache")),
             config: Some(config.to_owned()),
         }
     }
@@ -202,6 +266,9 @@ mod tests {
             task: None,
             affected: None,
             parallel: false,
+            no_cache: false,
+            verify: false,
+            cache_dir: Some(dir.path().join(".culm-cache")),
             config: Some(config),
         };
         let error = run_task_to(&none, dir.path(), &mut Vec::new()).unwrap_err();

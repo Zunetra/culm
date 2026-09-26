@@ -1,6 +1,6 @@
 // === Cache key
 
-/* docs/02-runner.md section 4: the cache key includes everything, or it is
+/* docs/DESIGN.md section 3.3: the cache key includes everything, or it is
  * not a cache, it is a bug waiting to happen. Too narrow and a real change
  * produces a stale hit, which is the one failure mode this whole module
  * exists to prevent. Too broad only costs a cache miss, which is merely
@@ -22,6 +22,9 @@ use super::Hash;
 /// here.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct CacheKey {
+    /// `project:task`, so two tasks that happen to share a command and
+    /// inputs never share an entry: their declared outputs differ.
+    pub task: String,
     pub command: String,
     /* Hex text rather than `blake3::Hash` directly: a hash's own byte
      * representation is not what changes the key's meaning, its ordering
@@ -29,10 +32,18 @@ pub struct CacheKey {
      * actually wants to read. */
     pub input_hashes: BTreeMap<PathBuf, String>,
     /// Only the environment variables the task's own `declared_env`
-    /// explicitly named, never the whole environment: `docs/02-runner.md`
-    /// section 4 is explicit that a broader key is merely disappointing
+    /// explicitly named, never the whole environment: `docs/DESIGN.md`
+    /// section 3.3 is explicit that a broader key is merely disappointing
     /// while a narrower one is dangerous, so nothing here is inferred.
-    pub declared_env: BTreeMap<String, String>,
+    /// `None` is an unset variable, which is not the same as an empty one.
+    pub declared_env: BTreeMap<String, Option<String>>,
+    /// Each dependency's own key digest, by task name. A change upstream
+    /// then always reaches downstream, even when the downstream task's
+    /// inputs do not name the upstream task's outputs.
+    pub dependencies: BTreeMap<String, String>,
+    /// `<os>-<arch>`. A binary built on one platform is not the output of
+    /// the same task on another, which matters the moment a cache is shared.
+    pub platform: String,
     pub tool_version: String,
 }
 
@@ -59,12 +70,15 @@ mod tests {
 
     fn key(command: &str, inputs: &[(&str, &str)]) -> CacheKey {
         CacheKey {
+            task: "demo:build".to_owned(),
             command: command.to_owned(),
             input_hashes: inputs
                 .iter()
                 .map(|(p, h)| (PathBuf::from(p), (*h).to_owned()))
                 .collect(),
             declared_env: BTreeMap::new(),
+            dependencies: BTreeMap::new(),
+            platform: "linux-x86_64".to_owned(),
             tool_version: "1.0.0".to_owned(),
         }
     }
@@ -98,10 +112,36 @@ mod tests {
         assert_ne!(a.digest(), b.digest());
 
         b = a.clone();
-        b.declared_env.insert("RUSTFLAGS".to_owned(), "-C opt".to_owned());
+        b.declared_env.insert("RUSTFLAGS".to_owned(), Some("-C opt".to_owned()));
         assert_ne!(a.digest(), b.digest());
 
-        a.declared_env.insert("RUSTFLAGS".to_owned(), "-C opt".to_owned());
+        a.declared_env.insert("RUSTFLAGS".to_owned(), Some("-C opt".to_owned()));
         assert_eq!(a.digest(), b.digest());
+    }
+
+    #[test]
+    fn an_unset_variable_is_not_an_empty_one() {
+        let mut a = key("cargo build", &[]);
+        let mut b = a.clone();
+        a.declared_env.insert("RUSTFLAGS".to_owned(), None);
+        b.declared_env.insert("RUSTFLAGS".to_owned(), Some(String::new()));
+        assert_ne!(a.digest(), b.digest());
+    }
+
+    #[test]
+    fn task_platform_and_dependencies_each_change_the_digest() {
+        let a = key("make", &[]);
+
+        let mut b = a.clone();
+        b.task = "demo:other".to_owned();
+        assert_ne!(a.digest(), b.digest());
+
+        let mut c = a.clone();
+        c.platform = "macos-aarch64".to_owned();
+        assert_ne!(a.digest(), c.digest());
+
+        let mut d = a.clone();
+        d.dependencies.insert("build".to_owned(), "ff".to_owned());
+        assert_ne!(a.digest(), d.digest());
     }
 }

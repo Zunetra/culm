@@ -1,16 +1,22 @@
 // === Task
 
+use std::path::{Path, PathBuf};
+
 use super::config::RunnerConfig;
 
 /// One task, resolved from a `culm.toml` table.
 ///
-/// Matches the sketch in docs/02-runner.md section 4. `inputs`, `outputs`
-/// and `cacheable` are carried for forward compatibility with r0.2's cache
-/// key and are not read by anything in r0.1.
+/// Matches the sketch in docs/DESIGN.md section 3.3. `inputs`, `outputs`,
+/// `cacheable` and `declared_env` feed the cache key in `runner::cache`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Task {
+    /// Unique across the run: the bare name in a single project, or
+    /// `<project>:<name>` in a workspace.
     pub name: String,
     pub project: String,
+    /// The project directory: where the command runs and what `inputs` and
+    /// `outputs` are relative to.
+    pub dir: PathBuf,
     pub command: String,
     pub inputs: Vec<String>,
     pub outputs: Vec<String>,
@@ -21,13 +27,14 @@ pub struct Task {
 
 /// Every task in a project's `culm.toml`, in no particular order.
 /// Ordering is the graph's job, not the config's.
-pub fn tasks_of(config: &RunnerConfig, project: &str) -> Vec<Task> {
+pub fn tasks_of(config: &RunnerConfig, project: &str, dir: &Path) -> Vec<Task> {
     config
         .tasks
         .iter()
         .map(|(name, spec)| Task {
             name: name.clone(),
             project: project.to_owned(),
+            dir: dir.to_owned(),
             command: spec.command.clone(),
             inputs: spec.inputs.clone(),
             outputs: spec.outputs.clone(),
@@ -62,9 +69,12 @@ mod tests {
         let mut tasks = BTreeMap::new();
         tasks.insert("build".to_owned(), spec("cargo build", &[]));
         tasks.insert("test".to_owned(), spec("cargo test", &["build"]));
-        let config = RunnerConfig { tasks };
+        let config = RunnerConfig {
+            tasks,
+            ..RunnerConfig::default()
+        };
 
-        let mut resolved = tasks_of(&config, "backend");
+        let mut resolved = tasks_of(&config, "backend", Path::new("."));
         resolved.sort_by(|a, b| a.name.cmp(&b.name));
 
         assert_eq!(resolved[0].name, "build");

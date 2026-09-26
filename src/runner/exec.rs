@@ -1,36 +1,31 @@
 // === Execution
 
-/* Sequential only, per r0.1's own scope: no caching, no parallelism, just the
- * graph and correct ordering. A task's `command` is a shell string rather
- * than argv, so it is run through a shell rather than split on whitespace,
- * which would break the first command using a pipe or a quoted argument. */
+/* Sequential: one task after another, stopping at the first failure. A
+ * task's `command` is a shell string rather than argv, so it is run through
+ * a shell rather than split on whitespace, which would break the first
+ * command using a pipe or a quoted argument. Whether a task runs at all, or
+ * is restored from the cache, is `runner::cache`'s decision. */
 
 use std::io::Write;
-use std::path::Path;
 use std::process::Command;
 
+use super::cache::{self, Plan, Session, Status};
 use super::error::RunnerError;
 use super::task::Task;
 
 /// Runs every task in `order`, in order, stopping at the first failure.
-pub fn run(order: &[&Task], root: &Path, out: &mut impl Write) -> Result<(), RunnerError> {
+pub fn run(order: &[&Task], session: &mut Session, out: &mut impl Write) -> Result<(), RunnerError> {
     for task in order {
-        writeln!(out, "> {} ({})", task.name, task.command).ok();
-
-        let status = shell(&task.command)
-            .current_dir(root)
-            .status()
-            .map_err(|e| RunnerError::NotStarted {
-                command: task.command.clone(),
-                message: e.to_string(),
-            })?;
-
-        if !status.success() {
-            return Err(RunnerError::TaskFailed {
-                task: task.name.clone(),
-                status: status.code(),
-            });
-        }
+        let status = match session.plan(task, out)? {
+            Plan::Restored => Status::Hit,
+            Plan::Run(pending) => cache::run(
+                task,
+                session.cache(),
+                pending.key.as_ref(),
+                pending.previous.as_ref(),
+            )?,
+        };
+        session.count(status);
     }
     Ok(())
 }
@@ -62,6 +57,7 @@ mod tests {
         Task {
             name: name.to_owned(),
             project: "demo".to_owned(),
+            dir: std::path::PathBuf::from("."),
             command: command.to_owned(),
             inputs: Vec::new(),
             outputs: Vec::new(),
@@ -81,7 +77,7 @@ mod tests {
         let order = [&a, &b];
 
         let mut out: Vec<u8> = Vec::new();
-        run(&order, dir.path(), &mut out).unwrap();
+        run(&order, &mut Session::new(None), &mut out).unwrap();
 
         let written = std::fs::read_to_string(&marker).unwrap();
         assert_eq!(written.lines().collect::<Vec<_>>(), vec!["a", "b"]);
@@ -97,7 +93,7 @@ mod tests {
         let order = [&fails, &never];
 
         let mut out: Vec<u8> = Vec::new();
-        let error = run(&order, dir.path(), &mut out).unwrap_err();
+        let error = run(&order, &mut Session::new(None), &mut out).unwrap_err();
 
         match error {
             RunnerError::TaskFailed { task, status } => {

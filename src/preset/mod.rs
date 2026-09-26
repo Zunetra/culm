@@ -5,7 +5,7 @@
  * broken shortcut, and shipping both halves together is what keeps them from
  * drifting apart.
  *
- * TOML rather than the YAML sketched in docs/01-scaffolder.md: the crate
+ * TOML rather than the YAML first sketched for presets (decision 20): the crate
  * already parses TOML, every layer is TOML, and `serde_yaml` is archived. A
  * second serialisation format would be a dependency bought for one file
  * shape. */

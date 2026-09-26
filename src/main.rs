@@ -2,12 +2,18 @@
 
 #![forbid(unsafe_code)]
 
+use std::io;
 use std::process::ExitCode;
+use std::time::Instant;
 
 use clap::{Parser, Subcommand};
 use culm::banner;
-use culm::cli::{CacheArgs, GraphArgs, NewArgs, RunArgs, run_cache, run_graph, run_new, run_task};
-use culm::telemetry;
+use culm::cli::{
+    CacheArgs, GraphArgs, NewArgs, NewReport, RunArgs, RunReport, run_cache, run_graph,
+    run_new_reporting, run_task_reporting,
+};
+use culm::runner::RunnerError;
+use culm::telemetry::{self, ErrorKind, Exit, Outcome};
 
 #[derive(Parser)]
 #[command(name = "culm", version, about = "Scaffold a workspace from layers")]
@@ -41,13 +47,17 @@ fn main() -> ExitCode {
      * argument is rejected before anything is drawn. */
     banner::print();
 
+    let started = Instant::now();
+    let mut new_report = NewReport::default();
+    let mut run_report = RunReport::default();
+
     let result = match &cli.command {
         Command::New(args) => match std::env::current_dir() {
-            Ok(cwd) => run_new(args, &cwd),
+            Ok(cwd) => run_new_reporting(args, &cwd, &mut io::stdout(), &mut new_report),
             Err(e) => Err(anyhow::Error::new(e).context("cannot read the working directory")),
         },
         Command::Run(args) => match std::env::current_dir() {
-            Ok(cwd) => run_task(args, &cwd),
+            Ok(cwd) => run_task_reporting(args, &cwd, &mut io::stdout(), &mut run_report),
             Err(e) => Err(anyhow::Error::new(e).context("cannot read the working directory")),
         },
         Command::Cache(args) => run_cache(args),
@@ -57,22 +67,38 @@ fn main() -> ExitCode {
         },
     };
 
-    /* Here, never in `cli::new`: this binary is the one caller a test never
-     * goes through (`tests/cli.rs` calls `run_new` directly precisely to
-     * avoid spawning it), which is what keeps `cargo test` from touching the
-     * network or this machine's real telemetry id on every run. Fired
-     * whether or not the confirmation prompt was accepted: a run without
-     * `--yes` still named its layers before asking, and that naming is what
-     * decision 9 calls the selection. */
-    /* `Run`, `Cache`, and `Graph` send nothing: decision 9 explicitly
-     * refuses task names and command strings, and none of the three has any
-     * other field worth reporting. */
-    if result.is_ok() {
-        match &cli.command {
-            Command::New(args) => telemetry::record("new", &args.layers, args.preset.as_deref()),
-            Command::Run(_) | Command::Cache(_) | Command::Graph(_) => {}
-        }
-    }
+    /* Here, never in the command modules: this binary is the one caller a
+     * test never goes through (`tests/cli.rs` calls the commands directly
+     * precisely to avoid spawning it), which is what keeps `cargo test` from
+     * touching the network or this machine's real telemetry id on every run.
+     * Sent for failures too, since which stage breaks is the most useful
+     * thing telemetry can say. The error itself is never sent, only the
+     * stage the command had reached, from a closed set. */
+    let (command, stage, cancelled, scaffold, run) = match cli.command {
+        Command::New(_) => (
+            "new",
+            new_report.stage,
+            new_report.cancelled,
+            Some(new_report.scaffold),
+            None,
+        ),
+        Command::Run(_) => ("run", run_report.stage, false, None, Some(run_report.run)),
+        Command::Cache(_) => ("cache", ErrorKind::Cache, false, None, None),
+        Command::Graph(_) => ("graph", ErrorKind::Graph, false, None, None),
+    };
+    let (exit, error_kind) = match &result {
+        _ if cancelled => (Exit::Cancelled, None),
+        Ok(()) => (Exit::Ok, None),
+        Err(error) => (Exit::Error, Some(error_kind(error, stage))),
+    };
+    telemetry::record(Outcome {
+        command,
+        exit,
+        error_kind,
+        duration_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+        scaffold,
+        run,
+    });
 
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -80,5 +106,15 @@ fn main() -> ExitCode {
             eprintln!("error: {e:#}");
             ExitCode::FAILURE
         }
+    }
+}
+
+/// A task's own command failing is told apart from culm failing around it;
+/// everything else is the stage the command had reached.
+fn error_kind(error: &anyhow::Error, stage: ErrorKind) -> ErrorKind {
+    match error.downcast_ref::<RunnerError>() {
+        Some(RunnerError::TaskFailed { .. }) => ErrorKind::TaskFailed,
+        _ if stage == ErrorKind::TaskFailed => ErrorKind::Other,
+        _ => stage,
     }
 }
