@@ -263,8 +263,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::open(dir.path()).unwrap();
         let cache_key = key("cargo build");
-        let entry = CacheEntry::record(&cache_key, &run_with("bin/app", b"elf", true), &store)
-            .unwrap();
+        let entry =
+            CacheEntry::record(&cache_key, &run_with("bin/app", b"elf", true), &store).unwrap();
 
         let restore_dir = tempfile::tempdir().unwrap();
         entry.restore(&store, restore_dir.path()).unwrap();

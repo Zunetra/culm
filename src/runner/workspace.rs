@@ -63,7 +63,11 @@ impl Loaded {
         let targets: Vec<String> = self
             .tasks
             .iter()
-            .filter(|task| task.name.rsplit_once(':').is_some_and(|(_, bare)| bare == name))
+            .filter(|task| {
+                task.name
+                    .rsplit_once(':')
+                    .is_some_and(|(_, bare)| bare == name)
+            })
             .map(|task| task.name.clone())
             .collect();
         if targets.is_empty() {
@@ -146,7 +150,8 @@ fn workspace(root: &Path, cwd: &Path) -> Result<Loaded, RunnerError> {
     for (id, (dir, config)) in &projects {
         for mut task in tasks_of(config, id, dir) {
             let bare = task.name.clone();
-            task.depends_on = resolve_dependencies(id, &bare, &task.depends_on, config, &projects, &root_config)?;
+            task.depends_on =
+                resolve_dependencies(id, &bare, &task.depends_on, config, &projects, &root_config)?;
             task.name = qualify(id, &bare);
             tasks.push(task);
         }
@@ -186,12 +191,12 @@ fn resolve_dependencies(
     for entry in raw {
         if let Some(bare) = entry.strip_prefix('^') {
             for dependency in &config.project.dependencies {
-                let (_, other) = projects
-                    .get(dependency.as_str())
-                    .ok_or_else(|| RunnerError::UnknownProject {
+                let (_, other) = projects.get(dependency.as_str()).ok_or_else(|| {
+                    RunnerError::UnknownProject {
                         project: project.to_owned(),
                         dependency: dependency.clone(),
-                    })?;
+                    }
+                })?;
                 if other.tasks.contains_key(bare) {
                     resolved.push(qualify(dependency, bare));
                 }
@@ -249,7 +254,11 @@ mod tests {
 
     fn fixture() -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
-        write(dir.path(), "culm.toml", "[workspace]\n\n[tasks.lint]\ncommand = \"true\"\n");
+        write(
+            dir.path(),
+            "culm.toml",
+            "[workspace]\n\n[tasks.lint]\ncommand = \"true\"\n",
+        );
         write(
             dir.path(),
             "libs/ui/culm.toml",
@@ -280,7 +289,11 @@ mod tests {
     #[test]
     fn without_a_workspace_names_stay_bare() {
         let dir = tempfile::tempdir().unwrap();
-        write(dir.path(), "culm.toml", "[tasks.build]\ncommand = \"true\"\n");
+        write(
+            dir.path(),
+            "culm.toml",
+            "[tasks.build]\ncommand = \"true\"\n",
+        );
         let loaded = load(dir.path(), None).unwrap();
         assert_eq!(names(&loaded), vec!["build"]);
         assert!(loaded.root.is_none());
@@ -292,7 +305,13 @@ mod tests {
         let loaded = load(dir.path(), None).unwrap();
         assert_eq!(
             names(&loaded),
-            vec![".:lint", "apps/web:build", "apps/web:codegen", "apps/web:test", "libs/ui:build"]
+            vec![
+                ".:lint",
+                "apps/web:build",
+                "apps/web:codegen",
+                "apps/web:test",
+                "libs/ui:build"
+            ]
         );
         assert_eq!(loaded.projects, 3);
     }
@@ -301,9 +320,17 @@ mod tests {
     fn each_dependency_form_resolves_to_a_qualified_name() {
         let dir = fixture();
         let loaded = load(dir.path(), None).unwrap();
-        let build = loaded.tasks.iter().find(|t| t.name == "apps/web:build").unwrap();
+        let build = loaded
+            .tasks
+            .iter()
+            .find(|t| t.name == "apps/web:build")
+            .unwrap();
         assert_eq!(build.depends_on, vec!["libs/ui:build", "apps/web:codegen"]);
-        let test = loaded.tasks.iter().find(|t| t.name == "apps/web:test").unwrap();
+        let test = loaded
+            .tasks
+            .iter()
+            .find(|t| t.name == "apps/web:test")
+            .unwrap();
         assert_eq!(test.depends_on, vec!["libs/ui:build"]);
     }
 
@@ -311,7 +338,11 @@ mod tests {
     fn a_task_runs_in_its_own_project_directory() {
         let dir = fixture();
         let loaded = load(dir.path(), None).unwrap();
-        let build = loaded.tasks.iter().find(|t| t.name == "libs/ui:build").unwrap();
+        let build = loaded
+            .tasks
+            .iter()
+            .find(|t| t.name == "libs/ui:build")
+            .unwrap();
         assert_eq!(build.dir, dir.path().join("libs/ui"));
     }
 
@@ -356,6 +387,10 @@ mod tests {
             "[tasks.build]\ncommand = \"true\"\n",
         );
         let loaded = load(dir.path(), None).unwrap();
-        assert!(!names(&loaded).iter().any(|name| name.starts_with("node_modules")));
+        assert!(
+            !names(&loaded)
+                .iter()
+                .any(|name| name.starts_with("node_modules"))
+        );
     }
 }

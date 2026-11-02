@@ -352,9 +352,12 @@ fn a_second_application_namespaces_both_of_them() {
         assert!(root.join(path).is_file(), "{path} is missing");
     }
 
-    let nuxt_manifest = fs::read_to_string(root.join("src/nuxt/package.json"))
-        .expect("nuxt's own package.json");
-    assert!(nuxt_manifest.contains("\"name\": \"demo-nuxt\""), "{nuxt_manifest}");
+    let nuxt_manifest =
+        fs::read_to_string(root.join("src/nuxt/package.json")).expect("nuxt's own package.json");
+    assert!(
+        nuxt_manifest.contains("\"name\": \"demo-nuxt\""),
+        "{nuxt_manifest}"
+    );
     assert!(nuxt_manifest.contains("\"dev\""), "{nuxt_manifest}");
 
     let react_vite_manifest = fs::read_to_string(root.join("src/react-vite/package.json"))
@@ -363,7 +366,10 @@ fn a_second_application_namespaces_both_of_them() {
         react_vite_manifest.contains("\"name\": \"demo-react-vite\""),
         "{react_vite_manifest}"
     );
-    assert!(react_vite_manifest.contains("\"dev\""), "{react_vite_manifest}");
+    assert!(
+        react_vite_manifest.contains("\"dev\""),
+        "{react_vite_manifest}"
+    );
 }
 
 /// The case a shape check alone gets wrong.

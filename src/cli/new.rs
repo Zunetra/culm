@@ -177,7 +177,10 @@ pub fn run_new_reporting(
 
     /* A merge that rendered to nothing is never written (see scaffold::write),
      * so it does not belong in "N files merged" either. */
-    let written_merges = merged.values().filter(|contents| !contents.is_empty()).count();
+    let written_merges = merged
+        .values()
+        .filter(|contents| !contents.is_empty())
+        .count();
     summarise(out, &entries, plan.len(), written_merges, &root)?;
 
     if !args.yes && !confirmed(out)? {
@@ -318,7 +321,11 @@ fn finish_installs(
 
 /* One at a time, so the manager that failed is known without reading the
  * error text: only its program name is reported, never its arguments. */
-fn run_each(commands: &[install::InstallCommand], root: &Path, report: &mut Scaffold) -> Result<()> {
+fn run_each(
+    commands: &[install::InstallCommand],
+    root: &Path,
+    report: &mut Scaffold,
+) -> Result<()> {
     for command in commands {
         if let Err(error) = install::run(std::slice::from_ref(command), root) {
             report.install = Some(Install::Failed);

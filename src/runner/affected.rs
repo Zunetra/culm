@@ -35,12 +35,12 @@ pub fn changed_files(repo_root: &Path, base_ref: &str) -> Result<HashSet<PathBuf
         .ok_or_else(|| unavailable("a bare repository has no working tree".to_owned()))?;
     let workdir = std::fs::canonicalize(workdir).unwrap_or_else(|_| workdir.to_owned());
 
-    let base_object =
-        repo.revparse_single(base_ref)
-            .map_err(|e| RunnerError::UnknownRef {
-                git_ref: base_ref.to_owned(),
-                message: e.message().to_owned(),
-            })?;
+    let base_object = repo
+        .revparse_single(base_ref)
+        .map_err(|e| RunnerError::UnknownRef {
+            git_ref: base_ref.to_owned(),
+            message: e.message().to_owned(),
+        })?;
     let base_tree = base_object
         .peel_to_tree()
         .map_err(|e| unavailable(e.message().to_owned()))?;
@@ -76,7 +76,10 @@ pub fn changed_files(repo_root: &Path, base_ref: &str) -> Result<HashSet<PathBuf
 /// declared `inputs` glob patterns matches a changed file. This is only the
 /// seed set; `TaskGraph::affected_order` is what expands it to the tasks
 /// each seed needs and the tasks that need each seed.
-pub fn seed_tasks<'a>(tasks: &'a [Task], changed: &HashSet<PathBuf>) -> Result<Vec<&'a str>, RunnerError> {
+pub fn seed_tasks<'a>(
+    tasks: &'a [Task],
+    changed: &HashSet<PathBuf>,
+) -> Result<Vec<&'a str>, RunnerError> {
     let mut seeds = Vec::new();
     for task in tasks {
         if task_matches(task, changed)? {
@@ -124,7 +127,10 @@ mod tests {
     }
 
     fn changed(paths: &[&str]) -> HashSet<PathBuf> {
-        paths.iter().map(|path| Path::new("/repo").join(path)).collect()
+        paths
+            .iter()
+            .map(|path| Path::new("/repo").join(path))
+            .collect()
     }
 
     #[test]

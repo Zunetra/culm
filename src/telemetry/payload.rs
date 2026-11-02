@@ -150,7 +150,12 @@ mod tests {
     use super::*;
 
     fn keys(value: &serde_json::Value) -> Vec<&str> {
-        let mut keys: Vec<&str> = value.as_object().unwrap().keys().map(String::as_str).collect();
+        let mut keys: Vec<&str> = value
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
         keys.sort();
         keys
     }

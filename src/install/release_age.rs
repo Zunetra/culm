@@ -145,7 +145,12 @@ pub fn precise_updates(
                     args.push("--manifest-path".to_owned());
                     args.push(manifest.clone());
                 }
-                args.extend(["-p".to_owned(), name.clone(), "--precise".to_owned(), version.clone()]);
+                args.extend([
+                    "-p".to_owned(),
+                    name.clone(),
+                    "--precise".to_owned(),
+                    version.clone(),
+                ]);
                 commands.push(InstallCommand {
                     program: "cargo".to_owned(),
                     args,
@@ -270,15 +275,24 @@ mod tests {
         assert_eq!(split("typescript@<6"), ("typescript", Some("<6")));
         assert_eq!(split("@vitejs/plugin-vue"), ("@vitejs/plugin-vue", None));
         assert_eq!(split("@scope/pkg@^2"), ("@scope/pkg", Some("^2")));
-        assert_eq!(split("github.com/go-chi/chi/v5"), ("github.com/go-chi/chi/v5", None));
+        assert_eq!(
+            split("github.com/go-chi/chi/v5"),
+            ("github.com/go-chi/chi/v5", None)
+        );
     }
 
     #[test]
     fn timestamps_from_both_registries_parse() {
         assert_eq!(unix_seconds("1970-01-01T00:00:00Z"), Some(0));
         assert_eq!(unix_seconds("2000-03-01T00:00:00Z"), Some(951_868_800));
-        assert_eq!(unix_seconds("2024-05-01T12:34:56.789+00:00"), Some(1_714_566_896));
-        assert_eq!(unix_seconds("2024-05-01T14:34:56+02:00"), Some(1_714_566_896));
+        assert_eq!(
+            unix_seconds("2024-05-01T12:34:56.789+00:00"),
+            Some(1_714_566_896)
+        );
+        assert_eq!(
+            unix_seconds("2024-05-01T14:34:56+02:00"),
+            Some(1_714_566_896)
+        );
         assert_eq!(unix_seconds("not a date"), None);
     }
 
@@ -292,7 +306,11 @@ mod tests {
         .unwrap();
         let locks = vec![
             (None, "tokio".to_owned(), "1.40.0".to_owned()),
-            (Some("crates/a/Cargo.toml".to_owned()), "serde".to_owned(), "1.0.200".to_owned()),
+            (
+                Some("crates/a/Cargo.toml".to_owned()),
+                "serde".to_owned(),
+                "1.0.200".to_owned(),
+            ),
             (None, "syn".to_owned(), "2.0.0".to_owned()),
         ];
         let (commands, skipped) = precise_updates(dir.path(), &locks);

@@ -251,12 +251,11 @@ pub fn apply_package_manager_pin(root: &Path) -> Result<(), InstallError> {
     let pinned = pin_pnpm_version()?;
     doc["packageManager"] = serde_json::Value::String(pinned);
 
-    let rendered = serde_json::to_string_pretty(&doc).map_err(|error| {
-        InstallError::MalformedPackageJson {
+    let rendered =
+        serde_json::to_string_pretty(&doc).map_err(|error| InstallError::MalformedPackageJson {
             path: path.clone(),
             message: error.to_string(),
-        }
-    })?;
+        })?;
     std::fs::write(&path, rendered + "\n").map_err(|error| InstallError::NotStarted {
         command: format!("write {}", path.display()),
         message: error.to_string(),
@@ -306,7 +305,9 @@ fn go_module_dir(entry: &CatalogEntry) -> Option<PathBuf> {
 fn pnpm_package_dir(entry: &CatalogEntry) -> Option<PathBuf> {
     entry.manifest.merges.iter().find_map(|merge| match merge {
         MergeSpec::JsonDeep { target, .. }
-            if target.file_name().is_some_and(|name| name == "package.json") =>
+            if target
+                .file_name()
+                .is_some_and(|name| name == "package.json") =>
         {
             target
                 .parent()

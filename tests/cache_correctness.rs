@@ -268,7 +268,11 @@ fn no_cache_runs_for_real_and_records_nothing() {
     fixture.run_with(args);
     fixture.run("build");
 
-    assert_eq!(fixture.runs(), 2, "--no-cache must not have recorded an entry");
+    assert_eq!(
+        fixture.runs(),
+        2,
+        "--no-cache must not have recorded an entry"
+    );
 }
 
 #[test]
@@ -420,6 +424,10 @@ fn in_a_workspace_a_library_change_reruns_the_app_built_on_it() {
     let mut args = fixture.args("build");
     args.config = None;
     fixture.run_with(args);
-    assert_eq!(fixture.runs(), 4, "the library changed, so the app reran too");
+    assert_eq!(
+        fixture.runs(),
+        4,
+        "the library changed, so the app reran too"
+    );
     assert_eq!(fixture.read("apps/web/dist/site.txt"), b"link\nhome\n");
 }

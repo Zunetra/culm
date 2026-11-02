@@ -1,0 +1,3 @@
+[alias]
+culm = "run --quiet --"
+lint = "clippy --all-targets -- -D warnings"

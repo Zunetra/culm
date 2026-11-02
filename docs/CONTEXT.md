@@ -144,6 +144,12 @@ step where the user backed out; for `run`, counts and flags only. Off in
 CI unless `CULM_TELEMETRY=1`, and `DO_NOT_TRACK=1` is honoured. The
 "never sent" list is unchanged and now also names error messages and
 preset sources. The receiver rejects any key not in the spec.
+**Amended 2026-11-02 by the owner: telemetry is opt-in.** It is off
+unless `CULM_TELEMETRY` is `1`, `true`, `on`, or `yes`; unset or any
+other value is off, so `DO_NOT_TRACK` and `CI` no longer need rules of
+their own. The payload, the first-run notice, and the "never sent" list
+are unchanged. Accepted cost: far fewer events, so the layer selection
+data above arrives only from people who chose to send it.
 
 **10. This project is culm, and ipile is the bootstrap tool.** Grain was
 abandoned for colliding with the Grain programming language. Four

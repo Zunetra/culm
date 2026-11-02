@@ -1,71 +1,76 @@
-# culm
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/Logo/culm-wordmark-dark.png"/>
+    <img src="docs/Logo/culm-wordmark.png" alt="culm" width="240"/>
+  </picture>
+</p>
 
-**culm** is the stalk of a grain plant, the structure the grain grows on.
-Four characters, plain ASCII, no diacritics: the folder, the repository,
-the binary, the npm package, the crate, and the domain are all `culm`.
+<h3 align="center">Workspace tooling for polyglot repositories.</h3>
 
-Workspace tooling for polyglot repositories. One binary that scaffolds a
-workspace and then runs its tasks.
+<p align="center">
+  Scaffold a workspace from composable layers · Run its tasks with a content-addressed cache<br/>
+  <b>One Rust binary for repositories that are genuinely more than one language.</b>
+</p>
 
-![Rust](https://img.shields.io/badge/rust-edition%202024-orange)
-![Version](https://img.shields.io/badge/version-0.1.0-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+<p align="center">
+  <a href="./LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-green.svg"/></a>
+  <img alt="Rust 2024" src="https://img.shields.io/badge/rust-edition%202024-orange.svg"/>
+  <img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-blue.svg"/>
+  <img alt="Status pre-alpha" src="https://img.shields.io/badge/status-pre--alpha-lightgrey.svg"/>
+  <img alt="Layers 39" src="https://img.shields.io/badge/layers-39-016630.svg"/>
+</p>
 
-> **Status: pre-alpha.** The `culm` binary exists with four commands:
-> `new`, `run`, `cache`, and `graph`. The scaffolder is the most complete
-> part: 39 layers, a merge engine, a wizard, presets, and a release age
-> guard on every install. The runner caches task results by content,
-> across multi-project workspaces, with `--affected`, `--parallel`, and
-> `--verify`; it is in its r0.2 checkpoint, two weeks of real use before
-> anything else is built on it. Nothing is published. See
-> [Roadmap](#-roadmap) for exactly what is built and what is not.
+> **Status: pre-alpha, nothing is published yet.** You install culm from
+> this source checkout, which takes about two minutes and is walked
+> through step by step in [Your first workspace](#-your-first-workspace).
+> The scaffolder is the most complete half. The runner works and caches,
+> but is in its r0.2 checkpoint: two weeks of real use before anything
+> else is built on it, so treat it as experimental.
+
+**culm** (pronounced *kulm*) is the stalk of a grain plant, the
+structure the grain grows on. Four characters, plain ASCII: the folder,
+the repository, the binary, the npm package, the crate, and the domain
+are all `culm`.
 
 ---
 
 ## 📖 Table of contents
 
-- [What it is](#-what-it-is)
-- [The gap it exists to fill](#-the-gap-it-exists-to-fill)
+- [What culm does](#-what-culm-does)
 - [Features](#-features)
-- [Project structure](#-project-structure)
-- [The layer model](#-the-layer-model)
-- [Shipped layers](#-shipped-layers)
-- [The merge engine](#-the-merge-engine)
-- [Scaffolding](#-scaffolding)
-- [Authoring a layer](#-authoring-a-layer)
-- [Using the library](#-using-the-library)
-- [Development](#-development)
+- [How it works](#-how-it-works)
+- [Your first workspace](#-your-first-workspace), a step by step walkthrough
+- [Running tasks](#-running-tasks), a step by step walkthrough
+- [Command reference](#-command-reference)
+- [Writing `culm.toml`](#-writing-culmtoml)
+- [Environment variables](#-environment-variables)
+- [Architecture](#-architecture)
+- [Repository layout](#-repository-layout)
+- [Rules worth knowing](#-rules-worth-knowing)
+- [Working on culm](#-working-on-culm)
+- [CI and releases](#-ci-and-releases)
 - [Distribution](#-distribution)
-- [Roadmap](#-roadmap)
 - [Troubleshooting](#-troubleshooting)
+- [Documentation](#-documentation)
 - [Contributing](#-contributing)
-- [Documents](#-documents)
+- [Organisation](#-organisation)
 - [Licence](#-licence)
 
-## 🌱 What it is
+## 🌱 What culm does
 
 culm is two halves of one tool, shipped as one binary rather than two
-products. That split is [decision 1](docs/CONTEXT.md#decisions).
+products ([decision 1](docs/CONTEXT.md#decisions)).
 
-**The scaffolder** stands up a workspace so a developer never again
-hand-wires prettier, eslint, rustfmt, clippy, tsconfig paths, ignore
-files, and a workspace manifest at 11pm on day one.
+- **The scaffolder (`culm new`)** stands up a workspace so you never
+  again hand-wire prettier, eslint, rustfmt, clippy, tsconfig paths,
+  ignore files, CI, and a workspace manifest at 11pm on day one. You pick
+  layers (a framework, a database, a linter, a runner), and culm merges
+  them into one consistent repository and installs the dependencies.
+- **The runner (`culm run`)** knows what changed, skips what it can, and
+  caches the rest by content, across a repository that holds more than
+  one language.
 
-**The runner** knows what changed, skips what it can, and caches the rest
-correctly across a repository that is genuinely more than one language.
-
-They are different in every commercial dimension. The scaffolder runs
-once per project and has no catastrophic failure mode. The runner runs
-hundreds of times a day and its worst failure is a silent wrong cache hit
-that ships broken code. They ship as one tool because the scaffolder is
-the acquisition channel and the runner is what retains.
-
-**The scaffolder ships first**, per [decision 2](docs/CONTEXT.md#decisions). It
-is cheaper, lower risk, and it is how anyone finds the runner. Both
-halves are designed in [docs/DESIGN.md](docs/DESIGN.md); the runner is
-partly built and does not cache yet.
-
-## 🕳️ The gap it exists to fill
+### The gap it exists to fill
 
 `create-nx-workspace` will not give you a Cargo workspace, a
 `rustfmt.toml`, a `clippy.toml`, and a pre-commit hook that runs
@@ -82,875 +87,830 @@ the real one and the other as a plugin.
 That is the whole thesis: **be correct about the polyglot case, which is
 the case everyone else bolted on afterwards.**
 
+### What you can scaffold today
+
+| Category | Choose | Layers |
+| --- | --- | --- |
+| shape | exactly one | `single-app`, `monorepo`, `tooling-only` |
+| frontend | depends on shape | `astro`, `next`, `nuxt`, `react-vite`, `svelte`, `vue-vite` |
+| backend | depends on shape | `actix`, `axum`, `express`, `fastify`, `go-chi`, `nestjs` |
+| data | zero or more | `drizzle`, `prisma`, `sqlx` |
+| toolchain | filled in for you | `node-pnpm`, `rust-cargo`, `go-mod` |
+| quality | zero or more, some on by default | `clippy`, `commitlint`, `editorconfig`, `eslint`, `husky`, `prettier`, `rustfmt` |
+| infra | zero or more | `docker-compose`, `dockerfile`, `github-actions` |
+| editor | zero or more | `vscode`, `zed` |
+| runner | exactly one | `none`, `nx`, `turborepo`, `moon`, `culm` |
+| base | always | `base` |
+
+Every layer, what it contributes, and how to write your own:
+[docs/LAYERS.md](docs/LAYERS.md).
+
 ## ✨ Features
 
-Everything in this section is implemented in `src/` and covered by tests.
+Everything here is implemented in `src/` and covered by tests.
 
-### 🧩 The layer format
+### 🧩 Scaffolding
 
-- **A layer is `<category>/<id>`**, a directory holding a `layer.toml`
-  plus the files that layer alone owns.
-- **Ten categories**, declared once in `src/layer/category.rs`, not
-  spread across manifests.
-- **Cardinality is a property of the category and depends on the
-  workspace shape**, so `single-app`, `monorepo`, and `tooling-only` get
-  different rules from one table.
-- **Strict manifest parsing.** `deny_unknown_fields` is on, so a typo
-  such as `defualt = true` is a parse error rather than a silently
-  ignored key.
-- **Strategy-tagged merges**, so a `[[merge]]` entry cannot declare one
-  strategy and carry another's payload.
+- **39 layers across ten categories.** Every application layer is
+  verified by a real install and build, in both `single-app` and
+  `monorepo` shapes.
+- **Three ways to choose**: an interactive wizard, presets (built in, a
+  local file, or a git URL), or `--layer` flags for scripts and CI.
+- **The selection is checked before anything happens.** Each category
+  has rules that depend on the shape, and a contradiction (a frontend in
+  a `tooling-only` workspace) is an error, not a half-built repository.
+- **Toolchains are implied**: pick `next` and `node-pnpm` arrives.
+- **`--save-preset`** writes your exact selection to a file you can
+  reuse or share.
 
-### 🔀 The merge engine
+### 🔀 Merging shared files
 
-- **Three strategies**: `json-deep`, `line-block`, and `toml-members`.
-- **Order independence**, proven by a proptest over every permutation of
-  a generated layer set, not asserted in prose.
-- **Collisions are errors, never last-write-wins**, and every error names
-  both culprit layers and the dotted key.
-- **Provenance tracking**, so a deep conflict names the layer that set
-  the offending leaf rather than the layer that happened to be applied
-  first.
-- **Failed merges leave the document untouched**, matching the
-  all-or-nothing rule for the run as a whole.
-- **A total order over JSON values** that never reports `Equal` for
-  values that differ, including integers beyond `f64` precision.
+- **Six merge strategies** for the files every layer wants a say in:
+  `package.json`, `Cargo.toml`, `.gitignore`, `pnpm-workspace.yaml`, CI
+  workflows, and git hooks.
+- **Order independent**, proven by a property test over every
+  permutation of a generated layer set: the same layers always produce
+  the same bytes.
+- **Collisions are errors that name both layers** and the exact key,
+  never last-write-wins.
 
-### 🏗️ Scaffolding
+### 📦 Installing
 
-- **A copy plan built entirely in memory** and validated before anything
-  touches disk.
-- **Path containment.** A destination that is absolute, rooted, or climbs
-  out with `..` is refused, because a layer is data and data must not be
-  able to write outside the directory it was pointed at.
-- **`{{name}}` interpolation** over a closed set of variables, where an
-  unknown placeholder is left literal rather than blanked.
-- **Identical content from two layers is not a conflict**; differing
-  content at the same destination is.
-- **Unix file modes** are applied where declared, and ignored on
-  platforms with no POSIX permission bits.
+- **Real package managers** (pnpm, cargo, go) install real, current
+  versions. No layer template pins a version.
+- **A release age guard** skips any version published in the last 3
+  days, a defence against freshly compromised packages.
+- **`--no-install`** prints the exact commands instead, for offline or
+  audited setups.
 
-### 🔒 Safety posture
+### 🏃 Running tasks
 
-- `#![forbid(unsafe_code)]` in both `src/lib.rs` and `src/main.rs`, so it
-  is enforced by the compiler rather than by a document asking nicely.
-- Library errors are `thiserror` types. `anyhow` is reserved for the
-  binary boundary that does not exist yet.
-- No version numbers anywhere in a layer template file. Package managers
-  write versions, per [decision 5](docs/CONTEXT.md#decisions), and a test fails
-  if a shipped `[[install]]` entry carries one.
+- **A content-addressed cache** keyed on the command, input file hashes,
+  declared environment variables, platform, and upstream keys.
+- **`--affected <REF>`** runs only what changed since a git ref,
+  including uncommitted work, plus everything downstream.
+- **`--parallel`** runs independent tasks at the same time.
+- **`--verify`** reruns for real and fails on any mismatch with the
+  cache, so a wrong cache hit cannot hide.
+- **Multi-project workspaces**: one `culm.toml` per project, tied
+  together by a root `[workspace]`.
+- **No lock-in**: the scaffolder can just as well write Nx, Turborepo,
+  or Moon configuration, or none.
 
-## 📁 Project structure
+### 🔒 Safety
+
+- **Nothing is half-written.** The whole workspace is planned in memory
+  and only written once everything validates.
+- **A layer cannot write outside the workspace.** Absolute paths and
+  `..` are refused.
+- **`#![forbid(unsafe_code)]`** in the library and the binary.
+- **Telemetry is off by default.** If you opt in, it prints its exact
+  payload on first run.
+
+## ⚙️ How it works
+
+### `culm new`
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor You
+    participant CLI as culm new
+    participant Cat as Layer catalog
+    participant Merge as Merge engine
+    participant Disk as Your disk
+    participant PM as pnpm / cargo / go
+
+    You->>CLI: culm new my-app (wizard, --preset, or --layer)
+    CLI->>Cat: Resolve the selection
+    Cat-->>CLI: Defaults added, toolchains implied, rules checked
+    CLI->>Merge: Every layer's fragments for shared files
+    Merge-->>CLI: package.json, Cargo.toml, .gitignore, ci.yml ... in memory
+    CLI->>You: Show the plan, ask "Write this workspace? [y/N]"
+    You->>CLI: y (or --yes)
+    CLI->>Disk: Write every file in one pass
+    CLI->>PM: Install dependencies, skipping releases younger than 3 days
+```
+
+Nothing touches disk until the whole selection has been validated and
+merged in memory. A conflict between two layers is an error that names
+both of them, never a silent last-write-wins.
+
+### `culm run`
+
+```mermaid
+flowchart LR
+    T[culm run test] --> G[Build the task graph<br/>from every culm.toml]
+    G --> O[Order by depends_on]
+    O --> K[For each task:<br/>hash command, inputs,<br/>declared env, platform,<br/>upstream keys]
+    K --> H{Key in the cache?}
+    H -- yes --> R[Restore outputs and logs<br/>cache hit]
+    H -- no --> X[Run the command<br/>record outputs<br/>cache miss]
+```
+
+Only tasks marked `cache = true` are cached. Everything else runs every
+time.
+
+## 🚀 Your first workspace
+
+This walkthrough takes you from nothing to a running, tested Rust API.
+Every output block below is copied from a real run, with long paths
+shortened.
+
+### Prerequisites
+
+- **Rust**, latest stable, via rustup (step 1)
+- **git**, to get the source
+- **Node and pnpm**, or **Go**, only if you pick JavaScript or Go layers
+  (step 2)
+
+### Step 1. Install Rust
+
+culm is written in Rust, so you need Rust to build it. If `cargo
+--version` already prints a version, run `rustup update` to get the
+latest stable and skip to step 2.
+
+**Linux and macOS:**
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+Accept the defaults, then **open a new terminal** so `cargo` is on your
+`PATH`.
+
+**Windows:** download and run `rustup-init.exe` from
+[rustup.rs](https://rustup.rs/), then open a new terminal.
+
+Check it worked:
+
+```bash
+cargo --version
+```
+
+### Step 2. Install the tools your layers will use
+
+culm runs the real package managers to install dependencies, so you
+need the ones for the layers you pick:
+
+| If you pick | You need | Check with |
+| --- | --- | --- |
+| Rust layers (`axum`, `actix`, `sqlx`, `clippy`, ...) | Rust, from step 1 | `cargo --version` |
+| JavaScript layers (`next`, `nuxt`, `nestjs`, `eslint`, ...) | Node (current LTS) and pnpm | `node --version`, `pnpm --version` |
+| Go layers (`go-chi`) | Go | `go version` |
+| `--affected`, or a preset from a git URL | git | `git --version` |
+
+Not sure yet? Install nothing extra for now. The walkthrough below only
+uses Rust, and `--no-install` (step 5) skips installs entirely.
+
+### Step 3. Get the source and install culm
+
+```bash
+git clone https://github.com/Zunetra/culm.git
+cd culm
+cargo install --path .
+```
+
+The first build downloads and compiles culm's dependencies, which takes
+a minute or two. When it finishes, `culm` is installed into
+`~/.cargo/bin`, which rustup already put on your `PATH`.
+
+Check it worked, from any directory:
+
+```bash
+culm --version
+```
+
+```
+culm 0.1.0
+```
+
+> **Tip:** to try culm without installing it, run `cargo culm <args>`
+> from inside the checkout. `cargo culm` is an alias for
+> `cargo run --quiet --` (see `.cargo/config.toml`). Anything it
+> scaffolds lands inside the checkout, so prefer the installed `culm`
+> for real projects.
+
+### Step 4. Move to where your projects live
+
+`culm new` creates a new folder **inside your current directory**, so
+leave the culm checkout first:
+
+```bash
+cd ~/Projects        # or wherever you keep your work
+```
+
+### Step 5. Scaffold a workspace
+
+There are three ways to choose what goes in it. Pick one.
+
+**Option A, the wizard (easiest the first time):**
+
+```bash
+culm new my-app
+```
+
+The wizard asks one question per screen, in this order: shape, frontend,
+backend, (toolchain, only for `tooling-only`), quality, infra, editor,
+runner.
+
+| Key | Does |
+| --- | --- |
+| `↑` / `↓` (or `k` / `j`) | Move |
+| `Space` | Tick or untick, on screens where you can choose several |
+| `Enter` | Confirm this screen |
+| `Esc` or `q` | Cancel. Nothing is written |
+
+Data layers (`sqlx`, `prisma`, `drizzle`) are not in the wizard yet. Use
+option C to add one.
+
+**Option B, a preset:**
+
+```bash
+culm new my-app --preset backend
+```
+
+| Preset | What you get |
+| --- | --- |
+| `backend` | A single Rust API on Axum |
+| `frontend` | A single Nuxt application |
+| `monorepo` | A Nuxt front end and an Axum service backed by SQLx |
+
+**Option C, layers by hand** (what this walkthrough uses):
+
+```bash
+culm new my-app --layer shape/single-app --layer backend/axum --layer runner/culm
+```
+
+Each `--layer` is `<category>/<id>`, from the table in
+[What you can scaffold today](#what-you-can-scaffold-today). You do not
+have to list toolchains or default quality layers: culm adds them for
+you and shows you exactly what it added.
+
+Whichever option you chose, culm prints the full plan and asks before
+writing anything:
+
+```
+7 layers:
+  backend/axum
+  base/base
+  quality/clippy
+  quality/rustfmt
+  runner/culm
+  shape/single-app
+  toolchain/rust-cargo
+
+8 files copied, 4 files merged
+
+Write this workspace? [y/N]
+```
+
+Type `y` and press `Enter`. culm writes the files, then installs
+dependencies:
+
+```
+Scaffolded my-app into ~/Projects/my-app
+
+Installing dependencies:
+  cargo add --manifest-path crates/axum/Cargo.toml axum@0.8.9 serde_json@1.0.154 thiserror@2.0.21
+  cargo add --manifest-path crates/axum/Cargo.toml --features full tokio@1.54.1
+  cargo add --dev --manifest-path crates/axum/Cargo.toml tower@0.5.3 http-body-util@0.1.5
+```
+
+Notice the exact versions: culm picks them itself, and never one
+released in the last 3 days. That is a supply-chain guard; change it
+with `--min-release-age <DAYS>`, or `0` to turn it off.
+
+**Useful flags for this step:**
+
+| Flag | Use it when |
+| --- | --- |
+| `--yes` | You do not want the `[y/N]` question. **Required in CI** and in scripts, where there is no one to answer it |
+| `--no-install` | You want the files only. culm prints the install commands instead of running them, so you can run them yourself later |
+| `--without <category>/<id>` | You want to drop a layer that would be added by default, such as `--without quality/clippy` |
+| `--save-preset <NAME>` | You want to reuse this exact selection. culm writes `<NAME>.toml` here; next time, `--preset ./<NAME>.toml` |
+
+### Step 6. Look at what you got
+
+```bash
+cd my-app
+```
+
+```
+my-app/
+├── Cargo.toml              # Cargo workspace, members merged from every Rust layer
+├── Cargo.lock
+├── clippy.toml             # from quality/clippy
+├── rustfmt.toml            # from quality/rustfmt
+├── culm.toml               # [workspace], from runner/culm
+├── .env.example
+├── .gitignore              # one block per layer that needs ignores
+├── .github/workflows/ci.yml
+└── crates/axum/
+    ├── Cargo.toml
+    ├── culm.toml           # this app's tasks: dev, build, test
+    ├── src/{main,lib,config,error}.rs
+    └── tests/health.rs
+```
+
+culm does not create a git repository for you. Make one now; you will
+want it for `--affected` later:
+
+```bash
+git init
+git add -A
+git commit -m "chore: scaffold with culm"
+```
+
+### Step 7. Prove it builds
+
+```bash
+cargo test
+```
+
+The `axum` layer ships with real tests, and they pass out of the box:
+
+```
+running 2 tests
+test an_unknown_path_returns_the_shared_error_body ... ok
+test health_reports_ok ... ok
+
+test result: ok. 2 passed; 0 failed
+```
+
+You now have a working workspace. If you chose `runner/culm`, carry on
+to [Running tasks](#-running-tasks). If you chose `nx`, `turborepo`, or
+`moon`, culm already wrote that tool's config; use that tool as you
+normally would.
+
+## 🏃 Running tasks
+
+This continues from step 7 above, inside `my-app`, and only applies if
+you chose `runner/culm`.
+
+> The runner is experimental until its r0.2 checkpoint closes. Use
+> `--verify` freely; it is how wrong cache hits get caught.
+
+### Step 1. See what tasks exist
+
+```bash
+culm graph
+```
+
+```
+crates/axum:dev
+crates/axum:build
+crates/axum:test
+```
+
+Tasks are named `<project>:<task>`. A project is any folder with its own
+`culm.toml`, and the root `culm.toml` (the one with `[workspace]`) ties
+them together. `culm graph --format dot | dot -Tsvg > graph.svg` draws
+it, if you have Graphviz.
+
+### Step 2. Run a task
+
+```bash
+culm run test
+```
+
+culm runs `build` first, because `test` declares `depends_on =
+["build"]`. Each task prints one line before its own output:
+
+```
+> crates/axum:build (cargo build)
+> crates/axum:test (cargo test) [cache miss]
+...
+1 cached task(s): 0 from cache, 1 run
+```
+
+`[cache miss]` means culm ran the command and stored its result.
+
+### Step 3. Run it again, and watch the cache
+
+```bash
+culm run test
+```
+
+```
+> crates/axum:build (cargo build)
+> crates/axum:test (cargo test) [cache hit]
+1 cached task(s): 1 from cache, 0 run
+```
+
+`test` did not run. culm saw that nothing it depends on had changed and
+replayed the stored output instead. (`build` ran again because the
+scaffolded `build` task is not marked `cache = true`.)
+
+### Step 4. Change something
+
+Edit any file under `crates/axum/src/` and run it a third time:
+
+```
+> crates/axum:test (cargo test) [cache miss]
+1 cached task(s): 0 from cache, 1 run
+```
+
+The input changed, so the key changed, so `test` ran for real.
+
+### Step 5. Everything else you will reach for
+
+```bash
+culm run test --parallel          # run independent tasks at the same time
+culm run test --no-cache          # run for real, read and write no cache
+culm run test --verify            # run for real AND fail if the result differs from the cache
+culm run --affected main          # only tasks whose inputs changed since main, plus what depends on them
+culm cache stats                  # e.g. "3 objects, 1636 bytes, at ~/.cache/culm/cas"
+culm cache clear                  # empty the cache; the next run of every task is a miss
+```
+
+> **Watch out with `--affected`:** a task with no `inputs` always counts
+> as affected, because guessing "unaffected" is the dangerous direction.
+> The scaffolded `dev` task has no inputs and starts a server that never
+> exits, so `culm run --affected main` will start it. Give `dev`
+> `inputs`, or stop it with `Ctrl+C`.
+
+Run `culm run` from the workspace root to run a task in every project
+that has it. Run it inside a project folder to run only that project's.
+
+## 📟 Command reference
+
+Run any command with `--help` for the full text.
+
+| Command | What it does |
+| --- | --- |
+| `culm new <PROJECT>` | Scaffold a workspace into `./<PROJECT>`. Refuses a folder that exists and is not empty |
+| `culm run [TASK]` | Run a task and everything it `depends_on`, using the cache |
+| `culm graph` | Print the task graph |
+| `culm cache stats` / `culm cache clear` | Inspect or empty the local cache |
+
+### Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Success. Also when you answer `N` to "Write this workspace?", since declining is not an error |
+| `1` | Any failure: invalid selection, merge conflict, failed install, unknown task, a task's command failing, or a `--verify` mismatch. The reason is printed as `error: ...` on stderr |
+| `2` | The command line itself was invalid, such as an unknown flag |
+
+### `culm new`
+
+| Flag | Meaning |
+| --- | --- |
+| `--layer <ID>` | Include a layer, as `<category>/<id>`. Repeat for several |
+| `--preset <NAME>` | Start from a preset instead of listing layers. Cannot be combined with `--layer` yet |
+| `--without <ID>` | Drop a layer that would otherwise arrive as a default |
+| `--yes` | Skip the confirmation. Required when there is no terminal |
+| `--no-install` | Write files, print install commands instead of running them |
+| `--min-release-age <DAYS>` | Never install a release younger than this. Default `3`, `0` turns it off |
+| `--save-preset <NAME>` | Save the resolved selection as `<NAME>.toml` in the current directory |
+| `--layers-dir <PATH>` | Read layers from a folder instead of the ones built in. For authoring layers |
+
+`--preset` accepts four forms:
+
+| Form | Example |
+| --- | --- |
+| A first-party name | `--preset monorepo` |
+| A local file | `--preset ./team.toml` |
+| GitHub or GitLab shorthand, optional path and ref | `--preset github:acme/presets/api.toml@v1` |
+| A full git URL (reads `preset.toml` on the default branch) | `--preset https://git.example.com/acme/presets.git` |
+
+A remote preset is only ever a list of layer names. No file or script is
+downloaded into your workspace from it.
+
+### `culm run`
+
+| Flag | Meaning |
+| --- | --- |
+| `--affected <REF>` | Instead of naming a task, run tasks affected by changes since `REF` (committed or not), plus everything downstream |
+| `--parallel` | Run independent tasks concurrently, level by level |
+| `--no-cache` | Run everything for real, read and write no cache |
+| `--verify` | Run everything for real, fail if a cacheable task's output differs from its cache entry |
+| `--cache-dir <PATH>` | Use this folder as the cache |
+| `--config <PATH>` | Read this `culm.toml` instead of the one in the current directory |
+
+### `culm graph` and `culm cache`
+
+| Command | Meaning |
+| --- | --- |
+| `culm graph --format list` | One task per line, in a valid run order (the default) |
+| `culm graph --format dot` | Graphviz DOT, for `dot -Tsvg` |
+| `culm cache --root <PATH> stats` | Use a cache folder other than the default. Note `--root` comes before `stats` / `clear` |
+
+## 📝 Writing `culm.toml`
+
+`culm new --layer runner/culm` writes these for you. You only need this
+section to add or change tasks.
+
+**The root `culm.toml`** marks the workspace. It is just:
+
+```toml
+[workspace]
+```
+
+**Each project's `culm.toml`** declares its tasks:
+
+```toml
+[project]
+dependencies = ["libs/ui"]          # other projects, by path from the root
+
+[tasks.build]
+command = "pnpm run build"
+inputs = ["src/**/*", "package.json", "../../pnpm-lock.yaml"]
+outputs = ["dist/**"]
+depends_on = ["^build"]             # build in every project under [project].dependencies
+cache = true
+
+[tasks.test]
+command = "cargo test"
+inputs = ["**/*", "../../Cargo.lock"]
+depends_on = ["build"]
+cache = true
+declared_env = ["RUSTFLAGS"]
+```
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `command` | required | The shell command, run in the project's folder |
+| `inputs` | none | Globs, relative to the project. Their contents are part of the cache key. **No inputs means "always affected"** |
+| `outputs` | none | Globs of files the task produces. Stored on a miss, restored on a hit |
+| `depends_on` | none | `"build"` (same project), `"libs/ui:build"` (a named project), or `"^build"` (every dependency project) |
+| `cache` | `false` | Whether this task is cached at all |
+| `declared_env` | none | Environment variables whose values are part of the key. Nothing else from the environment is |
+
+**What goes into the cache key:** the task name, the command, the hash
+of every input file, the declared environment variables, the OS and
+architecture, and the key of every task it depends on. Change any of
+those and the task runs. The cache lives in your OS cache folder
+(`~/.cache/culm/cas` on Linux, `~/Library/Caches/culm/cas` on macOS),
+never inside your workspace.
+
+Full design: [docs/DESIGN.md section 3](docs/DESIGN.md).
+
+## 🌍 Environment variables
+
+All optional.
+
+```bash
+# Telemetry is off by default. 1, true, on, or yes opts in, even in CI.
+# Unset, or any other value, keeps it off.
+CULM_TELEMETRY=1
+
+# Send telemetry to another receiver, for testing one.
+CULM_TELEMETRY_ENDPOINT=http://localhost:8787/events
+
+# Hide the start-up banner. NO_COLOR does the same, whatever its value,
+# and the banner is always hidden when output is piped.
+CULM_NO_BANNER=1
+NO_COLOR=1
+```
+
+**About telemetry.** It is off unless you set `CULM_TELEMETRY=1`. If
+you do, culm prints the exact JSON it sends on first run, along with how
+to turn it off. It sends an anonymous machine id, the culm
+version, OS and architecture, the command, and which layers and preset
+were chosen. It never sends repository names, file paths, task names,
+commands, environment values, or git remotes. The full payload is in
+[docs/TELEMETRY.md](docs/TELEMETRY.md). The receiver is not deployed
+yet, so nothing currently arrives anywhere.
+
+## 🏛️ Architecture
+
+```mermaid
+flowchart LR
+    subgraph Bin["culm binary"]
+        MAIN[main.rs] --> CLI[cli<br/>new · run · graph · cache]
+    end
+    CLI --> WIZ[wizard<br/>ratatui prompts]
+    CLI --> PRE[preset<br/>name · file · git URL]
+    CLI --> LAY[layer<br/>catalog · resolve · validate]
+    LAY --> MER[merge<br/>six strategies]
+    LAY --> SCA[scaffold<br/>plan · interpolate · write]
+    CLI --> INS[install<br/>pnpm · cargo · go<br/>release age guard]
+    CLI --> RUN[runner<br/>culm.toml · graph · affected · parallel]
+    RUN --> CAS[cas<br/>blake3 content store]
+    CLI --> TEL[telemetry]
+    LAYERS[(layers/ and presets/<br/>compiled into the binary)] --> LAY
+```
+
+| Module | Responsibility |
+| --- | --- |
+| `layer` | Loads every `layer.toml`, adds defaults and implied toolchains, and checks the selection against each category's rules for the chosen shape |
+| `merge` | Combines fragments from many layers into one shared file. Six strategies: `json-deep`, `line-block`, `toml-members`, `yaml-list`, `yaml-steps`, `hook-script`. Order independent, proven by a proptest |
+| `scaffold` | Plans each layer's own files in memory, fills in `{{project_name}}`, refuses any path that escapes the workspace, then writes everything in one pass |
+| `install` | Turns each layer's `[[install]]` entries into pnpm, cargo, and go commands, choosing versions old enough to pass the release age guard |
+| `runner` | Reads `culm.toml` files, builds the task graph, works out what is affected, runs tasks in order or in parallel, and writes Nx, Turborepo, and Moon config for those runner layers |
+| `cas` | The content-addressed store behind the cache: files stored under their blake3 hash |
+| `wizard`, `preset`, `telemetry`, `banner` | The interactive prompts, preset loading, the published telemetry payload, and the banner |
+
+Errors in the core modules (`layer`, `merge`, `scaffold`, `cas`) are
+`thiserror` types. `anyhow` is used only at the command boundary:
+`main.rs`, `cli/`, `wizard/`, and `runner/registration.rs`. Both
+`src/lib.rs` and `src/main.rs` carry `#![forbid(unsafe_code)]`.
+
+How the merge engine and scaffold pipeline work inside:
+[docs/INTERNALS.md](docs/INTERNALS.md).
+
+## 📁 Repository layout
 
 ```
 culm/
 ├── src/
-│   ├── lib.rs                     # Crate root, forbids unsafe, declares the modules
 │   ├── main.rs                    # Binary entry point: new, run, cache, graph
+│   ├── lib.rs                     # Crate root, forbids unsafe, declares the modules
 │   ├── banner.rs                  # Terminal banner, silenced by NO_COLOR or CULM_NO_BANNER
-│   ├── cli/                       # new, run, cache, and graph, each callable from a test
-│   ├── wizard/                    # The ratatui prompts, falling back to flags off a terminal
-│   ├── preset/                    # Git URL, local file, and saved presets
-│   ├── install/                   # Runs [[install]] entries through pnpm, cargo, and go
-│   ├── telemetry/                 # The published payload, opt out with CULM_TELEMETRY=0
-│   ├── cas/                       # Content-addressable store, blake3 addressed
-│   ├── runner/                    # culm.toml, workspaces, task graph, the cache, affected,
-│   │                              #   parallel, remote cache client, and the nx, turborepo,
-│   │                              #   moon, and culm config writers
-│   ├── layer/                     # The layer format
-│   │   ├── mod.rs                 # Declares and re-exports, holds no logic
-│   │   ├── category.rs            # The ten categories, Shape, and shape-dependent cardinality
-│   │   ├── manifest.rs            # layer.toml parsing, and conversion to the merge engine's Layer
-│   │   ├── catalog.rs             # Walks a directory tree and loads every layer.toml it finds
-│   │   ├── resolve.rs             # Expands what the user chose into the complete legal selection
-│   │   ├── selection.rs           # The questions both validate and resolve ask about a selection
-│   │   ├── validate.rs            # Checks a selection against every category's cardinality
-│   │   └── error.rs               # LayerError, the module's public contract for failure
-│   ├── merge/                     # The merge engine
-│   │   ├── mod.rs                 # LayerId, Strategy, Contribution, FileSet, MergeError
-│   │   ├── json_deep.rs           # Recursive object merge, array union, provenance, total ordering
-│   │   ├── line_block.rs          # One `# layer:<id>` delimited block per layer
-│   │   └── toml_members.rs        # A Cargo workspace members array, unioned and sorted
-│   └── scaffold/                  # Copying a layer's own files
-│       ├── mod.rs                 # Declares and re-exports
-│       ├── plan.rs                # CopyPlan, PlannedFile, and destination normalisation
-│       ├── interpolate.rs         # {{name}} substitution over a closed variable set
-│       ├── write.rs               # The only function that touches disk
-│       └── error.rs               # ScaffoldError
-├── layers/                        # The shipped layer catalog, one directory per layer
-│   ├── base/base/                 # Ignores that belong to no framework, plus .env.example
-│   ├── shape/                     # monorepo, single-app, tooling-only
-│   ├── frontend/                  # astro, next, nuxt, react-vite, svelte, vue-vite
-│   ├── backend/                   # actix, axum, express, fastify, nestjs
-│   ├── data/                      # drizzle, prisma, sqlx
-│   ├── toolchain/                 # node-pnpm, rust-cargo
-│   ├── quality/                   # clippy, eslint, prettier, rustfmt
-│   └── runner/                    # none, nx, turborepo, moon, culm
+│   ├── cli/                       # One file per command, each callable from a test
+│   ├── wizard/                    # The ratatui prompts
+│   ├── preset/                    # First-party, file, and git URL presets
+│   ├── layer/                     # The layer format: catalog, resolve, validate
+│   ├── merge/                     # The merge engine, one file per strategy
+│   ├── scaffold/                  # Copy plan, {{name}} interpolation, the one disk write
+│   ├── install/                   # pnpm, cargo, go installs and the release age guard
+│   ├── runner/                    # culm.toml, task graph, cache, affected, parallel,
+│   │                              #   remote cache client, nx/turborepo/moon writers
+│   ├── cas/                       # Content-addressed store, blake3
+│   └── telemetry/                 # The published payload and the sender
+├── layers/<category>/<id>/        # The 39 shipped layers, compiled into the binary
+├── presets/                       # backend, frontend, monorepo
 ├── tests/
-│   ├── layers.rs                  # Exercises every shipped layer, discovered by walking layers/
+│   ├── cli.rs                     # Drives the commands end to end
+│   ├── layers.rs                  # Every shipped layer, found by walking layers/
 │   ├── scaffold.rs                # End-to-end scaffolds into a temporary directory
-│   ├── order_independence.rs      # The proptest: any permutation renders identical bytes
-│   ├── cache_correctness.rs       # Runs tasks twice and compares restored bytes, not log lines
-│   └── order_independence.proptest-regressions  # Seeds for failures already found
+│   ├── order_independence.rs      # Proptest: any layer order renders identical bytes
+│   └── cache_correctness.rs       # Compares restored bytes, not "cache hit" log lines
 ├── docs/
-│   ├── CONTEXT.md                 # Decisions, conventions, and context worth keeping. Read first.
-│   ├── DESIGN.md                  # How both halves work, the benchmark method, and what is left
-│   └── TELEMETRY.md               # The exact payload, published verbatim
-├── presets/                       # First-party presets: backend, frontend, monorepo
-├── telemetry/worker/              # The receiver, written and not deployed
-├── npm/                           # The npm launcher and the script that stages platform packages
-├── packaging/homebrew/            # The formula template release.yml renders into the tap
-├── installer.sh                   # The shell installer, verifies SHA256SUMS
-├── deny.toml                      # cargo deny policy: licenses, sources, advisories
+│   ├── CONTEXT.md                 # Every settled decision and convention. Read first
+│   ├── DESIGN.md                  # How both halves work, and what is left
+│   ├── LAYERS.md                  # The layer model, every shipped layer, authoring
+│   ├── INTERNALS.md               # The merge engine, scaffold pipeline, library use
+│   ├── TELEMETRY.md               # The exact telemetry payload
+│   └── Logo/                      # The culm marks
+├── telemetry/worker/              # The telemetry receiver, written, not deployed
+├── npm/                           # npm launcher and platform package staging
+├── packaging/homebrew/            # Formula template for the tap
+├── installer.sh                   # Shell installer, verifies SHA256SUMS
+├── .cargo/config.toml             # cargo culm and cargo lint aliases
 ├── .github/workflows/             # ci, templates (weekly), release
-├── Cargo.toml                     # Single package, edition 2024
+├── deny.toml                      # cargo deny policy
+├── Cargo.toml                     # One crate, edition 2024
 └── LICENSE                        # MIT
 ```
 
-Two layout rules, both from [docs/CONTEXT.md](docs/CONTEXT.md):
-
-- **culm is a single crate**, not a Cargo workspace, and has no `crates/`
-  directory. Splitting a module into a crate later is mechanical.
-  Un-splitting a premature workspace is not.
-- **A module is a directory with a `mod.rs`**, and that `mod.rs` declares
-  and re-exports and holds no logic of its own.
-
-## 🧱 The layer model
-
-A **layer** is a directory of files plus a manifest describing how it
-merges into files other layers also touch. **No combination of layers is
-ever authored by hand.** That is the entire design, and abandoning it is
-how every scaffolder before this one died.
-
-### Identity
-
-A layer's identity is **`<category>/<id>`**, never the bare id.
-
-- `none` is a legitimate answer in more than one category, and the merge
-  engine keys line blocks by identity, so two layers called `none` would
-  silently share a block.
-- Presets travel by git URL, so a third party will eventually ship a
-  `nuxt` layer that is not ours.
-
-`requires` and `conflicts` name qualified ids for the same reason.
-
-### Categories and cardinality
-
-Cardinality is declared on the category and depends on the workspace
-shape, because "which framework does this app use" and "how many apps are
-there" are two different questions a flat per-category rule cannot tell
-apart.
-
-| Category | `single-app` | `monorepo` | `tooling-only` |
-| --- | --- | --- | --- |
-| `base` | exactly one | exactly one | exactly one |
-| `shape` | exactly one | exactly one | exactly one |
-| `frontend` | zero or one | zero or more | **none** |
-| `backend` | zero or one | zero or more | **none** |
-| `data` | zero or one | zero or more | **none** |
-| `toolchain` | zero or more | zero or more | **one or more** |
-| `quality` | zero or more | zero or more | zero or more |
-| `runner` | exactly one | exactly one | exactly one |
-| `infra` | zero or more | zero or more | zero or more |
-| `editor` | zero or more | zero or more | zero or more |
-
-One extra rule spans two categories and therefore lives in validation
-rather than in a cardinality: **a `single-app` selection needs at least
-one frontend or backend.** A single app with neither is not a workspace,
-it is a bare toolchain.
-
-### Why the shapes differ
-
-- **`single-app`** holds one app, and one app runs on one framework.
-- **`monorepo`** holds many, and a Nuxt marketing site beside a React
-  admin panel, or a Rust service beside a Node BFF, is the reason someone
-  reaches for a monorepo at all.
-- **`tooling-only`** takes no framework layers, because a framework layer
-  scaffolds an app and an app implies a shape. Naming both is a
-  contradiction, and it is rejected rather than half-scaffolded. The
-  toolchain flips from implied to required here, since with no framework
-  there is nothing left to imply it.
-
-`tooling-only` is named for what it gives you rather than for what it
-withholds. A shape called `none` tells the user nothing.
-
-### Why role, not language
-
-The user never answers "which language". Picking `backend/axum` implies
-Rust, which implies `toolchain/rust-cargo`, which implies `rustfmt` and
-`clippy`. The framework choice already contains the language, so asking
-separately is asking the user to state the same fact twice and then
-giving them a way to contradict themselves.
-
-### Selection errors
-
-`validate_selection` returns a named `LayerError` rather than a bare
-boolean. The variants that a selection can produce:
-
-| Error | When |
-| --- | --- |
-| `ShapeMissing` | No `shape` layer in the selection |
-| `UnknownShape` | A `shape` layer whose id is none of the three |
-| `CategoryEmpty` | A category needing at least one layer has none |
-| `CategoryForbidden` | A layer in a category the shape forbids |
-| `CategoryOverfull` | More than one layer in an at-most-one category |
-| `SingleAppHasNoApp` | `single-app` with no frontend and no backend |
-| `DuplicateId` | The same qualified id twice in one selection |
-| `MissingRequirement` | A `requires` entry nothing in the selection provides |
-| `Conflicting` | Two selected layers declare each other exclusive |
-
-### Resolution
-
-`resolve` turns what the user asked for into the complete legal
-selection, then runs it through `validate_selection` so a caller cannot
-forget to check it. The rules, in order:
-
-1. **Requirements are closed over, but only a toolchain is added on a
-   layer's behalf.** Node and pnpm follow any JS app and Rust and cargo
-   follow any Rust one, and both answers are forced, so asking would be
-   theatre. Any other unmet requirement stays an error, because quietly
-   choosing somebody's database for them is a guess dressed up as an
-   implication.
-2. **The shape is settled next**, falling back to the layer marked
-   `default` in the `shape` category. Cardinality depends on the shape,
-   so nothing else can be tested until it is known.
-3. **Defaults are added**, but only where the category has a free slot,
-   the layer's own requirements are already met, and it conflicts with
-   nothing selected. This is what makes quality tooling follow the
-   language: `quality/prettier` requires `toolchain/node-pnpm`, so it
-   appears in a JS workspace and stays away from a Rust-only one without
-   a single rule naming either.
-4. **A runner is filled in** if none was chosen. No runner layer is a
-   default, because the right answer is not a property of the runner:
-   `runner/nx` requires `toolchain/node-pnpm`, so a Rust-only workspace
-   can only take `runner/none` or `runner/culm`, which requires nothing.
-5. **Conflicts are checked symmetrically**, so one layer declaring the
-   pair is enough and the two manifests cannot drift.
-
-Explicit choices outrank opt-outs. Opting out only suppresses a layer
-that would have arrived as a default.
-
-## 📚 Shipped layers
-
-Thirty-eight layers live under `layers/`. Every one of them is loaded,
-parsed, and merge-tested by `tests/layers.rs`, which discovers them by
-walking the tree rather than reading a list, so a layer added tomorrow is
-covered without anybody remembering to register it.
-
-### base (1)
-
-| Layer | Default | What it contributes |
-| --- | --- | --- |
-| `base/base` | ✅ | The ignores that belong to no framework, plus a committed `.env.example` |
-
-Deliberately short. It carries OS and editor noise, `.env`, and `*.log`,
-and no framework's build output, because each framework layer ignores its
-own. A generated ignore file full of rules for tools the project does not
-use teaches people to stop reading it.
-
-### shape (3)
-
-| Layer | Default | What it contributes |
-| --- | --- | --- |
-| `shape/single-app` | ✅ | Nothing. Its job is to select the cardinality rules |
-| `shape/monorepo` | | Nothing, same reason |
-| `shape/tooling-only` | | Nothing, same reason |
-
-### frontend (6)
-
-Each contributes namespaced `package.json` scripts plus its own ignore
-lines, and requires `toolchain/node-pnpm`.
-
-| Layer | Scripts | Ignores |
-| --- | --- | --- |
-| `frontend/astro` | `dev:astro`, `build:astro`, `preview:astro`, `check:astro` | `dist/`, `.astro/` |
-| `frontend/next` | `dev:next`, `build:next`, `start:next`, `lint:next` | `.next/`, `out/`, `next-env.d.ts`, `.vercel/` |
-| `frontend/nuxt` | `dev:nuxt`, `build:nuxt`, `preview:nuxt`, `generate:nuxt` | `.nuxt/`, `.output/`, `.data/`, `dist/` |
-| `frontend/react-vite` | `dev:react-vite`, `build:react-vite`, `preview:react-vite` | `dist/`, `vite.config.ts.timestamp-*` |
-| `frontend/svelte` | `dev:svelte`, `build:svelte`, `preview:svelte`, `check:svelte` | `.svelte-kit/`, `build/`, `dist/` |
-| `frontend/vue-vite` | `dev:vue-vite`, `build:vue-vite`, `preview:vue-vite` | `dist/`, `vite.config.ts.timestamp-*` |
-
-Every script is suffixed with the layer id. A monorepo may hold several
-frontends, and two layers writing different values to `scripts.dev` is a
-hard merge error rather than something to resolve silently.
-
-`frontend/nuxt` deliberately does **not** contribute `postinstall`. That
-key has to keep its literal name to work, so it cannot be namespaced, and
-a second framework needing its own postinstall step would collide on it.
-
-### backend (6)
-
-| Layer | Requires | Notes |
-| --- | --- | --- |
-| `backend/actix` | `toolchain/rust-cargo` | Binary at `src/bin/actix.rs` |
-| `backend/axum` | `toolchain/rust-cargo` | Binary at `src/bin/axum.rs` |
-| `backend/express` | `toolchain/node-pnpm` | Server at `src/express/server.js` |
-| `backend/fastify` | `toolchain/node-pnpm` | Server at `src/fastify/server.js` |
-| `backend/nestjs` | `toolchain/node-pnpm` | Sources under `src/nestjs/`, plus `nest-cli.json` |
-| `backend/go-chi` | `toolchain/go-mod` | `{{app_dir}}/go.mod` is a complete module on its own, no `[[merge]]` entry |
-
-The two Rust backends put their entry point under `src/bin/` rather than
-at `src/main.rs`, so a second Rust service in the same workspace has a
-target of its own instead of a collision. Neither touches `package.json`,
-because a Rust-only workspace has none and inventing one would leave a
-JavaScript project behind for nobody to run.
-
-The Node backends use CommonJS and contribute no root `type` key. That
-key is a whole-workspace switch, and one app's module system is not a
-decision a single layer gets to make for every other app beside it.
-
-`backend/nestjs` installs no HTTP platform adapter. Which server sits
-underneath belongs to whoever selects the layer.
-
-### data (3)
-
-Data is its own category because it is chosen *alongside* a backend
-rather than instead of one. Nest with Prisma is an ordinary pairing.
-
-| Layer | Requires | Contributes |
-| --- | --- | --- |
-| `data/drizzle` | `toolchain/node-pnpm` | `generate:drizzle`, `migrate:drizzle`, `studio:drizzle`, config and schema files |
-| `data/prisma` | `toolchain/node-pnpm` | `generate:prisma`, `migrate:prisma`, `studio:prisma`, `prisma/schema.prisma` |
-| `data/sqlx` | `toolchain/rust-cargo` | `migrations/0001_init.sql` |
-
-All three add a `DATABASE_URL` line to `.env.example` rather than
-defaulting one. A committed file holding a working credential is how a
-real one ends up in a repository.
-
-### toolchain (3)
-
-| Layer | Contributes |
-| --- | --- |
-| `toolchain/node-pnpm` | `private: true` in `package.json`, plus `node_modules/`, `.pnpm-store/`, `.npm/` |
-| `toolchain/rust-cargo` | `/target`, `**/*.rs.bk`, `*.pdb` |
-| `toolchain/go-mod` | `*.exe`, `*.test`, `*.out`, `vendor/`. No root manifest: every Go app owns a complete module in `{{app_dir}}` |
-
-`private` is the one root key every JS layer can agree on, and they all
-agree on the same value, so it merges rather than conflicts.
-
-`toolchain/rust-cargo` contributes no `Cargo.toml`. Whether the
-repository is one crate or many is the shape layer's business, and
-guessing wrong would clobber a real manifest in an existing repository.
-
-### quality (7)
-
-| Layer | Default | Requires | Contributes |
-| --- | --- | --- | --- |
-| `quality/prettier` | ✅ | `toolchain/node-pnpm` | `format`, `format:check`, `.prettierrc`, `.prettierignore` |
-| `quality/eslint` | ✅ | `toolchain/node-pnpm` | `lint`, `lint:fix`, `eslint.config.mjs`, `.eslintcache` ignore |
-| `quality/rustfmt` | ✅ | `toolchain/rust-cargo` | `rustfmt.toml` |
-| `quality/clippy` | ✅ | `toolchain/rust-cargo` | `clippy.toml` |
-| `quality/husky` | ✅ | `toolchain/node-pnpm` | `.husky/pre-commit`, `.lintstagedrc.json`, installs `husky` and `lint-staged` |
-| `quality/commitlint` | ✅ | `toolchain/node-pnpm`, `quality/husky` | `.husky/commit-msg`, `commitlint.config.mjs`, installs `@commitlint/cli` |
-| `quality/editorconfig` | ✅ | `toolchain/node-pnpm` | `.editorconfig` |
-
-Quality scripts are **not** namespaced, unlike the frontend ones. At most
-one of each quality layer is selected, so `format` has a single owner and
-cannot collide the way `dev` would across several frontends.
-
-`quality/eslint` ships flat config only. `.eslintignore` was removed in
-flat config, so ignores live inside `eslint.config.mjs`.
-
-`quality/rustfmt` and `quality/clippy` contribute a config file and no
-script, because Cargo already ships the command and there is no
-`package.json` in a Rust-only repository to hang one on.
-
-### runner (4)
-
-| Layer | Requires | Contributes |
-| --- | --- | --- |
-| `runner/nx` | `toolchain/node-pnpm` | `.nx/cache` and `.nx/workspace-data` ignores, installs `nx` |
-| `runner/turborepo` | `toolchain/node-pnpm` | `.turbo/` ignore, installs `turbo`. `turbo.json` is written by `culm new` from the final app layout |
-| `runner/moon` | `toolchain/node-pnpm` | `.moon/cache/` ignore, installs `@moonrepo/cli`. The workspace and per-project files are written by `culm new` |
-| `runner/culm` | | Nothing to install. `culm new` writes a root `culm.toml` with `[workspace]` and one per app; `test` is cached, `build` and `dev` are not |
-| `runner/none` | | Nothing, and that is the point |
-
-`runner/none` has to be a real selectable answer rather than an absence
-the validator rejects, because [decision 3](docs/CONTEXT.md#decisions) says the
-scaffolder must be able to emit somebody else's runner or nothing at all.
-If the scaffolder ever emits configuration only culm's runner can
-consume, the entire argument for building the scaffolder first collapses.
-
-### infra (3)
-
-| Layer | Default | Requires | Contributes |
-| --- | --- | --- | --- |
-| `infra/dockerfile` | | | A `Dockerfile` per app |
-| `infra/docker-compose` | | `infra/dockerfile` | `compose.yaml`, merged `.env.example` |
-| `infra/github-actions` | | | `.github/workflows/ci.yml` |
-
-### editor (2)
-
-| Layer | Default | Requires | Contributes |
-| --- | --- | --- | --- |
-| `editor/vscode` | | `quality/prettier` | `.vscode/settings.json`, `.vscode/extensions.json` |
-| `editor/zed` | | | `.zed/settings.json` |
-
-All five are `zero or more` under every shape, so any combination, or
-none, is a legal selection.
-
-## 🔀 The merge engine
-
-This is the actual product. Everything else copies files.
-
-The problem: N independent layers each contribute fragments to the same
-shared files, in any selection order, and the result must be identical
-every time and must be a valid file.
-
-```
-  layers/frontend/nuxt/layer.toml ─┐
-  layers/quality/eslint/layer.toml ├─→  Layer  ─→  FileSet  ─→  render()  ─→  bytes
-  layers/toolchain/node-pnpm/…     ─┘   (merges)    (in memory)              (on disk, once)
-                                            │
-                                            └─→  MergeError, naming both layers
-```
-
-Nothing reaches disk until the whole run has validated. A partial
-scaffold is worse than a failed one: a failed one leaves nothing to clean
-up.
-
-### Strategies
-
-| Strategy | Typical target | Behaviour |
-| --- | --- | --- |
-| `json-deep` | `package.json`, `tsconfig.base.json` | Objects merge recursively, arrays union then sort then dedupe, matching scalars agree, differing scalars are an error |
-| `line-block` | `.gitignore`, `.env.example` | One `# layer:<id>` delimited block per layer, blocks sorted by layer id, lines sorted within a block |
-| `toml-members` | `Cargo.toml` | Crate paths unioned into `[workspace].members`, sorted, deduped |
-
-A target is claimed by exactly one strategy. A second layer claiming it
-under another is a `StrategyMismatch` error rather than a guess.
-
-### Rendered output
-
-`json-deep` renders pretty-printed JSON with keys sorted, ending in a
-newline:
-
-```json
-{
-  "name": "app",
-  "version": "0.1.0"
-}
-```
-
-`line-block` renders one labelled block per layer, blank line separated:
-
-```
-# layer:toolchain/node-pnpm
-.npm/
-.pnpm-store/
-node_modules/
-
-# layer:toolchain/rust-cargo
-*.pdb
-**/*.rs.bk
-/target
-```
-
-`toml-members` renders the workspace table with a fixed resolver:
-
-```toml
-[workspace]
-resolver = "3"
-members = [
-    "app",
-    "common",
-]
-```
-
-`resolver` is fixed rather than contributed, because it follows from the
-edition, and a layer choosing it would be a layer deciding something for
-the whole workspace.
-
-### Why collisions are errors
-
-If two layers set `scripts.build` to different strings, the scaffold
-stops and names both. It does not pick one.
-
-Last-write-wins would make the output depend on selection order, which
-destroys the one property this engine exists to guarantee. Worse, it is
-how a generated workspace ends up subtly wrong in a way nobody traces
-back for a week. The same reasoning governs `FileCollision` in the
-scaffold module: two layers writing different content to one destination
-is an error, while two layers writing identical content is not, because a
-shared file written twice is the same file either way.
-
-Set-shaped merges are the exception, and only where the merge genuinely
-is a set. Two layers naming the same Cargo member is agreement, because a
-member list is a set. Two layers naming the same array element is
-agreement, because arrays are unioned. A scalar has no such reading.
-
-### Merge errors
-
-| Error | Meaning |
-| --- | --- |
-| `ScalarConflict` | Two layers set the same key to different values. Names both layers and the dotted key |
-| `TypeConflict` | Two layers put incompatible kinds at the same path, such as an object against a string |
-| `StrategyMismatch` | Two layers claim one target under different strategies |
-| `NonObjectRoot` | A `json-deep` contribution whose root is not an object |
-| `MissingRequirement` | A selected layer needs a layer that was not selected |
-| `Conflicting` | Two selected layers declare each other mutually exclusive |
-
-Every conflict variant names both culprits, because "conflict in
-package.json" without the culprits is useless to whoever hits it. The
-conflict report is also order independent: the reported pair is sorted,
-so the message does not change with selection order.
-
-### Provenance
-
-`json-deep` records which layer set each node, keyed by dotted path, and
-records every node of a subtree inserted in one go. Without that, a deep
-conflict names whichever layer owns the ancestor rather than the layer
-that actually set the offending leaf.
-
-The regression test for this is
-`deep_conflict_names_the_layer_that_set_the_leaf`.
-
-### Order independence
-
-**Applying layers `{a, b, c}` in any permutation produces byte-identical
-output.** This is a property test, not a hope.
-
-`tests/order_independence.rs` generates two to five layers, builds every
-permutation of them, renders each, and asserts the bytes match. A second
-property asserts that every layer actually reaches the output, so the
-first property cannot be satisfied by rendering nothing.
-
-Sorted output everywhere is what makes this testable by byte comparison,
-which is why `FileSet` uses a `BTreeMap` and `LineBlockDoc` keys its
-blocks by layer id.
-
-### The total order invariant, learned the hard way
-
-Any comparator the engine sorts with must be a **total order consistent
-with equality**. It may report `Equal` only when the values genuinely are
-equal.
-
-This was violated once. Array entries are sorted so output does not
-depend on layer order, and the comparator ordered JSON numbers by
-converting both to `f64`. An `f64` carries 53 bits of precision, so
-integers above 2^53 no longer map one to one, and distinct integers
-collapsed onto the same `f64`. The comparator then reported `Equal` for
-numbers that were not equal, Rust's `sort_by` is stable, so it left them
-in arrival order, and arrival order is layer order. The rendered bytes
-changed depending on which layer was applied first.
-
-The fix breaks the tie on the exact textual form of the number. The
-regression test is
-`integers_beyond_f64_precision_still_sort_deterministically`.
-
-Two lessons worth carrying:
-
-- The property test did not catch it. Its generators drew from small
-  value pools and could never produce two numbers that collapse. **A
-  property test is only as strong as the inputs it can reach.**
-- The failure was silent, and silent wrong output is the same category as
-  the runner's worst failure mode.
-
-## 🏗️ Scaffolding
-
-The merge engine decides what shared files contain. The `scaffold` module
-decides what private files a layer copies and where they land. They are
-deliberately separate, because conflating them would put path safety and
-template interpolation inside the one module whose correctness property
-is byte-for-byte determinism.
-
-### The pipeline
-
-```
-  Manifest ─→ CopyPlan::build ─→ CopyPlan ─┐
-                (reads files/,             ├─→ scaffold::write(root, plan, merged)
-                 interpolates,             │        (creates dirs, writes, chmods)
-                 normalises paths)         │
-  Layer ────→ FileSet::build ──→ render() ─┘
-```
-
-### Interpolation
-
-Templates use `{{name}}`. Whitespace inside the braces is tolerated, so
-`{{ project_name }}` and `{{project_name}}` are the same placeholder.
-
-| Input | Variables | Output |
-| --- | --- | --- |
-| `name = "{{project_name}}"` | `project_name=klassivox` | `name = "klassivox"` |
-| `{{ project_name }}` | `project_name=klassivox` | `klassivox` |
-| `{{typo}}` | `project_name=klassivox` | `{{typo}}`, left literal |
-| `fn main() {{ let x = 1;` | any | unchanged, an unterminated `{{` is content |
-
-An unknown placeholder is left exactly as written rather than blanked. A
-silently empty string in a generated config is far harder to notice than
-a literal `{{typo}}`.
-
-The variable set is closed rather than arbitrary user data, so a template
-cannot come to depend on something the wizard does not ask.
-
-### Path containment
-
-A layer is data, and a scaffolder that lets data write outside the
-directory it was pointed at is a scaffolder that can overwrite anything
-the user can. Destinations are normalised before use:
-
-| Destination | Result |
-| --- | --- |
-| `src/main.rs` | `src/main.rs` |
-| `./bacon.toml` | `bacon.toml` |
-| `../../.ssh/authorized_keys` | refused, `EscapesRoot` |
-| `src/../../etc/passwd` | refused, `EscapesRoot` |
-| `/etc/passwd` | refused, `EscapesRoot` |
-| `` or `./` | refused, `EscapesRoot` |
-
-### Scaffold errors
-
-| Error | Meaning |
-| --- | --- |
-| `TemplateMissing` | A `[[files]]` entry names a file the layer directory does not hold |
-| `FileCollision` | Two layers write different content to one destination |
-| `EscapesRoot` | A destination that is absolute, rooted, or climbs out |
-| `Io` | The write itself failed, reported with the path |
-
-## 📝 Authoring a layer
-
-A layer is a directory under `layers/<category>/<id>/` holding a
-`layer.toml` and, optionally, a `files/` directory.
-
-### Full `layer.toml` reference
-
-| Field | Type | Required | Meaning |
-| --- | --- | --- | --- |
-| `id` | string | ✅ | The bare id. Must match the directory name |
-| `category` | string | ✅ | One of the ten categories, kebab-case |
-| `requires` | array of string | | Qualified ids this layer cannot apply without |
-| `conflicts` | array of string | | Qualified ids this layer is mutually exclusive with |
-| `default` | bool | | Selected unless opted out, subject to the resolution rules |
-| `[[files]]` | table array | | Files copied verbatim into the workspace |
-| `[[merge]]` | table array | | Contributions to files other layers may also own |
-| `[[install]]` | table array | | Packages to install after scaffolding |
-
-`[[files]]` entries:
-
-| Field | Type | Required | Meaning |
-| --- | --- | --- | --- |
-| `from` | path | ✅ | Relative to the layer's own directory |
-| `to` | path | ✅ | Relative to the workspace root. Cannot escape it |
-| `mode` | integer | | POSIX permission bits, ignored on non-unix |
-
-`[[merge]]` entries are tagged on `strategy`, and each strategy takes a
-different payload key:
-
-| `strategy` | Payload key | Type |
-| --- | --- | --- |
-| `json-deep` | `value` | table, whose root must be a table |
-| `line-block` | `lines` | array of string |
-| `toml-members` | `members` | array of string |
-
-Every entry also takes `target`, the path relative to the workspace root.
-
-`[[install]]` entries:
-
-| Field | Type | Required | Meaning |
-| --- | --- | --- | --- |
-| `manager` | string | ✅ | `pnpm`, `cargo`, and so on |
-| `dev` | bool | | Whether it is a development dependency |
-| `packages` | array of string | ✅ | Package names, **never with a version** |
-
-Unknown fields are rejected. `deny_unknown_fields` is on for every one of
-these structures, so `defualt = true` is a parse error rather than a
-silently ignored key.
-
-### A worked example
-
-```toml
-# layers/frontend/nuxt/layer.toml
-
-# Nuxt, the Vue meta framework.
-
-id = "nuxt"
-category = "frontend"
-requires = ["toolchain/node-pnpm"]
-default = false
-
-# Scripts are suffixed with the layer id because a monorepo may hold
-# several frontends, and two layers writing different values to
-# `scripts.dev` is a hard merge error rather than a last-one-wins.
-[[merge]]
-strategy = "json-deep"
-target = "package.json"
-[merge.value.scripts]
-"dev:nuxt" = "nuxt dev"
-"build:nuxt" = "nuxt build"
-"preview:nuxt" = "nuxt preview"
-"generate:nuxt" = "nuxt generate"
-
-# Only this framework's own build output. The OS and editor noise is the
-# base layer's job, and duplicating it here would emit two blocks.
-[[merge]]
-strategy = "line-block"
-target = ".gitignore"
-lines = [".nuxt/", ".output/", ".data/", "dist/"]
-
-# No versions. Package managers write versions, per decision 5.
-[[install]]
-manager = "pnpm"
-dev = false
-packages = ["vue", "vue-router"]
-
-[[install]]
-manager = "pnpm"
-dev = true
-packages = ["nuxt", "typescript"]
-```
-
-### Rules a new layer has to follow
-
-These are enforced by `tests/layers.rs`, so breaking one fails the build
-rather than surviving to a release.
-
-1. **`id` matches the directory name**, and the layer sits in the
-   directory named for its category.
-2. **No version numbers in any `[[install]]` package.** The check has its
-   own test proving the check can actually fail, so it cannot rot into a
-   no-op.
-3. **A layer never names another layer in its content.** Not in a package
-   name, not in a script, not in an ignore rule. The moment a special
-   case exists for a specific pair of layers, the combinatorial death has
-   started. This is a kill criterion, not a style note.
-4. **Every declared template file exists** in the layer directory.
-5. **Scripts in a many-per-workspace category are namespaced by layer
-   id.** Quality layers are not, because at most one of each is selected.
-6. **Every quality, backend, and data layer requires a toolchain**, which
-   is what makes tooling follow the language without a rule naming
-   either.
-7. **Every pair of frontends, and every pair of backends, merges
-   cleanly**, since a monorepo may select several.
-8. **A file only one layer touches is copied. A file several might touch
-   is merged.** Copying a shared file would let one layer clobber
-   another.
-
-### Adding a layer
-
-```bash
-mkdir -p layers/frontend/solid/files
-$EDITOR layers/frontend/solid/layer.toml
-
-# The tests discover it by walking the tree. Nothing to register.
-cargo test
-cargo clippy --all-targets -- -D warnings
-cargo fmt
-```
-
-## 🧪 Using the library
-
-Until the CLI exists, culm is consumed as a library. The public surface
-is `culm::layer`, `culm::merge`, and `culm::scaffold`.
-
-Merging a selection:
-
-```rust
-use culm::merge::{Contribution, FileSet, Layer};
-use serde_json::json;
-
-let node = Layer::new("toolchain/node-pnpm")
-    .with_merge("package.json", Contribution::JsonDeep(json!({ "private": true })))
-    .with_merge(
-        ".gitignore",
-        Contribution::LineBlock(vec!["node_modules/".to_owned()]),
-    );
-
-let nuxt = Layer::new("frontend/nuxt")
-    .requiring("toolchain/node-pnpm")
-    .with_merge(
-        "package.json",
-        Contribution::JsonDeep(json!({ "scripts": { "dev:nuxt": "nuxt dev" } })),
-    );
-
-let set = FileSet::build([&node, &nuxt])?;
-for (path, body) in set.render() {
-    println!("--- {}", path.display());
-    print!("{body}");
-}
-```
-
-Parsing and validating a selection of real manifests:
-
-```rust
-use culm::layer::{Manifest, validate_selection};
-
-let manifest = Manifest::parse("layers/frontend/nuxt/layer.toml", source)?;
-assert_eq!(manifest.qualified_id().as_str(), "frontend/nuxt");
-
-validate_selection(&selection)?;
-```
-
-`FileSet::build` validates requirements and conflicts across the whole
-selection before anything merges, so a doomed run cannot produce half a
-file set.
-
-## 🛠️ Development
+Two layout rules from [docs/CONTEXT.md](docs/CONTEXT.md):
+
+- **culm is a single crate**, not a Cargo workspace. Splitting a module
+  into a crate later is mechanical; un-splitting a premature workspace is
+  not.
+- **A module is a directory with a `mod.rs`** that declares and
+  re-exports and holds no logic of its own.
+
+## 📌 Rules worth knowing
+
+These catch people out. The reasons are in
+[docs/CONTEXT.md](docs/CONTEXT.md).
+
+- **culm never locks you into culm.** The scaffolder must be able to
+  emit Nx, Turborepo, Moon, or no runner at all, and never configuration
+  only culm's runner understands.
+- **No version numbers in layer templates.** Package managers write
+  versions at install time; a test fails if a shipped layer pins one.
+- **No combination of layers is ever written by hand.** Layers compose
+  through the merge engine. A special case for one specific pair is how
+  scaffolders rot.
+- **Conflicts are errors, never last-write-wins.** If two layers set
+  the same key to different values, culm stops and names both.
+- **Nothing is half-written.** The whole workspace is validated in
+  memory first, and a failure leaves your disk untouched.
+- **A layer cannot write outside the workspace.** Absolute paths and
+  `..` are refused, with no flag to allow them.
+- **Only toolchains and default quality layers are added for you.**
+  culm adds `node-pnpm` for a Next.js app and `clippy` for a Rust one,
+  but will never pick your framework or database.
+
+## 🛠️ Working on culm
 
 ### Prerequisites
 
-- **Rust** with edition 2024 support, installed via
-  [rustup](https://rustup.rs/)
-- Nothing else. There are no system dependencies, no database, and no
-  container
+Rust with edition 2024 support, via [rustup](https://rustup.rs/).
+Nothing else: no system packages, database, or container. Node and pnpm
+are only needed to run the optional `pnpm` scripts.
 
 ### Commands
 
-| Command | What it does |
-| --- | --- |
-| `cargo build` | Builds the library and the `culm` binary |
-| `cargo test` | Runs unit tests beside each module plus the integration tests |
-| `cargo test --test layers` | Only the shipped-layer suite |
-| `cargo test --test order_independence` | Only the merge proptest |
-| `cargo test --test scaffold` | Only the end-to-end scaffold tests |
-| `cargo clippy --all-targets -- -D warnings` | **The gate. Must pass before any commit** |
-| `cargo fmt` | Formats. `rustfmt.toml` stays at defaults |
-| `cargo fmt --check` | Fails instead of rewriting, for CI |
+Use whichever column you prefer; they run the same thing.
+
+| cargo | pnpm | What it does |
+| --- | --- | --- |
+| `cargo build` | `pnpm build` | Build the library and the `culm` binary |
+| `cargo build --release` | `pnpm build:release` | Optimised build into `target/release/culm` |
+| `cargo culm <args>` | `pnpm start <args>` | Run culm from source, e.g. `cargo culm new demo --preset backend --yes` |
+| `cargo check --all-targets` | `pnpm check` | Fast type check, including tests |
+| `cargo test` | `pnpm test` | Every unit and integration test |
+| `cargo lint` | `pnpm lint` | **The gate:** `cargo clippy --all-targets -- -D warnings` |
+| `cargo fmt` | `pnpm format` | Format |
+| `cargo fmt --check` | `pnpm format:check` | Fail instead of rewriting, as CI does |
+| `cargo install --path .` | | Install your local build as `culm` |
+
+Single test suites:
+
+```bash
+cargo test --test layers               # every shipped layer
+cargo test --test scaffold             # end-to-end scaffolds
+cargo test --test order_independence   # the merge proptest
+cargo test --test cache_correctness    # the runner's cache
+cargo test --test cli                  # the commands, end to end
+```
 
 ### Before every commit
 
 ```bash
 cargo test
-cargo clippy --all-targets -- -D warnings
-cargo fmt
+cargo lint
+cargo fmt --check
 ```
 
-`cargo clippy --all-targets -- -D warnings` is not advisory. It is the
-gate, and `--all-targets` matters because test code is where warnings
-otherwise accumulate unseen.
+All three run in CI, and CI fails on any of them. `--all-targets` in the
+lint matters: test code is where warnings otherwise pile up unseen.
+
+### Trying a layer change
+
+Build the binary once, then scaffold from your working copy of `layers/`
+into a throwaway folder:
+
+```bash
+cargo build
+cd /tmp
+~/path/to/culm/target/debug/culm new trial \
+  --layers-dir ~/path/to/culm/layers \
+  --layer shape/single-app --layer backend/axum --yes --no-install
+```
+
+The full guide to writing a layer, with a worked example, is in
+[docs/LAYERS.md](docs/LAYERS.md#-authoring-a-layer).
 
 ### Test layout
 
 - **Unit tests sit beside the code they test**, in a `#[cfg(test)] mod
   tests` under a `// === Tests` heading.
-- **Cross-module behaviour goes in `tests/`**, because that is where the
-  crate is exercised the way a caller would use it.
+- **Cross-module behaviour goes in `tests/`**, where the crate is used
+  the way a caller would use it.
 - `tests/order_independence.proptest-regressions` holds seeds for
   failures proptest has already found. It is committed on purpose: a
   shrunk counterexample is worth more than the run that produced it.
 
-### Conventions
+### Code conventions
 
-Full detail is in [docs/CONTEXT.md](docs/CONTEXT.md). The ones that bite
+Full detail in [docs/CONTEXT.md](docs/CONTEXT.md). The ones that bite
 first:
 
 - **Ordinary comments use `/* ... */`, not `//`.** Bare `//` lines are
   never stacked.
-- **`// === Section` is the top-level divider**, `// == Subsection` below
-  it, and `// = ` below that and rare.
-- **Doc comments are one sentence per line**, broken at the full stop, so
-  a diff touching one sentence touches one line.
+- **`// === Section` is the top-level divider**, `// == Subsection`
+  below it, and `// = ` below that and rare.
+- **Doc comments are one sentence per line**, broken at the full stop,
+  so a diff touching one sentence touches one line.
+- **An explicit `return` is house style**, which is why
+  `clippy::needless_return` is allowed in `Cargo.toml`.
 - **No em dash** in any comment, commit message, document, or PR
   description.
-- **Commits are signed, one line, `<type>: <description>`**, with no
-  body, no trailers, and no co-authorship attribution.
-- **Committing is an explicit instruction, and pushing is a separate
-  one.** Finish the work and leave it uncommitted.
+
+## 🔁 CI and releases
+
+| Workflow | Runs | What it proves |
+| --- | --- | --- |
+| [`ci.yml`](.github/workflows/ci.yml) | Every push and pull request | Formatting, clippy, tests, `cargo deny`, `cargo audit`, `cargo publish --dry-run`, a release build, and tests on macOS and Windows |
+| [`templates.yml`](.github/workflows/templates.yml) | Weekly | The shipped layers still scaffold, install, and build against today's framework releases |
+| [`release.yml`](.github/workflows/release.yml) | A `v*.*.*` tag, or by hand | Builds five binaries (Linux x64 and arm64, macOS x64 and arm64, Windows x64), attaches them with `SHA256SUMS` and `installer.sh` to a GitHub release |
+
+**Cutting a release, step by step:**
+
+1. Make sure CI is green on `main`, and `version` in `Cargo.toml` is the
+   version you are releasing.
+2. Tag and push the tag:
+   ```bash
+   git tag -s v0.1.0 -m "v0.1.0"
+   git push origin v0.1.0
+   ```
+   This alone builds the binaries and creates the GitHub release. It
+   publishes nothing to any registry.
+3. To publish, open **Actions → release → Run workflow**, choose the tag,
+   and set `publish` to `crates`, `npm`, `homebrew`, or `all`. Each
+   channel needs its secret set in the repository first:
+
+   | Channel | Secret |
+   | --- | --- |
+   | crates.io | `CARGO_REGISTRY_TOKEN` |
+   | npm | `NPM_TOKEN` |
+   | Homebrew | `HOMEBREW_TAP_TOKEN`, plus the `zunetra/homebrew-tap` repository |
+
+Publishing is never automatic. A crates.io release cannot be deleted,
+only yanked, so step 3 is deliberate.
 
 ## 📦 Distribution
 
 > **None of this is published yet.** The code for every channel is in
 > this repository; the registries, the tap, and the first release are
-> not. Do not paste these commands expecting them to work.
+> not. Until then, install from source as in
+> [step 3](#step-3-get-the-source-and-install-culm).
 
 | Channel | Command | Audience | In this repository |
 | --- | --- | --- | --- |
@@ -961,14 +921,10 @@ first:
 
 The Rust binary is the product. The npm package is a launcher shipping
 prebuilt binaries as platform-specific `optionalDependencies` with `os`
-and `cpu` fields, the pattern esbuild, Biome, `@swc/core`, and Rspack use.
-The package manager installs exactly one. The shell installer verifies
-every download against the release's `SHA256SUMS` before installing it.
-
-Every tag builds five binaries and attaches them with `SHA256SUMS` and
-`installer.sh` (`.github/workflows/release.yml`). Publishing to npm,
-crates.io, or the tap happens only when that workflow is run by hand on
-a tag, with its `publish` input set.
+and `cpu` fields, the pattern esbuild, Biome, `@swc/core`, and Rspack
+use. The package manager installs exactly one. The shell installer
+verifies every download against the release's `SHA256SUMS` before
+installing it.
 
 **Not a postinstall downloader.** Those break under `--ignore-scripts`,
 offline CI, corporate proxies, and sandboxed environments. See
@@ -979,112 +935,131 @@ the `.dev` domain on 2026-08-04, and are recorded in the handbook's
 [reserved names](../handbook/naming/RESERVED.md). Availability changes,
 so re-verify before relying on it.
 
-## 🗺️ Roadmap
-
-What is built, what is left in code, and what is left for the owner is
-kept in one place, [docs/DESIGN.md section 5](docs/DESIGN.md#5-status),
-so this README cannot drift from it.
+What is built and what is left: [docs/DESIGN.md section 5](docs/DESIGN.md#5-status).
 
 ## 🔧 Troubleshooting
 
-### `scalar conflict in package.json: layers 'a' and 'b' both set 'scripts.dev' to different values`
+### Using culm
 
-Two layers in a many-per-workspace category contributed the same script
+#### `culm: command not found`
+
+`~/.cargo/bin` is not on your `PATH`. Open a new terminal after
+installing Rust. If it still fails, add
+`export PATH="$HOME/.cargo/bin:$PATH"` to your `~/.bashrc` or
+`~/.zshrc`, then open a new terminal.
+
+#### `error: .../my-app already exists and is not empty`
+
+`culm new` never writes into a folder that has files in it. Pick another
+name, or delete the folder first.
+
+#### `Write this workspace? [y/N] Nothing was written.`
+
+culm asked for confirmation and got no answer, which is what happens in
+CI or a script. Add `--yes`.
+
+#### `pnpm: command not found` (or `go`) during install
+
+You picked a layer whose package manager is not installed. Install it
+(see [step 2](#step-2-install-the-tools-your-layers-will-use)), then
+either run the printed commands yourself or delete the folder and
+scaffold again.
+
+#### `error: .../culm.toml: No such file or directory`
+
+`culm run` looks for `culm.toml` in the current directory. `cd` into
+your workspace, or pass `--config <path>`. If the workspace has no
+`culm.toml` at all, it was scaffolded with a different runner layer.
+
+#### ``error: task `x` is not defined in .../culm.toml``
+
+Run `culm graph` to see the task names that do exist.
+
+#### `culm run --affected` starts a server and never finishes
+
+A task with no `inputs`, such as the scaffolded `dev`, always counts as
+affected. Add `inputs` to it, or stop it with `Ctrl+C`. See
+[Running tasks](#-running-tasks).
+
+#### A cached result looks wrong
+
+Run the task with `--verify`. It runs for real and fails if the result
+differs from the cache, which means an `inputs` glob or
+`declared_env` entry is missing. Please report it: wrong cache hits are
+the one bug the runner exists to never have. `culm cache clear` gets you
+going again meanwhile.
+
+### Selecting layers
+
+#### `layer 'x' requires layer 'y', which is not selected`
+
+Only toolchains are filled in automatically. Add `--layer` for the
+missing one: culm never picks your database for you.
+
+#### `category 'runner' requires at least one layer, but the selection has none`
+
+Every workspace needs a runner. If you do not want one, add
+`--layer runner/none`, which is a real answer rather than an absence.
+
+#### `a single-app workspace needs at least one frontend or backend layer`
+
+A single app with neither is a bare toolchain. Add an app layer, or use
+`--layer shape/tooling-only`, which exists for exactly that case.
+
+#### `shape 'tooling-only' allows no frontend layers, but the selection has nuxt`
+
+A framework layer is an app, and an app needs `single-app` or `monorepo`.
+Change the shape or drop the framework.
+
+### Authoring layers
+
+#### `scalar conflict in package.json: layers 'a' and 'b' both set 'scripts.dev' to different values`
+
+Two layers in a category that allows several contributed the same script
 key. Namespace them by layer id: `dev:nuxt`, not `dev`. Only quality
 layers may use a plain name, because at most one of each is selected.
 
-### `strategy conflict in .gitignore: layer 'a' merges it as json-deep, layer 'b' as line-block`
+#### `strategy conflict in .gitignore: layer 'a' merges it as json-deep, layer 'b' as line-block`
 
 One of the two manifests names the wrong `strategy` for that target.
 Guessing which would be a silent resolution, so it is reported instead.
 Check which strategy the target is supposed to use in
-[Strategies](#strategies).
+[Strategies](docs/INTERNALS.md#strategies).
 
-### `layer 'x' requires layer 'y', which is not selected`
-
-Only toolchain requirements are filled in automatically. Everything else
-has to be selected explicitly, because quietly choosing somebody's
-database for them is a guess dressed up as an implication.
-
-### `category 'runner' requires at least one layer, but the selection has none`
-
-Every workspace needs a runner, whatever the shape. If you do not want
-one, select `runner/none`, which is a real answer rather than an absence.
-
-### `a single-app workspace needs at least one frontend or backend layer`
-
-A single app with neither is a bare toolchain, not a workspace. Either
-add an app layer, or switch the shape to `tooling-only`, which is the
-shape that exists for exactly that case.
-
-### `shape 'tooling-only' allows no frontend layers, but the selection has nuxt`
-
-A framework layer scaffolds an app, and an app implies a shape. Asking
-for tooling only and then naming a framework is a contradiction, so it is
-caught rather than half-scaffolded.
-
-### `layer 'x' writes '../y', which escapes the workspace root`
+#### `layer 'x' writes '../y', which escapes the workspace root`
 
 A `[[files]]` destination climbed out of the root, or was absolute. Fix
 the `to` path. This is refused by design and there is no flag to allow
 it.
 
-### `layer 'x' declares 'files/y' which is not in the layer directory`
+#### `layer 'x' declares 'files/y' which is not in the layer directory`
 
 A `[[files]]` entry's `from` path is relative to the layer's own
 directory, not the repository root, and the file has to exist.
 
-### The output changed between two runs with the same layers
+#### The output changed between two runs with the same layers
 
-That is the one bug this engine exists to prevent. Check whether a
+That is the one bug the merge engine exists to prevent. Check whether a
 comparator was changed: any comparator the engine sorts with must be a
-total order consistent with equality, and reporting `Equal` for values
-that differ leaves a stable sort holding arrival order, which is layer
-order. See
-[the total order invariant](#the-total-order-invariant-learned-the-hard-way).
+total order consistent with equality. See
+[the total order invariant](docs/INTERNALS.md#the-total-order-invariant-learned-the-hard-way).
 
-### `cargo test` passes but `cargo clippy` fails
+#### `cargo test` passes but `cargo clippy` fails
 
-Run it with `--all-targets`. Test code is not linted otherwise, and it is
-where warnings accumulate unseen.
+Run it with `--all-targets` (or just `cargo lint`). Test code is not
+linted otherwise.
 
-## 🤝 Contributing
+## 📚 Documentation
 
-1. Read [docs/CONTEXT.md](docs/CONTEXT.md#decisions) first. Its `LOCKED`
-   entries are settled and closed, and are not to be re-litigated or
-   worked around. The `Open` section at the bottom is the only place
-   where a decision is genuinely still available.
-2. Read [docs/CONTEXT.md](docs/CONTEXT.md) second. It is authoritative on
-   how code here is written, and it outranks anything stated elsewhere,
-   including `CLAUDE.md` and this file.
-3. Branch, change, and run the gate:
-   ```bash
-   cargo test
-   cargo clippy --all-targets -- -D warnings
-   cargo fmt
-   ```
-4. One line commit message, `<type>: <description>`, signed.
-5. Open a pull request.
-
-### The rules that outrank convenience
-
-- **The scaffolder must be able to emit Nx, Turborepo, Moon, or nothing.**
-  Never emit configuration only culm's runner can consume.
-- **No version numbers in a layer template file.** Ever.
-- **Never author a combination of layers.** The moment a special case
-  exists for a specific pair, the combinatorial death has started.
-- **Klassivox is not modified by work in this repository** unless the
-  owner explicitly asks for a Klassivox change, naming it. Keeping
-  documentation in sync is not a reason.
-
-## 📄 Documents
-
-| Doc | What it covers |
+| Doc | Read it when |
 | --- | --- |
-| [docs/CONTEXT.md](docs/CONTEXT.md) | Every settled decision, the coding conventions, and the traps. Read first. |
-| [docs/DESIGN.md](docs/DESIGN.md) | Both halves, the benchmark method, and what is left to build. |
-| [docs/TELEMETRY.md](docs/TELEMETRY.md) | The exact payload that would be sent, published verbatim. |
-| [handbook/naming/NAMING.md](../handbook/naming/NAMING.md) | Why culm, what was eliminated, what is reserved. |
+| [docs/CONTEXT.md](docs/CONTEXT.md) | Before changing anything. Every settled decision, the conventions, and the traps |
+| [docs/DESIGN.md](docs/DESIGN.md) | You want to know how both halves are designed, and what is left to build |
+| [docs/LAYERS.md](docs/LAYERS.md) | You want the full layer list, the selection rules, or to write a layer |
+| [docs/INTERNALS.md](docs/INTERNALS.md) | You are changing the merge engine or scaffold pipeline, or using culm as a Rust library |
+| [docs/TELEMETRY.md](docs/TELEMETRY.md) | You want the exact telemetry payload, field by field |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | You are opening a pull request |
+| [handbook/naming/NAMING.md](../handbook/naming/NAMING.md) | You wonder why it is called culm |
 
 The quality bar in [decision 19](docs/CONTEXT.md#decisions) was a clone
 of `dev-davexoyinbo/actix-web-starter-template`, kept in `docs/` until
@@ -1092,7 +1067,36 @@ the backends reached it and deleted on 2026-08-15. Its copyright is
 `2025 Oyinbo David Bayode`, MIT, so anything still derived from it owes
 attribution. `backend/actix` is now the reference.
 
-## 🏛️ Organisation
+## 🤝 Contributing
+
+1. Read [docs/CONTEXT.md](docs/CONTEXT.md) first. Its `LOCKED`
+   decisions are settled and not to be re-litigated or worked around;
+   the `Open` section at the bottom is the only place a decision is
+   still available. It also outranks anything stated elsewhere,
+   including `CLAUDE.md` and this file, on how code here is written.
+2. Branch from `develop`, make your change, and run the gate:
+   ```bash
+   cargo test
+   cargo lint
+   cargo fmt
+   ```
+3. Commit with one signed line, `<type>: <description>`, for example
+   `fix: refuse an empty layer id`. No body, no trailers, no
+   co-authorship attribution.
+4. Open a pull request into `develop`.
+
+### The rules that outrank convenience
+
+- **The scaffolder must be able to emit Nx, Turborepo, Moon, or
+  nothing.** Never emit configuration only culm's runner can consume.
+- **No version numbers in a layer template file.** Ever.
+- **Never author a combination of layers.** The moment a special case
+  exists for a specific pair, the combinatorial death has started.
+- **Klassivox is not modified by work in this repository** unless the
+  owner explicitly asks for a Klassivox change, naming it. Keeping
+  documentation in sync is not a reason.
+
+## 🏢 Organisation
 
 culm is a [Zunetra](../handbook) project. Org-level decisions, including
 naming and reserved names, live in that repository, not this one.

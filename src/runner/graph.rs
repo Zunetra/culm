@@ -389,8 +389,7 @@ mod tests {
 
     #[test]
     fn all_in_order_includes_every_task_in_the_graph() {
-        let graph =
-            TaskGraph::build(vec![task("build", &[]), task("lint", &[])], &path()).unwrap();
+        let graph = TaskGraph::build(vec![task("build", &[]), task("lint", &[])], &path()).unwrap();
         let names: Vec<&str> = graph
             .all_in_order()
             .iter()
@@ -404,8 +403,7 @@ mod tests {
     #[test]
     fn to_dot_names_every_task_and_every_dependency_edge() {
         let graph =
-            TaskGraph::build(vec![task("build", &[]), task("test", &["build"])], &path())
-                .unwrap();
+            TaskGraph::build(vec![task("build", &[]), task("test", &["build"])], &path()).unwrap();
         let dot = graph.to_dot();
         assert!(dot.contains("build"));
         assert!(dot.contains("test"));

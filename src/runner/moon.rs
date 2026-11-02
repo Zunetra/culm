@@ -88,7 +88,10 @@ mod tests {
         let web = app(
             "web",
             "src/web",
-            &[("build", "vite build", &[]), ("test", "vitest run", &["build"])],
+            &[
+                ("build", "vite build", &[]),
+                ("test", "vitest run", &["build"]),
+            ],
         );
         let doc = generate_project(&web);
         assert!(doc.contains("build:"));

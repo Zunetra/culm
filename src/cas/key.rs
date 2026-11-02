@@ -85,8 +85,14 @@ mod tests {
 
     #[test]
     fn identical_keys_digest_identically() {
-        let a = key("cargo build", &[("src/main.rs", "aa"), ("Cargo.toml", "bb")]);
-        let b = key("cargo build", &[("Cargo.toml", "bb"), ("src/main.rs", "aa")]);
+        let a = key(
+            "cargo build",
+            &[("src/main.rs", "aa"), ("Cargo.toml", "bb")],
+        );
+        let b = key(
+            "cargo build",
+            &[("Cargo.toml", "bb"), ("src/main.rs", "aa")],
+        );
         assert_eq!(a.digest(), b.digest());
     }
 
@@ -112,10 +118,12 @@ mod tests {
         assert_ne!(a.digest(), b.digest());
 
         b = a.clone();
-        b.declared_env.insert("RUSTFLAGS".to_owned(), Some("-C opt".to_owned()));
+        b.declared_env
+            .insert("RUSTFLAGS".to_owned(), Some("-C opt".to_owned()));
         assert_ne!(a.digest(), b.digest());
 
-        a.declared_env.insert("RUSTFLAGS".to_owned(), Some("-C opt".to_owned()));
+        a.declared_env
+            .insert("RUSTFLAGS".to_owned(), Some("-C opt".to_owned()));
         assert_eq!(a.digest(), b.digest());
     }
 
@@ -124,7 +132,8 @@ mod tests {
         let mut a = key("cargo build", &[]);
         let mut b = a.clone();
         a.declared_env.insert("RUSTFLAGS".to_owned(), None);
-        b.declared_env.insert("RUSTFLAGS".to_owned(), Some(String::new()));
+        b.declared_env
+            .insert("RUSTFLAGS".to_owned(), Some(String::new()));
         assert_ne!(a.digest(), b.digest());
     }
 

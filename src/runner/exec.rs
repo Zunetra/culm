@@ -14,7 +14,11 @@ use super::error::RunnerError;
 use super::task::Task;
 
 /// Runs every task in `order`, in order, stopping at the first failure.
-pub fn run(order: &[&Task], session: &mut Session, out: &mut impl Write) -> Result<(), RunnerError> {
+pub fn run(
+    order: &[&Task],
+    session: &mut Session,
+    out: &mut impl Write,
+) -> Result<(), RunnerError> {
     for task in order {
         let status = match session.plan(task, out)? {
             Plan::Restored => Status::Hit,

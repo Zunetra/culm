@@ -39,16 +39,15 @@ pub struct CulmApp {
 /// The root `culm.toml`. `root_tasks` are the root-owned scripts a quality
 /// layer contributed (`lint`, `format`).
 pub fn generate_root(root_tasks: &[String]) -> String {
-    let mut doc = String::from("# culm's task runner. See docs/DESIGN.md in culm for the format.\n[workspace]\n");
+    let mut doc = String::from(
+        "# culm's task runner. See docs/DESIGN.md in culm for the format.\n[workspace]\n",
+    );
     for task in root_tasks {
         /* `format` rewrites files in place, so it has no output a cache
          * could restore; `lint` only reports. */
         let cacheable = task != "format";
-        write!(
-            doc,
-            "\n[tasks.{task}]\ncommand = \"pnpm run {task}\"\n"
-        )
-        .expect("writing to a String cannot fail");
+        write!(doc, "\n[tasks.{task}]\ncommand = \"pnpm run {task}\"\n")
+            .expect("writing to a String cannot fail");
         if cacheable {
             doc.push_str("inputs = [\"**/*\"]\ncache = true\n");
         }
@@ -59,7 +58,12 @@ pub fn generate_root(root_tasks: &[String]) -> String {
 /// One application's `culm.toml`.
 pub fn generate_project(app: &CulmApp) -> String {
     let (dev, build, test, lockfile) = match app.toolchain {
-        Toolchain::Node => ("pnpm run dev", "pnpm run build", "pnpm run test", "pnpm-lock.yaml"),
+        Toolchain::Node => (
+            "pnpm run dev",
+            "pnpm run build",
+            "pnpm run test",
+            "pnpm-lock.yaml",
+        ),
         Toolchain::Rust => ("cargo run", "cargo build", "cargo test", "Cargo.lock"),
         Toolchain::Go => ("go run .", "go build ./...", "go test ./...", "go.sum"),
     };
@@ -130,6 +134,10 @@ mod tests {
             toolchain: Toolchain::Rust,
         }));
         assert_eq!(config.tasks["test"].command, "cargo test");
-        assert!(config.tasks["test"].inputs.contains(&"../../Cargo.lock".to_owned()));
+        assert!(
+            config.tasks["test"]
+                .inputs
+                .contains(&"../../Cargo.lock".to_owned())
+        );
     }
 }

@@ -385,9 +385,7 @@ impl FileSet {
                 }),
             },
             Some(FileContent::YamlList(doc)) => match contribution {
-                Contribution::YamlList { lists, scalars } => {
-                    doc.add(target, layer, lists, scalars)
-                }
+                Contribution::YamlList { lists, scalars } => doc.add(target, layer, lists, scalars),
                 other => Err(MergeError::StrategyMismatch {
                     target: target.to_path_buf(),
                     a: doc.first_owner(),

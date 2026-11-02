@@ -14,7 +14,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
-use crate::layer::{Category, CatalogEntry};
+use crate::layer::{CatalogEntry, Category};
 use crate::scaffold::Variables;
 
 use super::culm_toml::{self, CulmApp, Toolchain};
@@ -63,7 +63,10 @@ fn apps<'a, 'b>(
         .iter()
         .zip(variables.iter())
         .filter(|(entry, _)| {
-            matches!(entry.manifest.category, Category::Frontend | Category::Backend)
+            matches!(
+                entry.manifest.category,
+                Category::Frontend | Category::Backend
+            )
         })
         .map(|(entry, vars)| (*entry, vars))
         .collect()
@@ -250,12 +253,7 @@ mod tests {
         let vars = Variables::new().with("pkg_name", "demo-react-vite");
         let dir = tempfile::tempdir().unwrap();
 
-        write_root_config(
-            &[&runner, &frontend],
-            &[Variables::new(), vars],
-            dir.path(),
-        )
-        .unwrap();
+        write_root_config(&[&runner, &frontend], &[Variables::new(), vars], dir.path()).unwrap();
 
         let doc = fs::read_to_string(dir.path().join("turbo.json")).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&doc).unwrap();
@@ -284,12 +282,7 @@ mod tests {
         let vars = Variables::new().with("app_dir", "src/nuxt");
         let dir = tempfile::tempdir().unwrap();
 
-        write_root_config(
-            &[&runner, &frontend],
-            &[Variables::new(), vars],
-            dir.path(),
-        )
-        .unwrap();
+        write_root_config(&[&runner, &frontend], &[Variables::new(), vars], dir.path()).unwrap();
 
         assert!(dir.path().join(".moon/workspace.yml").exists());
         assert!(dir.path().join("src/nuxt/moon.yml").exists());

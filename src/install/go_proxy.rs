@@ -88,22 +88,33 @@ mod tests {
 
     #[test]
     fn capitals_are_escaped_the_way_the_proxy_expects() {
-        assert_eq!(escape("github.com/BurntSushi/toml"), "github.com/!burnt!sushi/toml");
-        assert_eq!(escape("github.com/go-chi/chi/v5"), "github.com/go-chi/chi/v5");
+        assert_eq!(
+            escape("github.com/BurntSushi/toml"),
+            "github.com/!burnt!sushi/toml"
+        );
+        assert_eq!(
+            escape("github.com/go-chi/chi/v5"),
+            "github.com/go-chi/chi/v5"
+        );
     }
 
     #[test]
     fn candidates_are_newest_first_without_pre_releases() {
         let list = "v5.0.10\nv5.1.0\nv5.2.0-rc.1\nv5.0.9\n";
-        let found: Vec<String> = candidates(list, None).iter().map(Version::to_string).collect();
+        let found: Vec<String> = candidates(list, None)
+            .iter()
+            .map(Version::to_string)
+            .collect();
         assert_eq!(found, vec!["5.1.0", "5.0.10", "5.0.9"]);
     }
 
     #[test]
     fn a_range_narrows_the_candidates() {
         let range = VersionReq::parse("<5.1").unwrap();
-        let found: Vec<String> =
-            candidates("v5.0.10\nv5.1.0\n", Some(&range)).iter().map(Version::to_string).collect();
+        let found: Vec<String> = candidates("v5.0.10\nv5.1.0\n", Some(&range))
+            .iter()
+            .map(Version::to_string)
+            .collect();
         assert_eq!(found, vec!["5.0.10"]);
     }
 }

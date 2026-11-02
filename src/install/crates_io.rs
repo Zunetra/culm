@@ -38,7 +38,11 @@ pub fn releases(name: &str) -> Result<Vec<Release>, String> {
             /* crates.io refuses requests without an identifying agent. */
             .header(
                 "User-Agent",
-                concat!("culm/", env!("CARGO_PKG_VERSION"), " (https://github.com/Zunetra/culm)"),
+                concat!(
+                    "culm/",
+                    env!("CARGO_PKG_VERSION"),
+                    " (https://github.com/Zunetra/culm)"
+                ),
             )
             .call()
             .map_err(|e| format!("cannot reach crates.io for `{name}`: {e}"))?

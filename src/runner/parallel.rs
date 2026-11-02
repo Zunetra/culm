@@ -57,7 +57,11 @@ pub fn levels<'a>(order: &[&'a Task]) -> Vec<Vec<&'a Task>> {
 ///
 /// A level is planned on this thread before anything in it starts, so cache
 /// hits are restored up front and only real work is spread across threads.
-pub fn run(order: &[&Task], session: &mut Session, out: &mut impl Write) -> Result<(), RunnerError> {
+pub fn run(
+    order: &[&Task],
+    session: &mut Session,
+    out: &mut impl Write,
+) -> Result<(), RunnerError> {
     for level in levels(order) {
         let mut to_run = Vec::new();
         for task in &level {
@@ -73,12 +77,7 @@ pub fn run(order: &[&Task], session: &mut Session, out: &mut impl Write) -> Resu
                 .iter()
                 .map(|(task, pending)| {
                     scope.spawn(move || {
-                        cache::run(
-                            task,
-                            store,
-                            pending.key.as_ref(),
-                            pending.previous.as_ref(),
-                        )
+                        cache::run(task, store, pending.key.as_ref(), pending.previous.as_ref())
                     })
                 })
                 .collect();
@@ -169,8 +168,7 @@ mod tests {
         let never = task("never", &format!("touch {}", marker.display()), &["fails"]);
 
         let mut out: Vec<u8> = Vec::new();
-        let error = run(&[&fails, &never], &mut Session::new(None), &mut out)
-            .unwrap_err();
+        let error = run(&[&fails, &never], &mut Session::new(None), &mut out).unwrap_err();
 
         assert!(matches!(error, RunnerError::TaskFailed { .. }));
         assert!(!marker.exists());

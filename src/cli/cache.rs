@@ -46,7 +46,13 @@ pub fn run_cache_to(args: &CacheArgs, out: &mut impl Write) -> Result<()> {
     match args.command {
         CacheCommand::Stats => {
             let stats = store.stats().context("cannot read the local cache")?;
-            writeln!(out, "{} objects, {} bytes, at {}", stats.object_count, stats.total_bytes, root.display())?;
+            writeln!(
+                out,
+                "{} objects, {} bytes, at {}",
+                stats.object_count,
+                stats.total_bytes,
+                root.display()
+            )?;
         }
         CacheCommand::Clear => {
             store.clear().context("cannot clear the local cache")?;

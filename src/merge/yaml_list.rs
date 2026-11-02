@@ -209,14 +209,28 @@ mod tests {
 
     #[test]
     fn renders_a_sorted_sequence() {
-        let doc = YamlListDoc::seed(&layer("shape/monorepo"), &lists(&[("packages", &["libs/*", "apps/*"])]), &BTreeMap::new());
+        let doc = YamlListDoc::seed(
+            &layer("shape/monorepo"),
+            &lists(&[("packages", &["libs/*", "apps/*"])]),
+            &BTreeMap::new(),
+        );
         assert_eq!(doc.render(), "packages:\n  - \"apps/*\"\n  - \"libs/*\"\n");
     }
 
     #[test]
     fn unions_across_layers() {
-        let mut doc = YamlListDoc::seed(&layer("frontend/nuxt"), &lists(&[("packages", &["apps/*"])]), &BTreeMap::new());
-        doc.add(Path::new("x.yaml"), &layer("z"), &lists(&[("packages", &["libs/*"])]), &BTreeMap::new()).unwrap();
+        let mut doc = YamlListDoc::seed(
+            &layer("frontend/nuxt"),
+            &lists(&[("packages", &["apps/*"])]),
+            &BTreeMap::new(),
+        );
+        doc.add(
+            Path::new("x.yaml"),
+            &layer("z"),
+            &lists(&[("packages", &["libs/*"])]),
+            &BTreeMap::new(),
+        )
+        .unwrap();
         let entries: Vec<&str> = doc.entries("packages").collect();
         assert_eq!(entries, vec!["apps/*", "libs/*"]);
     }
@@ -225,16 +239,36 @@ mod tests {
      * here is a set, unlike a scalar where disagreement is unresolvable. */
     #[test]
     fn a_repeated_entry_appears_once() {
-        let mut doc = YamlListDoc::seed(&layer("frontend/nuxt"), &lists(&[("packages", &["apps/*"])]), &BTreeMap::new());
-        doc.add(Path::new("x.yaml"), &layer("z"), &lists(&[("packages", &["apps/*", "packages/*"])]), &BTreeMap::new()).unwrap();
+        let mut doc = YamlListDoc::seed(
+            &layer("frontend/nuxt"),
+            &lists(&[("packages", &["apps/*"])]),
+            &BTreeMap::new(),
+        );
+        doc.add(
+            Path::new("x.yaml"),
+            &layer("z"),
+            &lists(&[("packages", &["apps/*", "packages/*"])]),
+            &BTreeMap::new(),
+        )
+        .unwrap();
         let entries: Vec<&str> = doc.entries("packages").collect();
         assert_eq!(entries, vec!["apps/*", "packages/*"]);
     }
 
     #[test]
     fn separate_sequences_do_not_merge_into_one() {
-        let mut doc = YamlListDoc::seed(&layer("toolchain/node-pnpm"), &lists(&[("packages", &["apps/*"])]), &BTreeMap::new());
-        doc.add(Path::new("x.yaml"), &layer("z"), &lists(&[("onlyBuiltDependencies", &["esbuild"])]), &BTreeMap::new()).unwrap();
+        let mut doc = YamlListDoc::seed(
+            &layer("toolchain/node-pnpm"),
+            &lists(&[("packages", &["apps/*"])]),
+            &BTreeMap::new(),
+        );
+        doc.add(
+            Path::new("x.yaml"),
+            &layer("z"),
+            &lists(&[("onlyBuiltDependencies", &["esbuild"])]),
+            &BTreeMap::new(),
+        )
+        .unwrap();
         let names: Vec<&str> = doc.names().collect();
         assert_eq!(names, vec!["onlyBuiltDependencies", "packages"]);
         assert_eq!(doc.entries("packages").collect::<Vec<_>>(), vec!["apps/*"]);
@@ -242,11 +276,30 @@ mod tests {
 
     #[test]
     fn addition_order_does_not_change_the_output() {
-        let mut forward = YamlListDoc::seed(&layer("a"), &lists(&[("packages", &["b", "a"])]), &BTreeMap::new());
-        forward.add(Path::new("x.yaml"), &layer("z"), &lists(&[("packages", &["c"]), ("built", &["x"])]), &BTreeMap::new()).unwrap();
+        let mut forward = YamlListDoc::seed(
+            &layer("a"),
+            &lists(&[("packages", &["b", "a"])]),
+            &BTreeMap::new(),
+        );
+        forward
+            .add(
+                Path::new("x.yaml"),
+                &layer("z"),
+                &lists(&[("packages", &["c"]), ("built", &["x"])]),
+                &BTreeMap::new(),
+            )
+            .unwrap();
 
-        let mut backward = YamlListDoc::seed(&layer("a"), &lists(&[("built", &["x"])]), &BTreeMap::new());
-        backward.add(Path::new("x.yaml"), &layer("z"), &lists(&[("packages", &["c", "a", "b"])]), &BTreeMap::new()).unwrap();
+        let mut backward =
+            YamlListDoc::seed(&layer("a"), &lists(&[("built", &["x"])]), &BTreeMap::new());
+        backward
+            .add(
+                Path::new("x.yaml"),
+                &layer("z"),
+                &lists(&[("packages", &["c", "a", "b"])]),
+                &BTreeMap::new(),
+            )
+            .unwrap();
 
         assert_eq!(forward.render(), backward.render());
     }
@@ -255,7 +308,11 @@ mod tests {
      * glob is a document that means something else. */
     #[test]
     fn every_entry_is_quoted() {
-        let doc = YamlListDoc::seed(&layer("a"), &lists(&[("packages", &["*", "apps/*"])]), &BTreeMap::new());
+        let doc = YamlListDoc::seed(
+            &layer("a"),
+            &lists(&[("packages", &["*", "apps/*"])]),
+            &BTreeMap::new(),
+        );
         assert_eq!(doc.render(), "packages:\n  - \"*\"\n  - \"apps/*\"\n");
     }
 
@@ -264,14 +321,28 @@ mod tests {
      * resolve to "" for a selection where it does not apply. */
     #[test]
     fn a_blank_entry_from_an_unresolved_variable_contributes_nothing() {
-        let doc = YamlListDoc::seed(&layer("a"), &lists(&[("packages", &[""])]), &BTreeMap::new());
+        let doc = YamlListDoc::seed(
+            &layer("a"),
+            &lists(&[("packages", &[""])]),
+            &BTreeMap::new(),
+        );
         assert_eq!(doc.render(), "");
     }
 
     #[test]
     fn a_blank_entry_does_not_hide_a_real_one_from_another_layer() {
-        let mut doc = YamlListDoc::seed(&layer("a"), &lists(&[("packages", &[""])]), &BTreeMap::new());
-        doc.add(Path::new("x.yaml"), &layer("z"), &lists(&[("packages", &["src/*"])]), &BTreeMap::new()).unwrap();
+        let mut doc = YamlListDoc::seed(
+            &layer("a"),
+            &lists(&[("packages", &[""])]),
+            &BTreeMap::new(),
+        );
+        doc.add(
+            Path::new("x.yaml"),
+            &layer("z"),
+            &lists(&[("packages", &["src/*"])]),
+            &BTreeMap::new(),
+        )
+        .unwrap();
         assert_eq!(doc.render(), "packages:\n  - \"src/*\"\n");
     }
 
@@ -283,7 +354,11 @@ mod tests {
 
     #[test]
     fn a_quote_in_an_entry_is_escaped() {
-        let doc = YamlListDoc::seed(&layer("a"), &lists(&[("packages", &["we\"ird"])]), &BTreeMap::new());
+        let doc = YamlListDoc::seed(
+            &layer("a"),
+            &lists(&[("packages", &["we\"ird"])]),
+            &BTreeMap::new(),
+        );
         assert_eq!(doc.render(), "packages:\n  - \"we\\\"ird\"\n");
     }
 
@@ -318,8 +393,13 @@ mod tests {
     fn the_same_scalar_from_two_layers_is_agreement() {
         let setting = scalars(&[("minimumReleaseAge", YamlScalar::Integer(4320))]);
         let mut doc = YamlListDoc::seed(&layer("a"), &BTreeMap::new(), &setting);
-        doc.add(Path::new("pnpm-workspace.yaml"), &layer("b"), &BTreeMap::new(), &setting)
-            .unwrap();
+        doc.add(
+            Path::new("pnpm-workspace.yaml"),
+            &layer("b"),
+            &BTreeMap::new(),
+            &setting,
+        )
+        .unwrap();
         assert_eq!(doc.render(), "minimumReleaseAge: 4320\n");
     }
 
@@ -330,13 +410,21 @@ mod tests {
         let target = Path::new("pnpm-workspace.yaml");
 
         let mut forward = YamlListDoc::seed(&layer("a"), &BTreeMap::new(), &low);
-        let first = forward.add(target, &layer("b"), &BTreeMap::new(), &high).unwrap_err();
+        let first = forward
+            .add(target, &layer("b"), &BTreeMap::new(), &high)
+            .unwrap_err();
 
         let mut backward = YamlListDoc::seed(&layer("b"), &BTreeMap::new(), &high);
-        let second = backward.add(target, &layer("a"), &BTreeMap::new(), &low).unwrap_err();
+        let second = backward
+            .add(target, &layer("a"), &BTreeMap::new(), &low)
+            .unwrap_err();
 
         assert_eq!(first, second);
         assert!(matches!(first, MergeError::ScalarConflict { .. }));
-        assert_eq!(forward.render(), "minimumReleaseAge: 1440\n", "a refused add changes nothing");
+        assert_eq!(
+            forward.render(),
+            "minimumReleaseAge: 1440\n",
+            "a refused add changes nothing"
+        );
     }
 }

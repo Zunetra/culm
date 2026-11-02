@@ -69,7 +69,10 @@ impl Pattern {
 
 /// Every file the task's `inputs` name, by path as written relative to
 /// `root`, mapped to the hex blake3 digest of its content.
-pub fn hash_inputs(root: &Path, patterns: &[String]) -> Result<BTreeMap<PathBuf, String>, RunnerError> {
+pub fn hash_inputs(
+    root: &Path,
+    patterns: &[String],
+) -> Result<BTreeMap<PathBuf, String>, RunnerError> {
     let mut hashes = BTreeMap::new();
     for raw in patterns {
         let pattern = Pattern::parse(raw)?;
@@ -218,7 +221,11 @@ fn matches(pattern: &Pattern, relative: &Path) -> bool {
 }
 
 /// Every file under `start`, paired with its path as `base` would spell it.
-fn walk(start: &Path, base: &Path, honour_gitignore: bool) -> Result<Vec<(PathBuf, PathBuf)>, RunnerError> {
+fn walk(
+    start: &Path,
+    base: &Path,
+    honour_gitignore: bool,
+) -> Result<Vec<(PathBuf, PathBuf)>, RunnerError> {
     let mut files = Vec::new();
     if !start.exists() {
         return Ok(files);
@@ -288,7 +295,10 @@ mod tests {
 
         let hashes = hash_inputs(dir.path(), &strings(&["src/**/*.rs"])).unwrap();
         let paths: Vec<&Path> = hashes.keys().map(PathBuf::as_path).collect();
-        assert_eq!(paths, vec![Path::new("src/deep/lib.rs"), Path::new("src/main.rs")]);
+        assert_eq!(
+            paths,
+            vec![Path::new("src/deep/lib.rs"), Path::new("src/main.rs")]
+        );
     }
 
     #[test]
@@ -298,10 +308,16 @@ mod tests {
         let first = hash_inputs(dir.path(), &strings(&["a.txt"])).unwrap();
 
         write(dir.path(), "a.txt", "one");
-        assert_eq!(first, hash_inputs(dir.path(), &strings(&["a.txt"])).unwrap());
+        assert_eq!(
+            first,
+            hash_inputs(dir.path(), &strings(&["a.txt"])).unwrap()
+        );
 
         write(dir.path(), "a.txt", "two");
-        assert_ne!(first, hash_inputs(dir.path(), &strings(&["a.txt"])).unwrap());
+        assert_ne!(
+            first,
+            hash_inputs(dir.path(), &strings(&["a.txt"])).unwrap()
+        );
     }
 
     #[test]
@@ -311,7 +327,10 @@ mod tests {
         assert_eq!(before[Path::new("Cargo.lock")], MISSING);
 
         write(dir.path(), "Cargo.lock", "x");
-        assert_ne!(before, hash_inputs(dir.path(), &strings(&["Cargo.lock"])).unwrap());
+        assert_ne!(
+            before,
+            hash_inputs(dir.path(), &strings(&["Cargo.lock"])).unwrap()
+        );
     }
 
     #[test]
@@ -349,7 +368,10 @@ mod tests {
 
         let outputs = collect_outputs(dir.path(), &strings(&["dist"])).unwrap();
         let paths: Vec<&Path> = outputs.iter().map(|o| o.path.as_path()).collect();
-        assert_eq!(paths, vec![Path::new("dist/assets/a.css"), Path::new("dist/index.js")]);
+        assert_eq!(
+            paths,
+            vec![Path::new("dist/assets/a.css"), Path::new("dist/index.js")]
+        );
     }
 
     #[test]
