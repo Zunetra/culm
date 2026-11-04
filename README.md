@@ -164,8 +164,9 @@ Everything here is implemented in `src/` and covered by tests.
 - **A layer cannot write outside the workspace.** Absolute paths and
   `..` are refused.
 - **`#![forbid(unsafe_code)]`** in the library and the binary.
-- **Telemetry is off by default.** If you opt in, it prints its exact
-  payload on first run.
+- **Telemetry prints its exact payload** on first run, before you rely
+  on anything, and is off in CI, under `DO_NOT_TRACK=1`, or with
+  `CULM_TELEMETRY=0`.
 
 ## ⚙️ How it works
 
@@ -392,6 +393,10 @@ Installing dependencies:
   cargo add --manifest-path crates/axum/Cargo.toml --features full tokio@1.54.1
   cargo add --dev --manifest-path crates/axum/Cargo.toml tower@0.5.3 http-body-util@0.1.5
 ```
+
+The very first time you run culm, it also prints the anonymous usage
+data it sends, as exact JSON, and how to turn it off
+(`CULM_TELEMETRY=0`). See [Environment variables](#-environment-variables).
 
 Notice the exact versions: culm picks them itself, and never one
 released in the last 3 days. That is a supply-chain guard; change it
@@ -682,9 +687,16 @@ telemetry receiver has its own, `telemetry/worker/.env.example`; see
 [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ```bash
-# Telemetry is off by default. 1, true, on, or yes opts in, even in CI.
-# Unset, or any other value, keeps it off.
-CULM_TELEMETRY=1
+# Telemetry is on by default. 0, false, off, or no turns it off.
+# 1, true, on, or yes turns it on even in CI.
+CULM_TELEMETRY=0
+
+# The cross-tool opt out. 1 turns culm's telemetry off.
+DO_NOT_TRACK=1
+
+# Set by every CI provider. Turns telemetry off unless CULM_TELEMETRY
+# is 1, true, on, or yes.
+CI=true
 
 # Send telemetry to another receiver, for testing one.
 CULM_TELEMETRY_ENDPOINT=http://localhost:8787/events
@@ -695,14 +707,16 @@ CULM_NO_BANNER=1
 NO_COLOR=1
 ```
 
-**About telemetry.** It is off unless you set `CULM_TELEMETRY=1`. If
-you do, culm prints the exact JSON it sends on first run, along with how
-to turn it off. It sends an anonymous machine id, the culm
+**About telemetry.** culm sends anonymous usage data to help decide
+which layers to build next. The first time it does, it prints the exact
+JSON it sends and how to turn it off: `CULM_TELEMETRY=0` or
+`DO_NOT_TRACK=1`, and it is already off in CI. It sends an anonymous
+machine id, the culm
 version, OS and architecture, the command, and which layers and preset
 were chosen. It never sends repository names, file paths, task names,
 commands, environment values, or git remotes. The full payload is in
-[docs/TELEMETRY.md](docs/TELEMETRY.md). The receiver is not deployed
-yet, so nothing currently arrives anywhere.
+[docs/TELEMETRY.md](docs/TELEMETRY.md). Sending never delays a command
+by more than half a second, and a failed send is silent.
 
 ## 🏛️ Architecture
 
@@ -827,8 +841,8 @@ Rust with edition 2024 support, via [rustup](https://rustup.rs/).
 Nothing else: no system packages, database, or container. Node and pnpm
 are only needed to run the optional `pnpm` scripts.
 
-Optional environment, for example to opt in to telemetry while testing
-a receiver:
+Optional environment, for example to turn telemetry off while you work,
+or to point it at a receiver you are testing:
 
 ```bash
 cp .env.example .env

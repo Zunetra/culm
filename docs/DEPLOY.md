@@ -111,12 +111,14 @@ choose the **tag** (not a branch, or every publish job skips itself), set
 ## 📡 Deploying the telemetry receiver
 
 The receiver is a Cloudflare Worker (`telemetry/worker/src/index.js`)
-that validates each opt-in telemetry event and stores it as one row in a
+that validates each telemetry event and stores it as one row in a
 D1 database. The exact payload is specified in
 [TELEMETRY.md](TELEMETRY.md).
 
-Telemetry is opt-in (decision 9, amended 2026-11-02), so this is optional:
-culm works the same with or without it.
+Telemetry is on by default from 0.1.1 (decision 9, amended 2026-11-04),
+and `DEFAULT_ENDPOINT` points at this receiver, so keep it running. culm
+itself works the same either way: a failed send is silent and never
+delays a command by more than 500 ms.
 
 ### What it needs
 
@@ -331,6 +333,7 @@ npx wrangler delete                      # removes the Worker
 npx wrangler d1 delete culm-telemetry    # removes the database and every event in it
 ```
 
-Set `DEFAULT_ENDPOINT` back to an unused address in the next release,
-or the opt-in events of anyone still on the old version fail quietly
-after 500 ms, which costs them nothing but is untidy.
+Telemetry is on by default, so first change `DEFAULT_ENDPOINT` or the
+default itself in a release. Anyone still on an older version keeps
+sending to the deleted address; each send then fails silently after up
+to 500 ms, once per command.

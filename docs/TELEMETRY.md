@@ -1,13 +1,13 @@
 # Telemetry
 
-Telemetry is **off by default**. When you opt in, culm sends anonymous
-usage data. This page is the complete specification,
+culm sends anonymous usage data, and prints the exact payload the first
+time it does. This page is the complete specification,
 not a summary. If something is not listed here, it is not sent. The code
 that builds the payload is `src/telemetry/payload.rs`, and a test there
 fails if a key is added without this page changing too.
 
-**Opt in:** set `CULM_TELEMETRY=1` (or `true`, `on`, `yes`). Unset it, or
-set any other value, to turn it off again. No feature is degraded when
+**Opt out:** set `CULM_TELEMETRY=0` (or `false`, `off`, `no`), or
+`DO_NOT_TRACK=1`. It is already off in CI. No feature is degraded when
 telemetry is off.
 
 ---
@@ -138,17 +138,19 @@ Full specification: https://github.com/Zunetra/culm/blob/main/docs/TELEMETRY.md
 Opt out:            CULM_TELEMETRY=0
 ```
 
-## When it is on
+## When it is off
 
-Only when both of these hold:
+- `CULM_TELEMETRY` set to `0`, `false`, `off`, or `no`. This beats
+  everything else.
+- `DO_NOT_TRACK=1`.
+- `CI` set to anything but empty, `false`, or `0`, unless `CULM_TELEMETRY`
+  is `1`, `true`, `on`, or `yes`. CI runs would otherwise dominate the
+  numbers and make them meaningless; the explicit yes is how a receiver
+  is tested from a workflow.
+- No config directory to keep the id in.
 
-- `CULM_TELEMETRY` is set to `1`, `true`, `on`, or `yes`. Unset, empty,
-  or any other value leaves it off. An explicit opt-in holds even in CI,
-  which is how a receiver is tested from a workflow.
-- There is a config directory to keep the id in.
-
-`DO_NOT_TRACK` and `CI` need no rule of their own: without an explicit
-opt-in, telemetry is already off.
+An empty or unrecognised `CULM_TELEMETRY` (such as `2`) is not a
+decision, so the rules after it still apply.
 
 ## Transport
 

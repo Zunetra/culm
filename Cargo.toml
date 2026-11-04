@@ -11,7 +11,7 @@ keywords = ["monorepo", "scaffold", "workspace", "task-runner", "polyglot"]
 categories = ["command-line-utilities", "development-tools", "development-tools::build-utils"]
 # `include_dir!` compiles `layers/` and `presets/` into the binary, so the
 # published crate has to carry them; nothing else outside `src/` is needed.
-include = ["src/**/*", "layers/**/*", "presets/**/*", "README.md", "LICENSE"]
+include = ["src/**/*", "layers/**/*", "presets/**/*", "/README.md", "/LICENSE"]
 
 # An explicit `return` is a deliberate style choice here, not an oversight the
 # clippy gate should keep correcting.
