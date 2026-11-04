@@ -9,11 +9,11 @@ use std::time::Instant;
 use clap::{Parser, Subcommand};
 use culm::banner;
 use culm::cli::{
-    CacheArgs, GraphArgs, NewArgs, NewReport, RunArgs, RunReport, run_cache, run_graph,
-    run_new_reporting, run_task_reporting,
+    CacheArgs, CacheCommand, GraphArgs, GraphFormat, NewArgs, NewReport, RunArgs, RunReport,
+    run_cache, run_graph, run_new_reporting, run_task_reporting,
 };
 use culm::runner::RunnerError;
-use culm::telemetry::{self, ErrorKind, Exit, Outcome};
+use culm::telemetry::{self, CacheAction, CacheStats, ErrorKind, Exit, GraphStats, Outcome, codes};
 
 #[derive(Parser)]
 #[command(name = "culm", version, about = "Scaffold a workspace from layers")]
@@ -74,7 +74,7 @@ fn main() -> ExitCode {
      * Sent for failures too, since which stage breaks is the most useful
      * thing telemetry can say. The error itself is never sent, only the
      * stage the command had reached, from a closed set. */
-    let (command, stage, cancelled, scaffold, run) = match cli.command {
+    let (command, stage, cancelled, scaffold, run) = match &cli.command {
         Command::New(_) => (
             "new",
             new_report.stage,
@@ -86,18 +86,44 @@ fn main() -> ExitCode {
         Command::Cache(_) => ("cache", ErrorKind::Cache, false, None, None),
         Command::Graph(_) => ("graph", ErrorKind::Graph, false, None, None),
     };
-    let (exit, error_kind) = match &result {
-        _ if cancelled => (Exit::Cancelled, None),
-        Ok(()) => (Exit::Ok, None),
-        Err(error) => (Exit::Error, Some(error_kind(error, stage))),
+    let (exit, error_kind, error_code) = match &result {
+        _ if cancelled => (Exit::Cancelled, None, None),
+        Ok(()) => (Exit::Ok, None, None),
+        Err(error) => (
+            Exit::Error,
+            Some(error_kind(error, stage)),
+            Some(codes::of(error)),
+        ),
+    };
+    let graph = match &cli.command {
+        Command::Graph(args) => Some(GraphStats {
+            format: match args.format {
+                GraphFormat::List => telemetry::GraphFormat::List,
+                GraphFormat::Dot => telemetry::GraphFormat::Dot,
+            },
+        }),
+        _ => None,
+    };
+    let cache = match &cli.command {
+        Command::Cache(args) => Some(CacheStats {
+            action: match args.command {
+                CacheCommand::Stats => CacheAction::Stats,
+                CacheCommand::Clear => CacheAction::Clear,
+            },
+        }),
+        _ => None,
     };
     telemetry::record(Outcome {
         command,
         exit,
         error_kind,
+        error_code,
         duration_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
         scaffold,
         run,
+        graph,
+        cache,
+        tools: None,
     });
 
     match result {

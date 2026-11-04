@@ -24,3 +24,15 @@ pub enum ScaffoldError {
     #[error("{}: {message}", .path.display())]
     Io { path: PathBuf, message: String },
 }
+
+impl ScaffoldError {
+    /// The telemetry error code: which failure, never its text.
+    pub fn code(&self) -> &'static str {
+        return match self {
+            Self::TemplateMissing { .. } => "scaffold_template_missing",
+            Self::FileCollision { .. } => "scaffold_file_collision",
+            Self::EscapesRoot { .. } => "scaffold_escapes_root",
+            Self::Io { .. } => "scaffold_io",
+        };
+    }
+}

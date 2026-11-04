@@ -14,7 +14,7 @@ use serde::Serialize;
 use uuid::Uuid;
 
 /// Bumped whenever a field is added, removed, or changes meaning.
-pub const SCHEMA: u32 = 2;
+pub const SCHEMA: u32 = 3;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Event {
@@ -35,11 +35,19 @@ pub struct Outcome {
     pub exit: Exit,
     /// Which stage failed, from a closed set. Never an error message.
     pub error_kind: Option<ErrorKind>,
+    /// Which error it was, from `codes::ALL`. Never its message.
+    pub error_code: Option<&'static str>,
     pub duration_ms: u64,
     /// Present only for `new`.
     pub scaffold: Option<Scaffold>,
     /// Present only for `run`.
     pub run: Option<RunStats>,
+    /// Present only for `graph`.
+    pub graph: Option<GraphStats>,
+    /// Present only for `cache`.
+    pub cache: Option<CacheStats>,
+    /// Present only for `new`, filled in only once telemetry is known to be on.
+    pub tools: Option<Tools>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -97,6 +105,14 @@ pub struct Scaffold {
     pub saved_preset: bool,
     /// The wizard step, or `confirm`, where the user backed out.
     pub cancelled_at: Option<String>,
+    /// Packages the release age guard pinned below their newest release.
+    /// `None` when no version was resolved: installs skipped, nothing to install, or the guard off.
+    pub held_back: Option<u32>,
+    /// Wall-clock time of the install phase, when one ran.
+    pub install_ms: Option<u64>,
+    /// Wizard screens whose final answer differed from that screen's default.
+    /// Screen names only; the layers chosen are already in `layers`. `None` without the wizard.
+    pub wizard_changed: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -128,6 +144,47 @@ pub struct RunStats {
     pub parallel: bool,
     pub affected: bool,
     pub remote_cache: bool,
+    /// The originally recorded duration of every task restored from cache, summed.
+    pub ms_saved: u64,
+    /// Cacheable tasks whose `--verify` run differed from their cache entry.
+    /// A mismatch stops the run, so this is 0 or 1.
+    pub verify_mismatches: u32,
+}
+
+/// What `culm graph` printed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct GraphStats {
+    pub format: GraphFormat,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GraphFormat {
+    List,
+    Dot,
+}
+
+/// What `culm cache` did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct CacheStats {
+    pub action: CacheAction,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CacheAction {
+    Stats,
+    Clear,
+}
+
+/// Toolchain versions on the machine, `major.minor` only, `None` when absent or unreadable.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct Tools {
+    pub rustc: Option<String>,
+    pub cargo: Option<String>,
+    pub node: Option<String>,
+    pub pnpm: Option<String>,
+    pub go: Option<String>,
 }
 
 impl Event {
@@ -165,9 +222,13 @@ mod tests {
             command: "new",
             exit: Exit::Ok,
             error_kind: None,
+            error_code: None,
             duration_ms: 10,
             scaffold,
             run,
+            graph: None,
+            cache: None,
+            tools: None,
         }
     }
 
@@ -175,25 +236,34 @@ mod tests {
      * is the point: growing the payload means editing that document too. */
     #[test]
     fn the_payload_carries_exactly_the_documented_keys() {
-        let event = Event::new(
-            Uuid::new_v4(),
-            outcome(Some(Scaffold::default()), Some(RunStats::default())),
-        );
+        let mut o = outcome(Some(Scaffold::default()), Some(RunStats::default()));
+        o.graph = Some(GraphStats {
+            format: GraphFormat::Dot,
+        });
+        o.cache = Some(CacheStats {
+            action: CacheAction::Stats,
+        });
+        o.tools = Some(Tools::default());
+        let event = Event::new(Uuid::new_v4(), o);
         let value = serde_json::to_value(&event).unwrap();
 
         assert_eq!(
             keys(&value),
             vec![
                 "arch",
+                "cache",
                 "command",
                 "duration_ms",
+                "error_code",
                 "error_kind",
                 "exit",
+                "graph",
                 "id",
                 "os",
                 "run",
                 "scaffold",
                 "schema",
+                "tools",
                 "version"
             ]
         );
@@ -201,13 +271,16 @@ mod tests {
             keys(&value["scaffold"]),
             vec![
                 "cancelled_at",
+                "held_back",
                 "install",
                 "install_failed_manager",
+                "install_ms",
                 "layers",
                 "preset",
                 "saved_preset",
                 "selected_via",
-                "shape"
+                "shape",
+                "wizard_changed"
             ]
         );
         assert_eq!(
@@ -217,11 +290,19 @@ mod tests {
                 "cacheable",
                 "hits",
                 "misses",
+                "ms_saved",
                 "parallel",
                 "projects",
                 "remote_cache",
-                "tasks"
+                "tasks",
+                "verify_mismatches"
             ]
+        );
+        assert_eq!(keys(&value["graph"]), vec!["format"]);
+        assert_eq!(keys(&value["cache"]), vec!["action"]);
+        assert_eq!(
+            keys(&value["tools"]),
+            vec!["cargo", "go", "node", "pnpm", "rustc"]
         );
     }
 
@@ -229,10 +310,18 @@ mod tests {
     fn absent_blocks_are_null_rather_than_missing() {
         let event = Event::new(Uuid::new_v4(), outcome(None, None));
         let value = serde_json::to_value(&event).unwrap();
-        assert!(value["scaffold"].is_null());
-        assert!(value["run"].is_null());
-        assert!(value["error_kind"].is_null());
-        assert_eq!(value["schema"], 2);
+        for key in [
+            "scaffold",
+            "run",
+            "graph",
+            "cache",
+            "tools",
+            "error_kind",
+            "error_code",
+        ] {
+            assert!(value[key].is_null(), "{key}");
+        }
+        assert_eq!(value["schema"], 3);
     }
 
     #[test]

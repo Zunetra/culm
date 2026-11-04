@@ -9,12 +9,15 @@
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 use clap::Args;
 
 use crate::cas::Store;
+use crate::cli::CliError;
 use crate::runner::remote_cache::RemoteCache;
-use crate::runner::{Cache, CacheMode, Session, TaskGraph, affected, exec, parallel, workspace};
+use crate::runner::{
+    Cache, CacheMode, RunnerError, Session, TaskGraph, affected, exec, parallel, workspace,
+};
 use crate::telemetry::{ErrorKind, RunStats};
 
 #[derive(Debug, Args)]
@@ -105,7 +108,7 @@ pub fn run_task_reporting(
             }
             graph.affected_order(&seeds, &config_path)?
         }
-        (None, None) => bail!("pass a task name, or --affected <REF>"),
+        (None, None) => return Err(CliError::NoTaskOrAffected.into()),
         (Some(_), Some(_)) => unreachable!("clap already refuses task and --affected together"),
     };
 
@@ -136,6 +139,10 @@ pub fn run_task_reporting(
     /* Telemetry's `hits` has always counted verified runs too; keep its meaning. */
     report.run.hits = session.hits + session.verified;
     report.run.misses = session.misses;
+    report.run.ms_saved = session.ms_saved;
+    if matches!(result, Err(RunnerError::CacheMismatch { .. })) {
+        report.run.verify_mismatches = 1;
+    }
     result?;
     session.summarise(out);
     Ok(())

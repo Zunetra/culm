@@ -26,17 +26,18 @@ pub fn choose(
     range: Option<&VersionReq>,
     min_age_secs: i64,
     now: i64,
-) -> Result<Option<Version>, String> {
+) -> Result<Option<(Version, bool)>, String> {
     let base = format!("{PROXY}/{}/@v", escape(module));
     let list = get(&format!("{base}/list"), module)?;
 
-    for version in candidates(&list, range) {
+    /* Candidates come newest first, so anything after the first was held back by the guard. */
+    for (position, version) in candidates(&list, range).into_iter().enumerate() {
         let info: Info = serde_json::from_str(&get(&format!("{base}/v{version}.info"), module)?)
             .map_err(|e| format!("the Go proxy sent an unreadable answer for `{module}`: {e}"))?;
         let published = unix_seconds(&info.time)
             .ok_or_else(|| format!("the Go proxy sent an unreadable time for `{module}`"))?;
         if now - published >= min_age_secs {
-            return Ok(Some(version));
+            return Ok(Some((version, position > 0)));
         }
     }
     Ok(None)

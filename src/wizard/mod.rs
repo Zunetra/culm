@@ -29,8 +29,13 @@ use crate::merge::LayerId;
 /// How a wizard session ended.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome {
-    /// Every screen was answered; the qualified layer ids chosen.
-    Chosen(Vec<String>),
+    /// Every screen was answered.
+    Chosen {
+        /// The qualified layer ids chosen.
+        layers: Vec<String>,
+        /// The screens whose answer differed from their default, for telemetry.
+        changed: Vec<String>,
+    },
     /// Esc/q on the screen for this category.
     /// Named so telemetry can say where people give up, never what they had picked.
     Cancelled(Category),
@@ -48,10 +53,18 @@ pub fn run(catalog: &Catalog) -> Result<Outcome> {
 
 fn run_inner(terminal: &mut ratatui::DefaultTerminal, catalog: &Catalog) -> Result<Outcome> {
     let mut chosen: Vec<String> = Vec::new();
+    let mut changed: Vec<String> = Vec::new();
 
     let Some((shape_id, shape)) = pick_shape(terminal, catalog)? else {
         return Ok(Outcome::Cancelled(Category::Shape));
     };
+    let shape_default = single_default(catalog, Category::Shape);
+    note_change(
+        &mut changed,
+        Category::Shape,
+        std::slice::from_ref(&shape_id),
+        &shape_default,
+    );
     chosen.push(shape_id);
 
     for category in [Category::Frontend, Category::Backend] {
@@ -59,6 +72,8 @@ fn run_inner(terminal: &mut ratatui::DefaultTerminal, catalog: &Catalog) -> Resu
         else {
             return Ok(Outcome::Cancelled(category));
         };
+        let default = screen_default(catalog, category, shape, &|_| true);
+        note_change(&mut changed, category, &picked, &default);
         chosen.append(&mut picked);
     }
 
@@ -75,6 +90,8 @@ fn run_inner(terminal: &mut ratatui::DefaultTerminal, catalog: &Catalog) -> Resu
     else {
         return Ok(Outcome::Cancelled(Category::Data));
     };
+    let default = screen_default(catalog, Category::Data, shape, &offer_data);
+    note_change(&mut changed, Category::Data, &picked, &default);
     chosen.append(&mut picked);
 
     if matches!(shape, Shape::ToolingOnly) {
@@ -89,6 +106,8 @@ fn run_inner(terminal: &mut ratatui::DefaultTerminal, catalog: &Catalog) -> Resu
         else {
             return Ok(Outcome::Cancelled(Category::Toolchain));
         };
+        let default = screen_default(catalog, Category::Toolchain, shape, &|_| true);
+        note_change(&mut changed, Category::Toolchain, &picked, &default);
         chosen.append(&mut picked);
     }
 
@@ -101,6 +120,8 @@ fn run_inner(terminal: &mut ratatui::DefaultTerminal, catalog: &Catalog) -> Resu
         else {
             return Ok(Outcome::Cancelled(category));
         };
+        let default = screen_default(catalog, category, shape, &|_| true);
+        note_change(&mut changed, category, &picked, &default);
         chosen.append(&mut picked);
     }
 
@@ -108,9 +129,74 @@ fn run_inner(terminal: &mut ratatui::DefaultTerminal, catalog: &Catalog) -> Resu
     else {
         return Ok(Outcome::Cancelled(Category::Runner));
     };
+    let runner_default = single_default(catalog, Category::Runner);
+    note_change(
+        &mut changed,
+        Category::Runner,
+        std::slice::from_ref(&runner),
+        &runner_default,
+    );
     chosen.push(runner);
 
-    Ok(Outcome::Chosen(chosen))
+    Ok(Outcome::Chosen {
+        layers: chosen,
+        changed,
+    })
+}
+
+/// What a single-select screen starts on: the entry marked default, else the first, as the pickers do.
+fn single_default(catalog: &Catalog, category: Category) -> Vec<String> {
+    let mut ids: Vec<(String, bool)> = catalog
+        .by_category(category)
+        .map(|entry| {
+            (
+                entry.manifest.qualified_id().to_string(),
+                entry.manifest.default,
+            )
+        })
+        .collect();
+    ids.sort();
+    let chosen = ids
+        .iter()
+        .find(|(_, default)| *default)
+        .or_else(|| ids.first())
+        .map(|(id, _)| id.clone());
+    return chosen.into_iter().collect();
+}
+
+/// What a `pick_category` screen starts on, mirroring it: nothing for an
+/// optional single choice, the default-marked entries for a checklist.
+fn screen_default(
+    catalog: &Catalog,
+    category: Category,
+    shape: Shape,
+    offer: &dyn Fn(&CatalogEntry) -> bool,
+) -> Vec<String> {
+    match category.cardinality(shape) {
+        Cardinality::None | Cardinality::ZeroOrOne => return Vec::new(),
+        Cardinality::ExactlyOne | Cardinality::OneOrMore | Cardinality::ZeroOrMore => {}
+    }
+    let mut ids: Vec<String> = catalog
+        .by_category(category)
+        .filter(|entry| offer(entry) && entry.manifest.default)
+        .map(|entry| entry.manifest.qualified_id().to_string())
+        .collect();
+    ids.sort();
+    return ids;
+}
+
+/// Records `category` as changed when the answer is not the screen's default, compared as sets.
+fn note_change(
+    changed: &mut Vec<String>,
+    category: Category,
+    picked: &[String],
+    default: &[String],
+) {
+    let mut picked = picked.to_vec();
+    picked.sort();
+    if picked != default {
+        changed.push(category.to_string());
+    }
 }
 
 /// Every shape is a real choice: it is `ExactlyOne` in every case, so a plain
@@ -312,6 +398,38 @@ mod tests {
             offered_data(&["shape/monorepo", "frontend/nuxt", "backend/axum"]),
             vec!["data/drizzle", "data/prisma", "data/sqlx"]
         );
+    }
+
+    #[test]
+    fn keeping_every_default_changes_nothing() {
+        let catalog = Catalog::embedded().unwrap();
+        let mut changed = Vec::new();
+        let quality = screen_default(&catalog, Category::Quality, Shape::SingleApp, &|_| true);
+        note_change(&mut changed, Category::Quality, &quality, &quality);
+        let runner = single_default(&catalog, Category::Runner);
+        note_change(&mut changed, Category::Runner, &runner, &runner);
+        assert!(changed.is_empty());
+    }
+
+    #[test]
+    fn a_different_answer_names_only_its_screen() {
+        let catalog = Catalog::embedded().unwrap();
+        let mut changed = Vec::new();
+        let default = single_default(&catalog, Category::Runner);
+        note_change(
+            &mut changed,
+            Category::Runner,
+            &["runner/nx".to_owned()],
+            &default,
+        );
+        assert_eq!(changed, vec!["runner"]);
+    }
+
+    #[test]
+    fn an_optional_single_choice_defaults_to_nothing() {
+        let catalog = Catalog::embedded().unwrap();
+        let default = screen_default(&catalog, Category::Backend, Shape::SingleApp, &|_| true);
+        assert!(default.is_empty());
     }
 
     #[test]

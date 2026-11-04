@@ -1,0 +1,29 @@
+name = "culm-telemetry-dashboard"
+main = "src/index.js"
+compatibility_date = "2026-09-08"
+
+# Same account as the receiver. Not a secret.
+account_id = "1c29aac31ddeb3c8d571d04cccbe3949"
+
+# Served on workers.dev, behind Cloudflare Access (docs/DEPLOY.md). Version
+# preview URLs are turned off: each one would be another address to protect.
+workers_dev = true
+preview_urls = false
+
+# The receiver's database. This Worker only ever reads it.
+[[d1_databases]]
+binding = "DB"
+database_name = "culm-telemetry"
+database_id = "58896687-7bdd-42be-b1a6-a95b711d5425"
+
+# Cloudflare Access settings, from the Zero Trust dashboard (docs/DEPLOY.md,
+# "Deploying the dashboard"). None is a secret: the AUD tag and team domain
+# only let this Worker check a token, never mint one. While any value is still
+# REPLACE_ME, every request is refused with 403: deploying early is safe.
+[vars]
+# e.g. "yourteam.cloudflareaccess.com"
+TEAM_DOMAIN = "REPLACE_ME"
+# The Access application's "Application Audience (AUD) Tag".
+ACCESS_AUD = "REPLACE_ME"
+# Comma-separated; only these signed-in emails see the dashboard.
+ALLOWED_EMAILS = "REPLACE_ME"

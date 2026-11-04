@@ -37,6 +37,17 @@ pub enum PresetError {
     Misnamed { name: String, file: String },
 }
 
+impl PresetError {
+    /// The telemetry error code: which failure, never its text.
+    pub fn code(&self) -> &'static str {
+        return match self {
+            Self::Malformed { .. } => "preset_malformed",
+            Self::Unknown { .. } => "preset_unknown",
+            Self::Misnamed { .. } => "preset_misnamed",
+        };
+    }
+}
+
 /// A named selection of layers, as one `presets/*.toml`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]

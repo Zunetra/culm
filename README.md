@@ -711,10 +711,12 @@ NO_COLOR=1
 which layers to build next. The first time it does, it prints the exact
 JSON it sends and how to turn it off: `CULM_TELEMETRY=0` or
 `DO_NOT_TRACK=1`, and it is already off in CI. It sends an anonymous
-machine id, the culm
-version, OS and architecture, the command, and which layers and preset
-were chosen. It never sends repository names, file paths, task names,
-commands, environment values, or git remotes. The full payload is in
+machine id, the culm version, OS and architecture, the command, which
+layers and preset were chosen, counts such as cache hits and time saved,
+an error's code (never its message), and for `culm new` the
+`major.minor` versions of rustc, cargo, node, pnpm, and go. It never
+sends repository names, file paths, task names, commands, error
+messages, environment values, or git remotes. The full payload is in
 [docs/TELEMETRY.md](docs/TELEMETRY.md). Sending never delays a command
 by more than half a second, and a failed send is silent.
 
@@ -788,9 +790,10 @@ culm/
 │   ├── LAYERS.md                  # The layer model, every shipped layer, authoring
 │   ├── INTERNALS.md               # The merge engine, scaffold pipeline, library use
 │   ├── TELEMETRY.md               # The exact telemetry payload
-│   ├── DEPLOY.md                  # Releasing culm and deploying the telemetry receiver
+│   ├── DEPLOY.md                  # Releasing culm, deploying the receiver and dashboard
 │   └── Logo/                      # The culm marks
-├── telemetry/worker/              # The telemetry receiver, a Cloudflare Worker and D1
+├── telemetry/worker/              # The public telemetry receiver, a Cloudflare Worker and D1
+├── telemetry/dashboard/           # The private telemetry dashboard, behind Cloudflare Access
 ├── npm/                           # npm launcher and platform package staging
 ├── packaging/homebrew/            # Formula template for the tap
 ├── installer.sh                   # Shell installer, verifies SHA256SUMS
@@ -1113,7 +1116,7 @@ linted otherwise.
 | [docs/LAYERS.md](docs/LAYERS.md) | You want the full layer list, the selection rules, or to write a layer |
 | [docs/INTERNALS.md](docs/INTERNALS.md) | You are changing the merge engine or scaffold pipeline, or using culm as a Rust library |
 | [docs/TELEMETRY.md](docs/TELEMETRY.md) | You want the exact telemetry payload, field by field |
-| [docs/DEPLOY.md](docs/DEPLOY.md) | You are releasing a version of culm, or deploying the telemetry receiver |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | You are releasing a version of culm, or deploying the telemetry receiver or dashboard |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | You are opening a pull request |
 | [handbook/naming/NAMING.md](../handbook/naming/NAMING.md) | You wonder why it is called culm |
 

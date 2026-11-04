@@ -21,3 +21,16 @@ pub enum CasError {
     #[error("{}: {message}", .path.display())]
     Malformed { path: PathBuf, message: String },
 }
+
+impl CasError {
+    /// The telemetry error code: which failure, never its text.
+    pub fn code(&self) -> &'static str {
+        return match self {
+            Self::NoCacheDir { .. } => "cas_no_cache_dir",
+            Self::Io { .. } => "cas_io",
+            Self::Missing { .. } => "cas_missing",
+            Self::Corrupted { .. } => "cas_corrupted",
+            Self::Malformed { .. } => "cas_malformed",
+        };
+    }
+}

@@ -8,9 +8,10 @@
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 use clap::{Args, ValueEnum};
 
+use crate::cli::CliError;
 use crate::runner::{TaskGraph, workspace};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -41,7 +42,7 @@ pub fn run_graph_to(args: &GraphArgs, cwd: &Path, out: &mut impl Write) -> Resul
     let tasks = loaded.tasks;
 
     if tasks.is_empty() {
-        bail!("`{}` defines no tasks", config_path.display());
+        return Err(CliError::NoTasksDefined { path: config_path }.into());
     }
 
     let graph = TaskGraph::build(tasks, &config_path)?;

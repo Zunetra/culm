@@ -98,6 +98,8 @@ pub struct Session<'a> {
     pub hits: u32,
     pub misses: u32,
     pub verified: u32,
+    /// What every restored task originally took to run, summed: the time the cache saved.
+    pub ms_saved: u64,
 }
 
 impl<'a> Session<'a> {
@@ -108,6 +110,7 @@ impl<'a> Session<'a> {
             hits: 0,
             misses: 0,
             verified: 0,
+            ms_saved: 0,
         }
     }
 
@@ -151,6 +154,7 @@ impl<'a> Session<'a> {
                     Some(entry) => {
                         writeln!(out, "> {} ({}) [cache hit]", task.name, task.command).ok();
                         restore(task, &entry, cache)?;
+                        self.ms_saved = self.ms_saved.saturating_add(entry.duration_ms);
                         Ok(Plan::Restored)
                     }
                     None => {

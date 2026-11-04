@@ -8,7 +8,10 @@
     "deploy": "wrangler deploy",
     "db:migrate:local": "wrangler d1 execute culm-telemetry --local --file=./schema.sql",
     "db:migrate:remote": "wrangler d1 execute culm-telemetry --remote --file=./schema.sql",
-    "tail": "wrangler tail"
+    "tail": "wrangler tail",
+    "db:migrate:3:local": "wrangler d1 execute culm-telemetry --local --file=./migrations/0003_schema_3.sql",
+    "db:migrate:3:remote": "wrangler d1 execute culm-telemetry --remote --file=./migrations/0003_schema_3.sql",
+    "test": "node --test test/*.test.js"
   },
   "devDependencies": {
     "wrangler": "^4"

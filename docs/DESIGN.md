@@ -382,8 +382,14 @@ byte check.
   guard (section 2.6).
 - Runner backend config for Nx, Turborepo, Moon, and culm, written by
   `culm new`.
-- Telemetry, schema 2, Rust side and receiver code (decision 9 amended
-  2026-09-26; docs/TELEMETRY.md).
+- Telemetry, schema 3, Rust side and receiver code (decision 9 amended
+  2026-09-26 and 2026-11-04; docs/TELEMETRY.md): error codes, toolchain
+  versions, cache time saved, `--verify` mismatches, and more. The
+  receiver accepts schema 2 and 3; `migrations/0003_schema_3.sql` upgrades
+  the live table.
+- The private telemetry dashboard (`telemetry/dashboard/`): a read-only
+  Worker behind Cloudflare Access that verifies Access's token itself.
+  Built and tested locally, not deployed.
 
 **Runner**
 
@@ -434,15 +440,20 @@ Needs accounts, secrets, or time rather than code.
   every hit checked. Decides whether the held runner work happens at all.
 - **Telemetry:** the receiver is deployed (2026-11-04) at
   `culm-telemetry.shownzy001.workers.dev`, and `DEFAULT_ENDPOINT` points
-  at it from 0.1.1. Optional later: serve it at `telemetry.culm.dev`
-  once that domain is on the account (docs/DEPLOY.md).
-- **Registries:** the `culm` crate is published (0.1.0). Still open:
+  at it from 0.1.1. Before publishing the release that sends schema 3:
+  apply migration 0003 remotely and redeploy the receiver (docs/DEPLOY.md,
+  "Rolling out schema 3"). Optional later: serve it at
+  `telemetry.culm.dev` once that domain is on the account.
+- **Dashboard:** deploy `telemetry/dashboard/`, set up Cloudflare Access
+  (email code and GitHub, owner only), and fill in its three settings
+  (docs/DEPLOY.md, "Deploying the dashboard").
+- **Registries:** the `culm` crate is published (0.1.1). Still open:
   claim `culm` and `@zunetra` on npm, add `NPM_TOKEN`; create
   `zunetra/homebrew-tap` and `HOMEBREW_TAP_TOKEN`; add
   `CARGO_REGISTRY_TOKEN` if crates.io publishing should go through
   `release.yml`.
-- **Release:** no tag exists yet. Tag v0.1.1 so `release.yml` builds the
-  binaries the shell installer and Homebrew need, then publish 0.1.1.
+- **Release:** v0.1.1 is tagged and published. The next release (0.1.2)
+  sends schema 3; roll it out in the order above.
 - **Benchmark:** run and publish it, once the harness exists.
 - **Docs site:** `TELEMETRY.md` currently points at GitHub.
 - **Klassivox as a published preset** (decision 17), paused by choice.

@@ -59,3 +59,26 @@ pub enum RunnerError {
     #[error("task `{task}` produced different output than its cache entry holds: {}. The cache is not safe for this task; report it, then `culm cache clear`", .paths.join(", "))]
     CacheMismatch { task: String, paths: Vec<String> },
 }
+
+impl RunnerError {
+    /// The telemetry error code: which failure, never its text.
+    pub fn code(&self) -> &'static str {
+        return match self {
+            Self::Unreadable { .. } => "runner_unreadable",
+            Self::Malformed { .. } => "runner_malformed",
+            Self::UnknownTask { .. } => "runner_unknown_task",
+            Self::UnknownDependency { .. } => "runner_unknown_dependency",
+            Self::Cycle { .. } => "runner_cycle",
+            Self::NotStarted { .. } => "runner_not_started",
+            Self::TaskFailed { .. } => "runner_task_failed",
+            Self::GitUnavailable { .. } => "runner_git_unavailable",
+            Self::UnknownRef { .. } => "runner_unknown_ref",
+            Self::UnknownProject { .. } => "runner_unknown_project",
+            Self::NestedWorkspace { .. } => "runner_nested_workspace",
+            Self::BadPattern { .. } => "runner_bad_pattern",
+            Self::OutputOutsideProject { .. } => "runner_output_outside_project",
+            Self::Cache { .. } => "runner_cache",
+            Self::CacheMismatch { .. } => "runner_cache_mismatch",
+        };
+    }
+}

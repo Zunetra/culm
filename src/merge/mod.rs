@@ -141,6 +141,20 @@ pub enum MergeError {
     Conflicting { a: LayerId, b: LayerId },
 }
 
+impl MergeError {
+    /// The telemetry error code: which failure, never its text.
+    pub fn code(&self) -> &'static str {
+        return match self {
+            Self::ScalarConflict { .. } => "merge_scalar_conflict",
+            Self::TypeConflict { .. } => "merge_type_conflict",
+            Self::StrategyMismatch { .. } => "merge_strategy_mismatch",
+            Self::NonObjectRoot { .. } => "merge_non_object_root",
+            Self::MissingRequirement { .. } => "merge_missing_requirement",
+            Self::Conflicting { .. } => "merge_conflicting",
+        };
+    }
+}
+
 // == Contributions
 
 /// A single layer's fragment for one shared file.

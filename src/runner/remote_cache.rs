@@ -23,6 +23,16 @@ pub enum RemoteCacheError {
     Rejected { url: String, status: u16 },
 }
 
+impl RemoteCacheError {
+    /// The telemetry error code: which failure, never its text.
+    pub fn code(&self) -> &'static str {
+        return match self {
+            Self::Unreachable { .. } => "remote_cache_unreachable",
+            Self::Rejected { .. } => "remote_cache_rejected",
+        };
+    }
+}
+
 /// One remote cache endpoint. A cache miss against it must be exactly as
 /// safe as a local cache miss, so every method here returns `Ok(false)` or
 /// an ordinary error rather than panicking on an unreachable network; the

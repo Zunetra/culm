@@ -37,6 +37,19 @@ pub enum RemoteError {
     Malformed { path: String, message: String },
 }
 
+impl RemoteError {
+    /// The telemetry error code: which failure, never its text.
+    pub fn code(&self) -> &'static str {
+        return match self {
+            Self::NoCacheDir { .. } => "preset_remote_no_cache_dir",
+            Self::CloneFailed { .. } => "preset_remote_clone_failed",
+            Self::GitNotStarted { .. } => "preset_remote_git_not_started",
+            Self::MissingFile { .. } => "preset_remote_missing_file",
+            Self::Malformed { .. } => "preset_remote_malformed",
+        };
+    }
+}
+
 /// A parsed reference to a preset hosted outside this binary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteSource {

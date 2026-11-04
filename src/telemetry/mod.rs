@@ -10,13 +10,18 @@
  * with the command finishing exactly as it would have without this module.
  * Nothing here ever turns an `Ok` into an `Err`. */
 
+pub mod codes;
 mod id;
 mod payload;
+mod tools;
 
 use std::sync::mpsc;
 use std::time::Duration;
 
-pub use payload::{ErrorKind, Event, Exit, Install, Outcome, RunStats, Scaffold, SelectedVia};
+pub use payload::{
+    CacheAction, CacheStats, ErrorKind, Event, Exit, GraphFormat, GraphStats, Install, Outcome,
+    RunStats, Scaffold, SelectedVia, Tools,
+};
 
 /// The default collector: the `telemetry/worker/` receiver, deployed 2026-11-04.
 /// `CULM_TELEMETRY_ENDPOINT` overrides it without a rebuild, for a test or another receiver.
@@ -30,6 +35,9 @@ const SPEC_URL: &str = "https://github.com/Zunetra/culm/blob/main/docs/TELEMETRY
 /// Long enough for a healthy network to complete a small POST, short enough
 /// that a dead endpoint is not something anyone waits on.
 const SEND_BUDGET: Duration = Duration::from_millis(500);
+
+/// The part of `SEND_BUDGET` toolchain detection may use; the send gets the rest.
+const TOOLS_BUDGET: Duration = Duration::from_millis(200);
 
 /// Whether telemetry is off, as a pure function of the three variables that
 /// decide it, so the rule is testable without mutating process-wide
@@ -65,7 +73,8 @@ fn disabled(culm_telemetry: Option<&str>, do_not_track: Option<&str>, ci: Option
 /// a test invokes directly to avoid spawning a process, and they must never
 /// touch the network or this machine's real telemetry id as a side effect of
 /// running `cargo test`.
-pub fn record(outcome: Outcome) {
+pub fn record(mut outcome: Outcome) {
+    let started = std::time::Instant::now();
     let var = |name: &str| std::env::var(name).ok();
     if disabled(
         var("CULM_TELEMETRY").as_deref(),
@@ -79,6 +88,9 @@ pub fn record(outcome: Outcome) {
         return;
     };
 
+    if outcome.command == "new" {
+        outcome.tools = Some(tools::detect(TOOLS_BUDGET));
+    }
     let event = Event::new(machine, outcome);
 
     if first_run {
@@ -94,29 +106,29 @@ pub fn record(outcome: Outcome) {
         }
     }
 
-    send(event);
+    send(event, SEND_BUDGET.saturating_sub(started.elapsed()));
 }
 
-/// Fires the request on its own thread and gives it `SEND_BUDGET` to finish.
+/// Fires the request on its own thread and gives it `budget`, what is left of `SEND_BUDGET`, to finish.
 /// A thread rather than a bare synchronous call because the alternative is
 /// blocking every command on the network even when nothing above is willing
 /// to wait for it; a channel rather than a bare `join` because `join` has no
 /// timeout and a hung connection would otherwise hang the command with it.
-fn send(event: Event) {
+fn send(event: Event, budget: Duration) {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
-        let _ = post(&event);
+        let _ = post(&event, budget);
         let _ = tx.send(());
     });
-    let _ = rx.recv_timeout(SEND_BUDGET);
+    let _ = rx.recv_timeout(budget);
 }
 
-fn post(event: &Event) -> Result<(), Box<dyn std::error::Error>> {
+fn post(event: &Event, budget: Duration) -> Result<(), Box<dyn std::error::Error>> {
     let endpoint =
         std::env::var("CULM_TELEMETRY_ENDPOINT").unwrap_or_else(|_| DEFAULT_ENDPOINT.to_owned());
     ureq::post(&endpoint)
         .config()
-        .timeout_global(Some(SEND_BUDGET))
+        .timeout_global(Some(budget))
         .build()
         .send_json(event)?;
     Ok(())

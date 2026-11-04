@@ -23,18 +23,20 @@ because growing it means editing this file.
 ## The exact payload
 
 One event per command. Every key is always present, `null` where it
-does not apply.
+does not apply. This is schema 3, sent from culm 0.1.2; culm 0.1.1 sends
+schema 2, which is the same without the keys marked "schema 3" below.
 
 ```json
 {
-  "schema": 2,
+  "schema": 3,
   "id": "9f2c1e7a-4b3d-4a51-9c8e-2f0d6b7a1e33",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "os": "linux",
   "arch": "x86_64",
   "command": "new",
   "exit": "ok",
   "error_kind": null,
+  "error_code": null,
   "duration_ms": 4210,
   "scaffold": {
     "shape": "monorepo",
@@ -44,13 +46,25 @@ does not apply.
     "install": "ok",
     "install_failed_manager": null,
     "saved_preset": false,
-    "cancelled_at": null
+    "cancelled_at": null,
+    "held_back": 1,
+    "install_ms": 3100,
+    "wizard_changed": ["backend", "runner"]
   },
-  "run": null
+  "run": null,
+  "graph": null,
+  "cache": null,
+  "tools": {
+    "rustc": "1.99",
+    "cargo": "1.99",
+    "node": "24.22",
+    "pnpm": "10.4",
+    "go": null
+  }
 }
 ```
 
-For `culm run`, `scaffold` is `null` and `run` is:
+For `culm run`, `scaffold` and `tools` are `null` and `run` is:
 
 ```json
 {
@@ -61,9 +75,14 @@ For `culm run`, `scaffold` is `null` and `run` is:
   "misses": 1,
   "parallel": true,
   "affected": false,
-  "remote_cache": false
+  "remote_cache": false,
+  "ms_saved": 21400,
+  "verify_mismatches": 0
 }
 ```
+
+For `culm graph`, `graph` is `{ "format": "list" }` or `{ "format": "dot" }`.
+For `culm cache`, `cache` is `{ "action": "stats" }` or `{ "action": "clear" }`.
 
 | Field | Meaning |
 | --- | --- |
@@ -74,6 +93,7 @@ For `culm run`, `scaffold` is `null` and `run` is:
 | `command` | The subcommand name alone: `new`, `run`, `cache`, `graph`. |
 | `exit` | `ok`, `error`, or `cancelled`. |
 | `error_kind` | On `error` only, the stage that failed, from a closed set: `select`, `preset_fetch`, `resolve`, `merge`, `write`, `install`, `version_resolve`, `config`, `graph`, `task_failed`, `cache`, `other`. **Never an error message.** |
+| `error_code` | Schema 3. On `error` only, which error it was, from the closed list in `src/telemetry/codes.rs` (74 codes such as `cli_destination_not_empty`, `merge_scalar_conflict`, `runner_task_failed`, `install_failed`, or `other`). The code names the error's type, chosen in the code, never derived from its text. **Never an error message.** |
 | `duration_ms` | Wall-clock time of the invocation. |
 | `scaffold.shape` | `single-app`, `monorepo`, or `tooling-only`. |
 | `scaffold.layers` | The resolved layer ids, defaults included. **Only layers that ship in culm**; a layer from `--layers-dir` or a typo is dropped. |
@@ -83,15 +103,31 @@ For `culm run`, `scaffold` is `null` and `run` is:
 | `scaffold.install_failed_manager` | `pnpm`, `cargo`, or `go`. Never its arguments. |
 | `scaffold.saved_preset` | Whether `--save-preset` was used. Never its name. |
 | `scaffold.cancelled_at` | The wizard screen (`shape`, `frontend`, ...) or `confirm` where the user backed out. |
+| `scaffold.held_back` | Schema 3. How many packages the release age guard pinned below their newest release. `null` when no version was resolved. Never the package names. |
+| `scaffold.install_ms` | Schema 3. Wall-clock time of the install phase, `null` when none ran. |
+| `scaffold.wizard_changed` | Schema 3. Wizard screen names whose answer differed from that screen's default, `null` without the wizard. Screen names only, from a closed set. |
 | `run.*` | Counts and flags only. Never a task name, project name, or command. |
+| `run.ms_saved` | Schema 3. The originally recorded run time of every task restored from cache, summed. |
+| `run.verify_mismatches` | Schema 3. Tasks whose `--verify` run differed from their cache entry. A mismatch stops the run, so 0 or 1. |
+| `graph.format` | Schema 3. `list` or `dot`. |
+| `cache.action` | Schema 3. `stats` or `clear`. |
+| `tools.*` | Schema 3, `culm new` only. The `major.minor` version of `rustc`, `cargo`, `node`, `pnpm`, and `go`, or `null` when absent or not answering within 200 ms. **Never the patch level, build hash, vendor suffix, or install path.** |
 
 ## What it is for
 
 - **Which layers matter:** what gets maintained, and what gets cut when
   the template CI matrix grows too wide.
-- **Where scaffolds break:** `error_kind` and `install_failed_manager`
+- **Where scaffolds break:** `error_kind`, `error_code`, and `install_failed_manager`
   say which stage and which package manager, without any error text.
 - **Where people give up:** `cancelled_at`.
+- **Whether the defaults are right:** `wizard_changed` names the screens
+  where people did not keep the default.
+- **Whether the release age guard costs anything:** `held_back` and
+  `install_ms`.
+- **Which toolchain versions to support:** `tools`.
+- **Whether the cache is correct, from every user:** `verify_mismatches`
+  is the r0.2 checkpoint's failure signal, and `ms_saved` is what the
+  runner is worth.
 - **Whether the runner earns its place:** `run` says whether anyone uses
   it and whether the cache hits, which the runner's kill criteria need.
 
@@ -104,17 +140,20 @@ This list is binding.
 - Repository names, directory names, or any filesystem path
 - File contents of any kind
 - Task names, project names, or command strings from `culm.toml`
-- Error messages or package manager output
+- Error messages or package manager output (`error_code` names the
+  error's type; its text, which carries paths and names, is never sent)
 - Preset sources: no git URL, no file path, no saved preset name
 - Environment variable names or values
 - Git remotes, branch names, commit hashes, or author information
 - IP addresses beyond what the transport unavoidably exposes, which is
   not stored
 - Anything derived from hostname, MAC address, username, or serial number
+- A tool's full version, build hash, vendor suffix, or path: `tools` is
+  `major.minor` only, and only for `culm new`
 
 `culm.toml` contains user-authored shell commands. Sending them "to
 debug failures" would be the obvious next request, and it is refused here
-in advance. `error_kind` is the answer to that request.
+in advance. `error_kind` and `error_code` are the answer to that request.
 
 ## The anonymous id
 
@@ -155,10 +194,14 @@ decision, so the rules after it still apply.
 ## Transport
 
 - Sent after the command completes, never blocking it for more than
-  500ms.
+  500ms in total. For `culm new`, toolchain detection runs first, all
+  tools at once, and uses at most 200ms of that.
 - Failure is silent and never retried. Telemetry must not be able to slow
   down or break a command.
-- The receiver (`telemetry/worker/`) rejects any key not on this page.
+- The receiver (`telemetry/worker/`) rejects any key not on this page,
+  and any `error_code` or tool version outside the formats above.
+- Stored events are read only by the owner, through a private dashboard
+  (`telemetry/dashboard/`) behind Cloudflare Access.
 
 ## What this does and does not measure
 

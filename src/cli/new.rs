@@ -7,9 +7,10 @@
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use clap::Args;
 
+use crate::cli::CliError;
 use crate::install;
 use crate::layer::{Catalog, CatalogEntry, Category, LayerSource, Manifest, resolve};
 use crate::merge::{FileSet, LayerId};
@@ -285,29 +286,45 @@ fn finish_installs(
             .duration_since(std::time::UNIX_EPOCH)
             .map(|elapsed| i64::try_from(elapsed.as_secs()).unwrap_or(i64::MAX))
             .unwrap_or(0);
-        let pinned = install::release_age::pin(commands, args.min_release_age, now).map_err(|message| {
-            anyhow::anyhow!(
-                "{message}\nThe workspace is on disk. Pass --min-release-age 0 to install without the guard."
-            )
-        })?;
+        let pinned = install::release_age::pin(commands, args.min_release_age, now)
+            .map_err(|message| CliError::ReleaseAge { message })?;
+        report.scaffold.held_back = Some(pinned.held_back);
         (pinned.commands, pinned.cargo_locks)
     };
 
     report.stage = ErrorKind::Install;
+    let install_started = std::time::Instant::now();
+    let installed = install_all(&commands, &cargo_locks, root, out, &mut report.scaffold);
+    report.scaffold.install_ms =
+        Some(u64::try_from(install_started.elapsed().as_millis()).unwrap_or(u64::MAX));
+    installed?;
+    report.scaffold.install = Some(Install::Ok);
+    Ok(())
+}
+
+/// Runs every install command, then moves each crate the guard pinned back to its chosen version.
+/// Separate so the caller can time the whole phase, failures included.
+fn install_all(
+    commands: &[install::InstallCommand],
+    cargo_locks: &[(Option<String>, String, String)],
+    root: &Path,
+    out: &mut impl Write,
+    report: &mut Scaffold,
+) -> Result<()> {
     writeln!(out, "\nInstalling dependencies:")?;
-    for command in &commands {
+    for command in commands {
         writeln!(out, "  {}", command.display())?;
     }
-    run_each(&commands, root, &mut report.scaffold)?;
+    run_each(commands, root, report)?;
 
     /* After every add, when `Cargo.lock` exists: move each crate the guard
      * chose back to that version, since the lockfile resolved the newest. */
     if !cargo_locks.is_empty() {
-        let (updates, skipped) = install::release_age::precise_updates(root, &cargo_locks);
+        let (updates, skipped) = install::release_age::precise_updates(root, cargo_locks);
         for command in &updates {
             writeln!(out, "  {}", command.display())?;
         }
-        run_each(&updates, root, &mut report.scaffold)?;
+        run_each(&updates, root, report)?;
         for name in skipped {
             writeln!(
                 out,
@@ -315,8 +332,7 @@ fn finish_installs(
             )?;
         }
     }
-    report.scaffold.install = Some(Install::Ok);
-    Ok(())
+    return Ok(());
 }
 
 /* One at a time, so the manager that failed is known without reading the
@@ -361,16 +377,25 @@ fn set_pnpm_release_age(root: &Path, days: u64) -> Result<()> {
 fn project_name(raw: &str) -> Result<&str> {
     let name = raw.trim();
     if name.is_empty() {
-        bail!("the project name is empty");
+        return Err(CliError::ProjectNameEmpty.into());
     }
     if name == "." || name == ".." {
-        bail!("`{name}` is not a usable project name");
+        return Err(CliError::ProjectNameUnusable {
+            name: name.to_owned(),
+        }
+        .into());
     }
     if name.contains('/') || name.contains('\\') {
-        bail!("the project name `{name}` must be a single directory name, not a path");
+        return Err(CliError::ProjectNameIsPath {
+            name: name.to_owned(),
+        }
+        .into());
     }
     if name.starts_with('-') {
-        bail!("the project name `{name}` must not start with a dash");
+        return Err(CliError::ProjectNameStartsWithDash {
+            name: name.to_owned(),
+        }
+        .into());
     }
     Ok(name)
 }
@@ -428,17 +453,18 @@ fn chosen_layers(
         (None, true) if is_interactive() => {
             report.scaffold.selected_via = Some(SelectedVia::Wizard);
             match crate::wizard::run(catalog)? {
-                crate::wizard::Outcome::Chosen(chosen) => Ok(ids(&chosen)),
+                crate::wizard::Outcome::Chosen { layers, changed } => {
+                    report.scaffold.wizard_changed = Some(changed);
+                    Ok(ids(&layers))
+                }
                 crate::wizard::Outcome::Cancelled(step) => {
                     report.cancelled = true;
                     report.scaffold.cancelled_at = Some(step.to_string());
-                    bail!("cancelled: nothing was chosen")
+                    Err(CliError::Cancelled.into())
                 }
             }
         }
-        (None, true) => bail!(
-            "no layers chosen: pass --preset NAME, or at least one --layer, for example --layer backend/axum"
-        ),
+        (None, true) => Err(CliError::NoLayersChosen.into()),
     }
 }
 
@@ -509,13 +535,19 @@ fn check_destination(root: &Path) -> Result<()> {
         return Ok(());
     }
     if !root.is_dir() {
-        bail!("{} already exists and is not a directory", root.display());
+        return Err(CliError::DestinationNotADirectory {
+            path: root.to_owned(),
+        }
+        .into());
     }
     let mut existing = root
         .read_dir()
         .with_context(|| format!("cannot read {}", root.display()))?;
     if existing.next().is_some() {
-        bail!("{} already exists and is not empty", root.display());
+        return Err(CliError::DestinationNotEmpty {
+            path: root.to_owned(),
+        }
+        .into());
     }
     Ok(())
 }

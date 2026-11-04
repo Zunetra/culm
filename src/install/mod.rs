@@ -50,6 +50,21 @@ pub enum InstallError {
     MalformedPackageJson { path: PathBuf, message: String },
 }
 
+impl InstallError {
+    /// The telemetry error code: which failure, never its text.
+    pub fn code(&self) -> &'static str {
+        return match self {
+            Self::UnknownManager { .. } => "install_unknown_manager",
+            Self::FeaturesUnsupported { .. } => "install_features_unsupported",
+            Self::DevUnsupported { .. } => "install_dev_unsupported",
+            Self::NotStarted { .. } => "install_not_started",
+            Self::Failed { .. } => "install_failed",
+            Self::NoRootPackageJson { .. } => "install_no_root_package_json",
+            Self::MalformedPackageJson { .. } => "install_malformed_package_json",
+        };
+    }
+}
+
 /// One package manager invocation, held as argv rather than as a string.
 /// A shell string would have to be quoted to be correct and parsed to be tested, and neither is worth doing when the only consumer spawns a process.
 #[derive(Debug, Clone, PartialEq, Eq)]

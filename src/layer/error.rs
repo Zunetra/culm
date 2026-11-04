@@ -65,3 +65,25 @@ pub enum LayerError {
     #[error("{}: {message}", .path.display())]
     Unreadable { path: PathBuf, message: String },
 }
+
+impl LayerError {
+    /// The telemetry error code: which failure, never its text.
+    pub fn code(&self) -> &'static str {
+        return match self {
+            Self::Malformed { .. } => "layer_malformed",
+            Self::NonTableMergeValue { .. } => "layer_non_table_merge_value",
+            Self::CategoryEmpty { .. } => "layer_category_empty",
+            Self::CategoryForbidden { .. } => "layer_category_forbidden",
+            Self::CategoryOverfull { .. } => "layer_category_overfull",
+            Self::DuplicateId { .. } => "layer_duplicate_id",
+            Self::ShapeMissing { .. } => "layer_shape_missing",
+            Self::UnknownShape { .. } => "layer_unknown_shape",
+            Self::SingleAppHasNoApp { .. } => "layer_single_app_has_no_app",
+            Self::UnknownLayer { .. } => "layer_unknown_layer",
+            Self::MissingRequirement { .. } => "layer_missing_requirement",
+            Self::Conflicting { .. } => "layer_conflicting",
+            Self::UnqualifiedReference { .. } => "layer_unqualified_reference",
+            Self::Unreadable { .. } => "layer_unreadable",
+        };
+    }
+}

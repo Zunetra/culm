@@ -60,6 +60,19 @@ Two places need that URL:
    a rebuild, which is how this was tested against a throwaway endpoint
    before this file existed.
 
+## Upgrading an existing database
+
+`schema.sql` creates the table for a fresh database. A database created
+before schema 3 needs the new columns added once:
+
+```sh
+npm run db:migrate:3:remote
+```
+
+Do this, then `npm run deploy`, **before** publishing the culm release
+that sends schema 3. docs/DEPLOY.md, "Rolling out schema 3", has the
+full order and checks. `npm test` runs the receiver's validation tests.
+
 ## Querying what lands
 
 ```sh

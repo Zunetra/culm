@@ -71,6 +71,8 @@ pub struct Pinned {
     /// `(manifest path, crate, version)` for each Cargo crate whose lockfile
     /// entry must be moved back to the chosen version after installing.
     pub cargo_locks: Vec<(Option<String>, String, String)>,
+    /// Packages pinned below their newest release because that release was too young.
+    pub held_back: u32,
 }
 
 /// Names a version for every Cargo and Go package in `commands`. pnpm
@@ -92,11 +94,19 @@ pub fn pin(commands: &[InstallCommand], days: u64, now: i64) -> Result<Pinned, S
                 let chosen = match command.program.as_str() {
                     "cargo" => {
                         let releases = crates_io::releases(name)?;
-                        select(&releases, range.as_ref(), min_age, now).map(|r| r.version.clone())
+                        let newest = select(&releases, range.as_ref(), i64::MIN, now);
+                        select(&releases, range.as_ref(), min_age, now).map(|r| {
+                            let held = newest.is_some_and(|n| n.version != r.version);
+                            (r.version.clone(), held)
+                        })
                     }
                     _ => go_proxy::choose(name, range.as_ref(), min_age, now)?,
                 };
+                if chosen.as_ref().is_some_and(|(_, held)| *held) {
+                    pinned.held_back += 1;
+                }
                 let version = chosen
+                    .map(|(version, _)| version)
                     .ok_or_else(|| format!("{name} has no release at least {days} day(s) old"))?
                     .to_string();
                 if command.program == "cargo" {

@@ -156,6 +156,21 @@ or `no`, or `DO_NOT_TRACK=1`, or `CI` is set; `CULM_TELEMETRY` set to `1`,
 `true`, `on`, or `yes` turns it back on in CI. Takes effect from 0.1.1.
 The first-run notice printing the exact payload is what makes the
 default acceptable, so it must never be removed or summarised.
+**Amended 2026-11-04 by the owner (schema 3).** Adds `error_code`, the
+type of the error from a closed list of codes (`src/telemetry/codes.rs`),
+in place of any idea of sending error messages: the owner asked for error
+messages and chose codes, because the text carries user paths, project
+names, and task names, and would be sent by default. Error messages stay
+on the "never sent" list. Also adds toolchain versions (`rustc`, `cargo`,
+`node`, `pnpm`, `go`) as `major.minor` only and only for `culm new`,
+detected only when telemetry is on and within the 500 ms budget; the
+time the cache saved; `--verify` mismatches; packages the release age
+guard held back; install time; the `graph` format and `cache` action; and
+the wizard screens whose default was changed (names only). The receiver
+accepts schema 2 and 3. The stored events are read through a private
+dashboard (`telemetry/dashboard/`), a separate Worker that only reads,
+behind Cloudflare Access, which also verifies Access's signed token on
+every request and refuses everyone while it is not configured.
 
 **10. This project is culm, and ipile is the bootstrap tool.** Grain was
 abandoned for colliding with the Grain programming language. Four

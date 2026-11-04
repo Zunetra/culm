@@ -515,3 +515,6 @@ $RECYCLE.BIN/
 
 # Wrangler local state for telemetry/worker: the emulated D1 and build output
 .wrangler/
+
+# wrangler dev settings for the telemetry Workers; .dev.vars.example is the template
+.dev.vars

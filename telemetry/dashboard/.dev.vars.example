@@ -1,0 +1,10 @@
+# Local development only. Copy it, then run `npm run dev`:
+#
+#   cp .dev.vars.example .dev.vars
+#
+# wrangler reads .dev.vars for `wrangler dev` and never deploys it. The bypass
+# below works only for requests to localhost or 127.0.0.1, so even a deployed
+# value would be ignored. .dev.vars is gitignored.
+
+# Any email: shown as the signed-in user in local development.
+DEV_BYPASS_EMAIL=you@example.com

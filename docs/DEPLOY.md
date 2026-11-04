@@ -6,6 +6,7 @@ culm has exactly two things that leave this repository:
 | --- | --- | --- | --- |
 | **The `culm` binary** | crates.io, GitHub Releases (later npm and Homebrew) | Every version | [Releasing culm](#-releasing-culm) |
 | **The telemetry receiver**, `telemetry/worker/` | Cloudflare Workers and D1 | Once, then only when its code changes | [Deploying the telemetry receiver](#-deploying-the-telemetry-receiver) |
+| **The private dashboard**, `telemetry/dashboard/` | Cloudflare Workers, behind Cloudflare Access | Once, then only when its code changes | [Deploying the dashboard](#-deploying-the-dashboard) |
 
 Nothing else is deployed. There is no website and no server for the CLI
 itself: a user's `cargo install culm` is the whole delivery.
@@ -319,12 +320,49 @@ The payload, `schema.sql`, the receiver's validation in `src/index.js`,
 and [TELEMETRY.md](TELEMETRY.md) move together, and a schema change is a
 decision 9 change first. When one changes:
 
-1. Update all four in one commit.
-2. Apply new columns to the live database with an `ALTER TABLE`
-   statement through `wrangler d1 execute --remote --command`, since
-   `CREATE TABLE IF NOT EXISTS` does not alter an existing table.
+1. Update all four in one commit, plus a numbered file in
+   `telemetry/worker/migrations/` with the `ALTER TABLE` statements,
+   since `CREATE TABLE IF NOT EXISTS` does not alter an existing table.
+2. Apply that migration to the live database.
 3. Deploy the receiver **before** publishing the culm that sends the new
    field, so no event is rejected in between.
+
+### Rolling out schema 3
+
+Schema 3 adds error codes, toolchain versions, time saved by the cache,
+`--verify` mismatches, and more ([TELEMETRY.md](TELEMETRY.md)). culm
+0.1.1 sends schema 2; the next release sends schema 3. Do these in
+order, from `telemetry/worker/`, **before** publishing that release:
+
+1. **Run the receiver's own tests:**
+   ```bash
+   npm test
+   ```
+2. **Add the new columns to the live database** (once only; a second
+   run fails with `duplicate column name` and changes nothing):
+   ```bash
+   npm run db:migrate:3:remote
+   ```
+   Answer `yes`. Check it worked:
+   ```bash
+   npx wrangler d1 execute culm-telemetry --remote \
+     --command "SELECT COUNT(*) AS columns FROM pragma_table_info('events')"
+   ```
+   It must say `40`.
+3. **Deploy the receiver:**
+   ```bash
+   npm run deploy
+   ```
+   It now accepts schema 2 and schema 3, so 0.1.1 users keep working.
+4. **Prove a schema 3 event lands**, as in
+   [Step 6](#step-6-prove-an-event-lands), using a culm built from this
+   repository. Then check the new columns:
+   ```bash
+   npx wrangler d1 execute culm-telemetry --remote \
+     --command "SELECT schema, error_code, tool_rustc, tool_node FROM events ORDER BY event_id DESC LIMIT 3"
+   ```
+5. **Only now** publish the culm release that sends schema 3
+   ([Releasing culm](#-releasing-culm)).
 
 ### Taking it down
 
@@ -337,3 +375,180 @@ Telemetry is on by default, so first change `DEFAULT_ENDPOINT` or the
 default itself in a release. Anyone still on an older version keeps
 sending to the deleted address; each send then fails silently after up
 to 500 ms, once per command.
+
+---
+
+## 🔐 Deploying the dashboard
+
+The dashboard (`telemetry/dashboard/`) is a private website that shows
+everything in the telemetry database: overview, every event, machines,
+scaffolding, the runner, errors, toolchains, and CSV or JSON export. It
+is a **separate Worker** from the receiver and only ever reads.
+
+Only you can open it. Two locks protect it:
+
+1. **Cloudflare Access** stands in front of it. Opening it shows
+   Cloudflare's login page, where you sign in with a one-time code sent
+   to your email, or with GitHub. Anyone else is stopped there and never
+   reaches the dashboard.
+2. **The dashboard checks again itself.** On every request it verifies
+   the signed token Access attaches: the signature, that it is for this
+   application, that it has not expired, and that the email is on its
+   own allow list. A request without a valid token gets `403 Forbidden`
+   and no data, even if Access were somehow switched off.
+
+While its settings are still `REPLACE_ME`, the dashboard refuses
+**everyone**, you included. Deploying it before setting up Access is
+safe; it just shows `Forbidden` until step 6 is done.
+
+Cloudflare Access is part of Cloudflare Zero Trust, which is free for up
+to 50 users. It may ask for a payment method when you first enable Zero
+Trust; the free plan is not charged.
+
+### Step 1. Look at it locally first (optional)
+
+From `telemetry/dashboard/`:
+
+```bash
+npm install
+cp .dev.vars.example .dev.vars        # sets a local-only sign-in bypass
+npm run dev
+```
+
+Open <http://localhost:8787>. Locally it reads wrangler's local copy of
+the database, which is empty unless you ran the receiver's migrations
+with `--local`. The bypass in `.dev.vars` works **only** for requests to
+`localhost` or `127.0.0.1`, and `.dev.vars` is never deployed and is
+gitignored.
+
+### Step 2. Deploy the Worker
+
+```bash
+cd telemetry/dashboard
+npm install
+npx wrangler login        # skip if already logged in
+npm run deploy
+```
+
+It prints the dashboard's address, such as
+`https://culm-telemetry-dashboard.shownzy001.workers.dev`. Open it: you
+should see `Forbidden`. That is correct for now.
+
+### Step 3. Turn on Zero Trust and pick a team name
+
+1. Open the Cloudflare dashboard, choose the **Shownzy001@gmail.com's
+   Account** account, and click **Zero Trust** in the left sidebar.
+2. The first time, it asks for a **team name**. Choose something short,
+   such as `zunetra`. Your **team domain** is then
+   `zunetra.cloudflareaccess.com`. Write it down.
+3. Choose the **Free** plan and finish the setup.
+
+If Zero Trust is already set up, find the team domain under
+**Settings, Custom Pages** (or **Settings, General**): it is shown as
+`<team>.cloudflareaccess.com`.
+
+### Step 4. Add the two ways to sign in
+
+In Zero Trust, go to **Settings, Authentication, Login methods**.
+
+**One-time PIN (email code).** Click **Add new**, choose **One-time
+PIN**, and save. Nothing else to fill in.
+
+**GitHub.**
+
+1. In another tab, open GitHub, **Settings, Developer settings, OAuth
+   Apps, New OAuth App**, and fill in:
+   - **Application name:** `culm telemetry dashboard`
+   - **Homepage URL:** `https://<team>.cloudflareaccess.com`
+   - **Authorization callback URL:**
+     `https://<team>.cloudflareaccess.com/cdn-cgi/access/callback`
+
+   with your team name in place of `<team>`.
+2. Click **Register application**, then **Generate a new client
+   secret**. Copy the **Client ID** and the **Client secret** (the secret
+   is shown once).
+3. Back in Zero Trust, **Login methods, Add new, GitHub**: paste the
+   Client ID and Client secret, save, then click **Test**. A GitHub
+   page asks you to authorise the app; approve it, and the test reports
+   success.
+
+### Step 5. Put the dashboard behind Access
+
+In Zero Trust, go to **Access, Applications, Add an application**, and
+choose **Self-hosted**.
+
+1. **Application name:** `culm telemetry dashboard`.
+2. **Session duration:** `24 hours` (or shorter).
+3. **Public hostname:** subdomain `culm-telemetry-dashboard`, domain
+   `shownzy001.workers.dev`; that is, exactly the address step 2 printed.
+4. **Login methods:** untick **Accept all available identity
+   providers**, then tick only **One-time PIN** and **GitHub**.
+5. Click **Next** to reach **Policies**, and add one:
+   - **Policy name:** `Owner only`
+   - **Action:** `Allow`
+   - **Include:** selector **Emails**, value your own email address.
+     For GitHub sign-in, use the email on your GitHub account, or add it
+     as a second value.
+6. Save the application.
+7. Open the application again and find **Application Audience (AUD)
+   Tag** under its **Overview** (or **Basic information**). It is a long
+   string of letters and numbers. Copy it.
+
+If the Cloudflare dashboard offers it instead, enabling **Cloudflare
+Access** from the Worker's own page (**Workers & Pages,
+culm-telemetry-dashboard, Settings, Domains & Routes**, the
+`workers.dev` row) creates the same kind of application; then edit its
+policy and login methods as in 4 and 5, and copy its AUD tag.
+
+### Step 6. Tell the dashboard about Access
+
+Edit `telemetry/dashboard/wrangler.toml`, replacing the three
+`REPLACE_ME` values:
+
+```toml
+[vars]
+TEAM_DOMAIN = "zunetra.cloudflareaccess.com"        # your team domain, from step 3
+ACCESS_AUD = "4714c1358e65fe4b408ad6d432a5f878f08194bdb4752441fd56faefa9b2b6f2"   # your AUD tag, from step 5
+ALLOWED_EMAILS = "you@example.com"                   # comma-separated if more than one
+```
+
+None of these is a secret: they let the dashboard *check* a token, never
+create one. Then deploy again:
+
+```bash
+npm run deploy
+```
+
+### Step 7. Check both locks
+
+1. **In a private (incognito) window**, open the dashboard address. You
+   must see Cloudflare's sign-in page, not the dashboard. Sign in with
+   the email code, then try GitHub: both must open the dashboard, with
+   your email shown at the top right.
+2. **Without Access**, the dashboard must refuse:
+   ```bash
+   curl -i https://culm-telemetry-dashboard.shownzy001.workers.dev/
+   ```
+   must answer with Cloudflare's login redirect (`302`) or `403
+   Forbidden`, never the dashboard.
+3. **Someone else** cannot get in: signing in with an email not on the
+   policy is refused by Access itself.
+
+### If something is wrong
+
+| You see | Cause and fix |
+| --- | --- |
+| `Forbidden` after signing in | A setting in `wrangler.toml` does not match: the team domain, the AUD tag, or your email (`ALLOWED_EMAILS` is compared without case). Fix it and `npm run deploy` again |
+| The dashboard opens without any sign-in page | The Access application's hostname does not match the dashboard's address. Fix it in step 5. The dashboard still refuses without a token, so you see `Forbidden`, not data |
+| GitHub sign-in fails | The OAuth app's callback URL must be exactly `https://<team>.cloudflareaccess.com/cdn-cgi/access/callback` |
+| `Something went wrong reading the telemetry database` | The database is missing columns. Run the schema 3 migration ([Rolling out schema 3](#rolling-out-schema-3)) |
+
+### Day to day
+
+- Sign out: the **Sign out** link at the top right.
+- Change who can see it: edit the Access policy **and** `ALLOWED_EMAILS`,
+  then `npm run deploy`.
+- Remove it: `npx wrangler delete` from `telemetry/dashboard/`, then
+  delete the Access application. The receiver and its data are not
+  affected.
+
