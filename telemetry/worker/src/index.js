@@ -34,7 +34,7 @@ const SELECTED_VIA = ["flags", "preset", "wizard"];
 const INSTALLS = ["ok", "failed", "skipped", "none"];
 const MANAGERS = ["pnpm", "cargo", "go"];
 const CANCEL_STEPS = [
-  "confirm", "shape", "frontend", "backend", "toolchain",
+  "confirm", "shape", "frontend", "backend", "data", "toolchain",
   "quality", "infra", "editor", "runner",
 ];
 

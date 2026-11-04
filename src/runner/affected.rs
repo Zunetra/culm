@@ -123,6 +123,7 @@ mod tests {
             depends_on: Vec::new(),
             cacheable: false,
             declared_env: Vec::new(),
+            persistent: false,
         }
     }
 

@@ -15,13 +15,13 @@
 <p align="center">
   <a href="./LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-green.svg"/></a>
   <img alt="Rust 2024" src="https://img.shields.io/badge/rust-edition%202024-orange.svg"/>
-  <img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-blue.svg"/>
+  <a href="https://crates.io/crates/culm"><img alt="crates.io" src="https://img.shields.io/crates/v/culm.svg"/></a>
   <img alt="Status pre-alpha" src="https://img.shields.io/badge/status-pre--alpha-lightgrey.svg"/>
   <img alt="Layers 39" src="https://img.shields.io/badge/layers-39-016630.svg"/>
 </p>
 
-> **Status: pre-alpha, nothing is published yet.** You install culm from
-> this source checkout, which takes about two minutes and is walked
+> **Status: pre-alpha.** culm is on [crates.io](https://crates.io/crates/culm),
+> so `cargo install culm` is all it takes; the whole path is walked
 > through step by step in [Your first workspace](#-your-first-workspace).
 > The scaffolder is the most complete half. The runner works and caches,
 > but is in its r0.2 checkpoint: two weeks of real use before anything
@@ -226,9 +226,9 @@ shortened.
 
 ### Step 1. Install Rust
 
-culm is written in Rust, so you need Rust to build it. If `cargo
---version` already prints a version, run `rustup update` to get the
-latest stable and skip to step 2.
+culm is installed with Cargo, Rust's package manager, so you need Rust.
+If `cargo --version` already prints a version, run `rustup update` to
+get the latest stable and skip to step 2.
 
 **Linux and macOS:**
 
@@ -258,21 +258,19 @@ need the ones for the layers you pick:
 | Rust layers (`axum`, `actix`, `sqlx`, `clippy`, ...) | Rust, from step 1 | `cargo --version` |
 | JavaScript layers (`next`, `nuxt`, `nestjs`, `eslint`, ...) | Node (current LTS) and pnpm | `node --version`, `pnpm --version` |
 | Go layers (`go-chi`) | Go | `go version` |
-| `--affected`, or a preset from a git URL | git | `git --version` |
+| `--affected`, a preset from a git URL, or installing from source | git | `git --version` |
 
 Not sure yet? Install nothing extra for now. The walkthrough below only
 uses Rust, and `--no-install` (step 5) skips installs entirely.
 
-### Step 3. Get the source and install culm
+### Step 3. Install culm
 
 ```bash
-git clone https://github.com/Zunetra/culm.git
-cd culm
-cargo install --path .
+cargo install culm
 ```
 
-The first build downloads and compiles culm's dependencies, which takes
-a minute or two. When it finishes, `culm` is installed into
+Cargo downloads culm from crates.io and compiles it, which takes a
+minute or two the first time. When it finishes, `culm` is installed into
 `~/.cargo/bin`, which rustup already put on your `PATH`.
 
 Check it worked, from any directory:
@@ -282,19 +280,32 @@ culm --version
 ```
 
 ```
-culm 0.1.0
+culm 0.1.1
 ```
 
-> **Tip:** to try culm without installing it, run `cargo culm <args>`
-> from inside the checkout. `cargo culm` is an alias for
-> `cargo run --quiet --` (see `.cargo/config.toml`). Anything it
-> scaffolds lands inside the checkout, so prefer the installed `culm`
-> for real projects.
+To upgrade later, run `cargo install culm` again. To remove it,
+`cargo uninstall culm`.
+
+<details>
+<summary>Installing from source instead (to try unreleased changes)</summary>
+
+```bash
+git clone https://github.com/Zunetra/culm.git
+cd culm
+cargo install --path .
+```
+
+Inside the checkout, `cargo culm <args>` runs culm without installing
+it: it is an alias for `cargo run --quiet --` (see `.cargo/config.toml`).
+Anything it scaffolds lands inside the checkout, so prefer the
+installed `culm` for real projects.
+
+</details>
 
 ### Step 4. Move to where your projects live
 
 `culm new` creates a new folder **inside your current directory**, so
-leave the culm checkout first:
+`cd` to wherever you keep your work first:
 
 ```bash
 cd ~/Projects        # or wherever you keep your work
@@ -311,8 +322,10 @@ culm new my-app
 ```
 
 The wizard asks one question per screen, in this order: shape, frontend,
-backend, (toolchain, only for `tooling-only`), quality, infra, editor,
-runner.
+backend, database, (toolchain, only for `tooling-only`), quality, infra,
+editor, runner. The database screen only offers what fits the apps you
+picked (`sqlx` beside a Rust service, `prisma` and `drizzle` beside a
+Node one), and is skipped when you picked no app.
 
 | Key | Does |
 | --- | --- |
@@ -320,9 +333,6 @@ runner.
 | `Space` | Tick or untick, on screens where you can choose several |
 | `Enter` | Confirm this screen |
 | `Esc` or `q` | Cancel. Nothing is written |
-
-Data layers (`sqlx`, `prisma`, `drizzle`) are not in the wizard yet. Use
-option C to add one.
 
 **Option B, a preset:**
 
@@ -335,6 +345,12 @@ culm new my-app --preset backend
 | `backend` | A single Rust API on Axum |
 | `frontend` | A single Nuxt application |
 | `monorepo` | A Nuxt front end and an Axum service backed by SQLx |
+
+Add `--layer` to put more on top of a preset:
+
+```bash
+culm new my-app --preset backend --layer data/sqlx --layer runner/culm
+```
 
 **Option C, layers by hand** (what this walkthrough uses):
 
@@ -524,11 +540,11 @@ culm cache stats                  # e.g. "3 objects, 1636 bytes, at ~/.cache/cul
 culm cache clear                  # empty the cache; the next run of every task is a miss
 ```
 
-> **Watch out with `--affected`:** a task with no `inputs` always counts
-> as affected, because guessing "unaffected" is the dangerous direction.
-> The scaffolded `dev` task has no inputs and starts a server that never
-> exits, so `culm run --affected main` will start it. Give `dev`
-> `inputs`, or stop it with `Ctrl+C`.
+> **How `--affected` treats long-running tasks:** a task with no `inputs`
+> always counts as affected, because guessing "unaffected" is the
+> dangerous direction. A task marked `persistent = true`, like the
+> scaffolded `dev` server, is never picked by `--affected`. Run it by
+> name with `culm run dev`.
 
 Run `culm run` from the workspace root to run a task in every project
 that has it. Run it inside a project folder to run only that project's.
@@ -557,7 +573,7 @@ Run any command with `--help` for the full text.
 | Flag | Meaning |
 | --- | --- |
 | `--layer <ID>` | Include a layer, as `<category>/<id>`. Repeat for several |
-| `--preset <NAME>` | Start from a preset instead of listing layers. Cannot be combined with `--layer` yet |
+| `--preset <NAME>` | Start from a preset. Any `--layer` given as well is added on top |
 | `--without <ID>` | Drop a layer that would otherwise arrive as a default |
 | `--yes` | Skip the confirmation. Required when there is no terminal |
 | `--no-install` | Write files, print install commands instead of running them |
@@ -626,6 +642,10 @@ inputs = ["**/*", "../../Cargo.lock"]
 depends_on = ["build"]
 cache = true
 declared_env = ["RUSTFLAGS"]
+
+[tasks.dev]
+command = "pnpm run dev"
+persistent = true                   # a server that never exits
 ```
 
 | Field | Default | Meaning |
@@ -636,6 +656,7 @@ declared_env = ["RUSTFLAGS"]
 | `depends_on` | none | `"build"` (same project), `"libs/ui:build"` (a named project), or `"^build"` (every dependency project) |
 | `cache` | `false` | Whether this task is cached at all |
 | `declared_env` | none | Environment variables whose values are part of the key. Nothing else from the environment is |
+| `persistent` | `false` | A long-running task, such as a dev server. `--affected` never selects it; `culm run <task>` still runs it. Added in 0.1.1; 0.1.0 ignores it |
 
 **What goes into the cache key:** the task name, the command, the hash
 of every input file, the declared environment variables, the OS and
@@ -808,7 +829,7 @@ Use whichever column you prefer; they run the same thing.
 | `cargo lint` | `pnpm lint` | **The gate:** `cargo clippy --all-targets -- -D warnings` |
 | `cargo fmt` | `pnpm format` | Format |
 | `cargo fmt --check` | `pnpm format:check` | Fail instead of rewriting, as CI does |
-| `cargo install --path .` | | Install your local build as `culm` |
+| `cargo install --path .` | | Install your local build as `culm`, replacing the crates.io one |
 
 Single test suites:
 
@@ -887,8 +908,8 @@ first:
    version you are releasing.
 2. Tag and push the tag:
    ```bash
-   git tag -s v0.1.0 -m "v0.1.0"
-   git push origin v0.1.0
+   git tag -s v0.1.1 -m "v0.1.1"
+   git push origin v0.1.1
    ```
    This alone builds the binaries and creates the GitHub release. It
    publishes nothing to any registry.
@@ -907,15 +928,15 @@ only yanked, so step 3 is deliberate.
 
 ## 📦 Distribution
 
-> **None of this is published yet.** The code for every channel is in
-> this repository; the registries, the tap, and the first release are
-> not. Until then, install from source as in
-> [step 3](#step-3-get-the-source-and-install-culm).
+> **crates.io is live; the other three are not yet.** The code for
+> every channel is in this repository, but the npm packages, the
+> Homebrew tap, and a tagged GitHub release with binaries do not exist
+> yet. Until they do, use `cargo install culm`.
 
 | Channel | Command | Audience | In this repository |
 | --- | --- | --- | --- |
 | npm | `npx culm@latest new` | Primary funnel, zero install | `npm/` |
-| crates.io | `cargo install culm` | Rust-native developers | `Cargo.toml` |
+| crates.io (**live**) | `cargo install culm` | Rust-native developers | `Cargo.toml` |
 | Shell | `curl -fsSL https://github.com/Zunetra/culm/releases/latest/download/installer.sh \| sh` | CI and Docker | `installer.sh` |
 | Homebrew | `brew install zunetra/tap/culm` | macOS and Linux | `packaging/homebrew/` |
 
@@ -977,9 +998,9 @@ Run `culm graph` to see the task names that do exist.
 
 #### `culm run --affected` starts a server and never finishes
 
-A task with no `inputs`, such as the scaffolded `dev`, always counts as
-affected. Add `inputs` to it, or stop it with `Ctrl+C`. See
-[Running tasks](#-running-tasks).
+The workspace was scaffolded by culm 0.1.0, before `persistent` existed.
+Add `persistent = true` under `[tasks.dev]` in each project's
+`culm.toml`, and upgrade with `cargo install culm`.
 
 #### A cached result looks wrong
 

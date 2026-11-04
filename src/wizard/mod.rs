@@ -12,15 +12,19 @@
  * is already known. Toolchain is asked only under `tooling-only`, the one
  * shape where nothing else implies it (decision 4); every other shape never
  * asks, the same as a flag-driven run never names a toolchain directly. Data
- * layers (`sqlx`, `prisma`, `drizzle`) are not in the documented wizard order
- * either, so this does not invent a step for them - they stay reachable only
- * by `--layer` for now. */
+ * follows backend, and offers only the data layers whose toolchain an app
+ * already chosen brings: `sqlx` beside a Rust service, `prisma` and
+ * `drizzle` beside a Node one. Nothing chosen offers nothing, and the screen
+ * is skipped. */
 
 mod picker;
 
+use std::collections::HashSet;
+
 use anyhow::{Context, Result};
 
-use crate::layer::{Cardinality, Catalog, Category, Shape, shape_of};
+use crate::layer::{Cardinality, Catalog, CatalogEntry, Category, Shape, shape_of};
+use crate::merge::LayerId;
 
 /// How a wizard session ended.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,15 +55,37 @@ fn run_inner(terminal: &mut ratatui::DefaultTerminal, catalog: &Catalog) -> Resu
     chosen.push(shape_id);
 
     for category in [Category::Frontend, Category::Backend] {
-        let Some(mut picked) = pick_category(terminal, catalog, category, shape, "app")? else {
+        let Some(mut picked) = pick_category(terminal, catalog, category, shape, "app", &|_| true)?
+        else {
             return Ok(Outcome::Cancelled(category));
         };
         chosen.append(&mut picked);
     }
 
+    let toolchains = implied_toolchains(catalog, &chosen);
+    let offer_data = |entry: &CatalogEntry| data_fits(entry, &toolchains);
+    let Some(mut picked) = pick_category(
+        terminal,
+        catalog,
+        Category::Data,
+        shape,
+        "database",
+        &offer_data,
+    )?
+    else {
+        return Ok(Outcome::Cancelled(Category::Data));
+    };
+    chosen.append(&mut picked);
+
     if matches!(shape, Shape::ToolingOnly) {
-        let Some(mut picked) =
-            pick_category(terminal, catalog, Category::Toolchain, shape, "toolchain")?
+        let Some(mut picked) = pick_category(
+            terminal,
+            catalog,
+            Category::Toolchain,
+            shape,
+            "toolchain",
+            &|_| true,
+        )?
         else {
             return Ok(Outcome::Cancelled(Category::Toolchain));
         };
@@ -71,7 +97,8 @@ fn run_inner(terminal: &mut ratatui::DefaultTerminal, catalog: &Catalog) -> Resu
         (Category::Infra, "infra layer"),
         (Category::Editor, "editor"),
     ] {
-        let Some(mut picked) = pick_category(terminal, catalog, category, shape, noun)? else {
+        let Some(mut picked) = pick_category(terminal, catalog, category, shape, noun, &|_| true)?
+        else {
             return Ok(Outcome::Cancelled(category));
         };
         chosen.append(&mut picked);
@@ -128,13 +155,21 @@ fn pick_category(
     category: Category,
     shape: Shape,
     noun: &str,
+    offer: &dyn Fn(&CatalogEntry) -> bool,
 ) -> Result<Option<Vec<String>>> {
     let cardinality = category.cardinality(shape);
     if matches!(cardinality, Cardinality::None) {
         return Ok(Some(Vec::new()));
     }
 
-    let mut entries: Vec<&crate::layer::CatalogEntry> = catalog.by_category(category).collect();
+    let mut entries: Vec<&CatalogEntry> = catalog
+        .by_category(category)
+        .filter(|entry| offer(entry))
+        .collect();
+    /* A screen with nothing to choose is only a keypress to get past. */
+    if entries.is_empty() {
+        return Ok(Some(Vec::new()));
+    }
     entries.sort_by_key(|entry| entry.manifest.qualified_id().to_string());
     let labels: Vec<String> = entries
         .iter()
@@ -166,7 +201,7 @@ fn pick_category(
                 // selection: `tooling-only` requires at least one toolchain,
                 // and `validate_selection` would refuse this downstream
                 // anyway, just with a less immediate message.
-                return pick_category(terminal, catalog, category, shape, noun);
+                return pick_category(terminal, catalog, category, shape, noun, offer);
             }
             Ok(Some(
                 indices.into_iter().map(|i| labels[i].clone()).collect(),
@@ -174,6 +209,33 @@ fn pick_category(
         }
         Cardinality::None => unreachable!("handled above"),
     }
+}
+
+/// Every toolchain the layers chosen so far require, as qualified ids.
+fn implied_toolchains(catalog: &Catalog, chosen: &[String]) -> HashSet<String> {
+    let mut toolchains = HashSet::new();
+    for id in chosen {
+        let Some(entry) = catalog.get(&LayerId::new(id)) else {
+            continue;
+        };
+        for required in &entry.manifest.requires {
+            if required.starts_with("toolchain/") {
+                toolchains.insert(required.clone());
+            }
+        }
+    }
+    return toolchains;
+}
+
+/// Whether a data layer belongs beside the apps already chosen.
+/// Only its toolchain requirements count: a data layer that also needs a quality layer, such as `eslint`, is still offered, and validation names that layer if it is later unticked.
+fn data_fits(entry: &CatalogEntry, toolchains: &HashSet<String>) -> bool {
+    return entry
+        .manifest
+        .requires
+        .iter()
+        .filter(|required| required.starts_with("toolchain/"))
+        .all(|required| toolchains.contains(required));
 }
 
 fn plural_hint(cardinality: Cardinality) -> &'static str {
@@ -207,4 +269,53 @@ fn pick_single_category(
     let title = format!("{category} ({noun})");
     let _ = category.cardinality(shape); // asserted by the caller's own choice of category, not re-derived
     Ok(picker::pick_single(terminal, &title, &labels, default)?.map(|i| labels[i].clone()))
+}
+
+// === Tests
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn offered_data(chosen: &[&str]) -> Vec<String> {
+        let catalog = Catalog::embedded().unwrap();
+        let chosen: Vec<String> = chosen.iter().map(|s| (*s).to_owned()).collect();
+        let toolchains = implied_toolchains(&catalog, &chosen);
+        let mut offered: Vec<String> = catalog
+            .by_category(Category::Data)
+            .filter(|entry| data_fits(entry, &toolchains))
+            .map(|entry| entry.manifest.qualified_id().to_string())
+            .collect();
+        offered.sort();
+        return offered;
+    }
+
+    #[test]
+    fn a_rust_service_is_offered_sqlx_only() {
+        assert_eq!(
+            offered_data(&["shape/single-app", "backend/axum"]),
+            vec!["data/sqlx"]
+        );
+    }
+
+    #[test]
+    fn a_node_app_is_offered_the_node_orms_only() {
+        assert_eq!(
+            offered_data(&["shape/single-app", "frontend/nuxt"]),
+            vec!["data/drizzle", "data/prisma"]
+        );
+    }
+
+    #[test]
+    fn a_polyglot_monorepo_is_offered_all_three() {
+        assert_eq!(
+            offered_data(&["shape/monorepo", "frontend/nuxt", "backend/axum"]),
+            vec!["data/drizzle", "data/prisma", "data/sqlx"]
+        );
+    }
+
+    #[test]
+    fn no_app_means_no_database_screen() {
+        assert!(offered_data(&["shape/single-app"]).is_empty());
+    }
 }

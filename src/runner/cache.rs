@@ -55,8 +55,10 @@ impl Cache {
 /// How one task was satisfied.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
-    /// Restored from the cache, or, under `--verify`, run and matched.
+    /// Restored from the cache.
     Hit,
+    /// Under `--verify`: run for real and matched its cache entry.
+    Verified,
     /// Run for real and recorded.
     Miss,
     /// Run for real; not cacheable, or caching is off.
@@ -95,6 +97,7 @@ pub struct Session<'a> {
     keys: HashMap<String, Option<Hash>>,
     pub hits: u32,
     pub misses: u32,
+    pub verified: u32,
 }
 
 impl<'a> Session<'a> {
@@ -104,6 +107,7 @@ impl<'a> Session<'a> {
             keys: HashMap::new(),
             hits: 0,
             misses: 0,
+            verified: 0,
         }
     }
 
@@ -161,6 +165,7 @@ impl<'a> Session<'a> {
     pub fn count(&mut self, status: Status) {
         match status {
             Status::Hit => self.hits += 1,
+            Status::Verified => self.verified += 1,
             Status::Miss => self.misses += 1,
             Status::Uncached => {}
         }
@@ -168,13 +173,24 @@ impl<'a> Session<'a> {
 
     /// Prints the one-line summary, when anything was cacheable at all.
     pub fn summarise(&self, out: &mut impl Write) {
-        if self.hits + self.misses > 0 {
+        let total = self.hits + self.verified + self.misses;
+        if total == 0 {
+            return;
+        }
+        /* A verified task really ran, so counting it "from cache" would claim
+         * the opposite of what --verify just did. */
+        if self.verified > 0 {
             writeln!(
                 out,
-                "\n{} cached task(s): {} from cache, {} run",
-                self.hits + self.misses,
-                self.hits,
-                self.misses
+                "\n{total} cached task(s): {} verified against the cache, {} recorded",
+                self.verified, self.misses
+            )
+            .ok();
+        } else {
+            writeln!(
+                out,
+                "\n{total} cached task(s): {} from cache, {} run",
+                self.hits, self.misses
             )
             .ok();
         }
@@ -244,7 +260,7 @@ pub fn run(
 
     if let Some(previous) = previous {
         verify(task, previous, &captured)?;
-        return Ok(Status::Hit);
+        return Ok(Status::Verified);
     }
     CacheEntry::record(key, &captured, &cache.store).map_err(cache_error)?;
     Ok(Status::Miss)
@@ -347,5 +363,47 @@ fn not_started(task: &Task, error: io::Error) -> RunnerError {
 fn cache_error(error: crate::cas::CasError) -> RunnerError {
     RunnerError::Cache {
         message: error.to_string(),
+    }
+}
+
+// === Tests
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn summary(hits: u32, verified: u32, misses: u32) -> String {
+        let mut session = Session::new(None);
+        session.hits = hits;
+        session.verified = verified;
+        session.misses = misses;
+        let mut out = Vec::new();
+        session.summarise(&mut out);
+        return String::from_utf8(out).unwrap();
+    }
+
+    #[test]
+    fn an_ordinary_run_reports_hits_as_from_cache() {
+        assert_eq!(
+            summary(1, 0, 2),
+            "\n3 cached task(s): 1 from cache, 2 run\n"
+        );
+    }
+
+    /* The bug this replaced: a --verify run printed "1 from cache, 0 run"
+     * for a task it had just run for real. */
+    #[test]
+    fn a_verify_run_never_claims_anything_came_from_cache() {
+        let line = summary(0, 1, 0);
+        assert_eq!(
+            line,
+            "\n1 cached task(s): 1 verified against the cache, 0 recorded\n"
+        );
+        assert!(!line.contains("from cache"));
+    }
+
+    #[test]
+    fn nothing_cacheable_prints_nothing() {
+        assert_eq!(summary(0, 0, 0), "");
     }
 }

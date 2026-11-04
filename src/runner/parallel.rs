@@ -111,6 +111,7 @@ mod tests {
             depends_on: depends_on.iter().map(|s| (*s).to_owned()).collect(),
             cacheable: false,
             declared_env: Vec::new(),
+            persistent: false,
         }
     }
 

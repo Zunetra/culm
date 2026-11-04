@@ -77,6 +77,7 @@ pub fn generate_project(app: &CulmApp) -> String {
     format!(
         "[tasks.dev]\n\
          command = \"{dev}\"\n\
+         persistent = true\n\
          \n\
          [tasks.build]\n\
          command = \"{build}\"\n\
@@ -118,6 +119,8 @@ mod tests {
         }));
         assert!(!config.tasks["build"].cache);
         assert!(!config.tasks["dev"].cache);
+        assert!(config.tasks["dev"].persistent);
+        assert!(!config.tasks["build"].persistent);
         assert!(config.tasks["test"].cache);
         assert_eq!(
             config.tasks["test"].inputs,

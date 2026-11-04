@@ -27,9 +27,9 @@ pub struct NewArgs {
     #[arg(long = "layer", value_name = "ID")]
     pub layers: Vec<String>,
 
-    /// A named selection of layers to start from, instead of listing them.
-    /// Extending a preset with extra layers is a later question, so the two are exclusive for now.
-    #[arg(long, value_name = "NAME", conflicts_with = "layers")]
+    /// A named selection of layers to start from.
+    /// Any `--layer` given as well is added on top of it.
+    #[arg(long, value_name = "NAME")]
     pub preset: Option<String>,
 
     /// A layer to suppress even though it would otherwise arrive as a default.
@@ -394,9 +394,9 @@ fn ids(raw: &[String]) -> Vec<LayerId> {
 /// preset, or picked in the wizard.
 ///
 /// A preset resolves to ids here and then takes the ordinary path, so nothing
-/// downstream has to know a preset was involved. Clap keeps `--layer` and
-/// `--preset` exclusive, and the check is repeated because `run_new` is also
-/// called directly by the tests.
+/// downstream has to know a preset was involved. Any `--layer` given with a
+/// preset extends it; a layer the preset already names is not repeated, and a
+/// clash such as a second shape is left to validation to report by name.
 ///
 /// The wizard is the fallback when neither is given, and only when both
 /// stdin and stdout are real terminals: a script that forgot `--layer` gets
@@ -410,11 +410,16 @@ fn chosen_layers(
     report: &mut NewReport,
 ) -> Result<Vec<LayerId>> {
     match (&args.preset, args.layers.is_empty()) {
-        (Some(_), false) => bail!("--preset and --layer cannot be combined"),
-        (Some(source), true) => {
+        (Some(source), _) => {
             report.scaffold.selected_via = Some(SelectedVia::Preset);
             report.scaffold.preset = Some(preset_label(source));
-            Ok(resolve_preset(source, report)?.ids())
+            let mut chosen = resolve_preset(source, report)?.ids();
+            for extra in ids(&args.layers) {
+                if !chosen.contains(&extra) {
+                    chosen.push(extra);
+                }
+            }
+            Ok(chosen)
         }
         (None, false) => {
             report.scaffold.selected_via = Some(SelectedVia::Flags);

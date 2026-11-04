@@ -133,7 +133,8 @@ pub fn run_task_reporting(
     } else {
         exec::run(&order, &mut session, out)
     };
-    report.run.hits = session.hits;
+    /* Telemetry's `hits` has always counted verified runs too; keep its meaning. */
+    report.run.hits = session.hits + session.verified;
     report.run.misses = session.misses;
     result?;
     session.summarise(out);

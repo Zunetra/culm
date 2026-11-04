@@ -55,6 +55,10 @@ pub struct TaskSpec {
     pub cache: bool,
     #[serde(default)]
     pub declared_env: Vec<String>,
+    /// A long-running task such as a dev server, which never exits on its own.
+    /// `--affected` never selects one; naming it with `culm run` still runs it.
+    #[serde(default)]
+    pub persistent: bool,
 }
 
 impl RunnerConfig {

@@ -282,15 +282,45 @@ fn an_unknown_preset_lists_the_ones_that_exist() {
     assert!(message.contains("monorepo"), "{message}");
 }
 
-/// Extending a preset with extra layers is a later question, so the two are exclusive.
+/// A `--layer` given with a preset extends it rather than replacing it.
 #[test]
-fn a_preset_and_a_layer_cannot_be_combined() {
+fn a_layer_extends_a_preset() {
+    let dir = tempfile::tempdir().expect("a temp dir");
+    let mut args = args("demo", &["runner/culm"]);
+    args.preset = Some("backend".to_owned());
+
+    run_new(&args, dir.path()).expect("the preset plus a layer scaffolds");
+
+    let root = dir.path().join("demo");
+    assert!(
+        root.join("crates/axum/Cargo.toml").is_file(),
+        "the preset's backend is missing"
+    );
+    assert!(
+        root.join("culm.toml").is_file(),
+        "the extra runner layer is missing"
+    );
+}
+
+/// Naming a layer the preset already has is not a duplicate.
+#[test]
+fn a_layer_the_preset_already_names_is_not_repeated() {
     let dir = tempfile::tempdir().expect("a temp dir");
     let mut args = args("demo", &["backend/axum"]);
     args.preset = Some("backend".to_owned());
 
-    let error = run_new(&args, dir.path()).expect_err("the combination is refused");
-    assert!(error.to_string().contains("--preset"));
+    run_new(&args, dir.path()).expect("the overlap is harmless");
+}
+
+/// A preset fixes the shape, so a second shape is a selection error, not a silent swap.
+#[test]
+fn a_second_shape_on_top_of_a_preset_is_refused() {
+    let dir = tempfile::tempdir().expect("a temp dir");
+    let mut args = args("demo", &["shape/monorepo"]);
+    args.preset = Some("backend".to_owned());
+
+    let error = run_new(&args, dir.path()).expect_err("two shapes are refused");
+    assert!(error.to_string().contains("shape"), "{error}");
 }
 
 // == The nuxt layer emits an application

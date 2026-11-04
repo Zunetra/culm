@@ -23,6 +23,7 @@ pub struct Task {
     pub depends_on: Vec<String>,
     pub cacheable: bool,
     pub declared_env: Vec<String>,
+    pub persistent: bool,
 }
 
 /// Every task in a project's `culm.toml`, in no particular order.
@@ -41,6 +42,7 @@ pub fn tasks_of(config: &RunnerConfig, project: &str, dir: &Path) -> Vec<Task> {
             depends_on: spec.depends_on.clone(),
             cacheable: spec.cache,
             declared_env: spec.declared_env.clone(),
+            persistent: spec.persistent,
         })
         .collect()
 }
@@ -61,6 +63,7 @@ mod tests {
             depends_on: depends_on.iter().map(|s| (*s).to_owned()).collect(),
             cache: false,
             declared_env: Vec::new(),
+            persistent: false,
         }
     }
 

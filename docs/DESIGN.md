@@ -111,8 +111,9 @@ Rules:
 ### 2.4 The wizard
 
 `culm new <name>` with no `--layer` or `--preset`, on a real terminal
-only. Order: shape, frontend, backend, toolchain (tooling-only only),
-quality, infra, editor, runner. Two rules: every question has a flag,
+only. Order: shape, frontend, backend, data, toolchain (tooling-only
+only), quality, infra, editor, runner. Data offers only the layers whose
+toolchain an app already chosen brings, and is skipped when none fits. Two rules: every question has a flag,
 and the resolved plan is printed and confirmed before anything is
 written (`--yes` skips it).
 
@@ -122,7 +123,10 @@ A preset is a name, a description, and a list of qualified layer ids, in
 TOML (decision 20). Sources, in lookup order: first-party (`monorepo`,
 `frontend`, `backend`, compiled in), a local `./file.toml`, a git URL
 (`github:user/repo[/path.toml][@ref]`). `--save-preset NAME` writes the
-fully resolved run back out. No hosted registry before v2 (decision 6).
+fully resolved run back out. `--layer` given with `--preset` extends
+the preset; a layer it already names is not repeated, and a clash (a
+second shape) is a selection error. No hosted registry before v2
+(decision 6).
 
 ### 2.6 Version resolution
 
@@ -217,6 +221,10 @@ depends_on = ["build"]
 cache = true
 declared_env = ["RUSTFLAGS"]
 ```
+
+`persistent = true` marks a task that never exits on its own, such as a
+dev server: `--affected` never selects it, and naming it still runs it.
+`culm new` writes it on every generated `dev`.
 
 culm does not know what `cargo` or `vite` is: a command, input globs,
 output paths. Parsing only ever gains fields, so a `culm.toml` written
@@ -368,7 +376,8 @@ byte check.
   the order independence proptest.
 - 39 layers across all ten categories, every application layer verified
   by a real install and build in both shapes.
-- `culm new`: flags, wizard, presets (first-party, file, git URL),
+- `culm new`: flags, wizard (with a data screen filtered by toolchain),
+  presets (first-party, file, git URL) extendable with `--layer`,
   `--save-preset`, installs for pnpm, cargo, and go, and the release age
   guard (section 2.6).
 - Runner backend config for Nx, Turborepo, Moon, and culm, written by
@@ -379,7 +388,9 @@ byte check.
 **Runner**
 
 - r0.1, r0.2 in code, r0.3: ordered runs, the content-addressed cache
-  with `--no-cache` and `--verify`, `--affected`, `--parallel`.
+  with `--no-cache` and `--verify` (its summary reports verified tasks,
+  not cache hits), `--affected`, `--parallel`, and `persistent` tasks
+  that `--affected` never starts.
 - Multi-project workspaces (section 3.2).
 - `culm graph`, `culm cache`, and a remote cache client (not wired in).
 - `tests/cache_correctness.rs`, which checks restored bytes rather than
@@ -421,13 +432,17 @@ Needs accounts, secrets, or time rather than code.
 
 - **The r0.2 checkpoint:** two weeks of real use with `--verify` runs,
   every hit checked. Decides whether the held runner work happens at all.
-- **Telemetry:** DNS for `culm.dev`, create the D1 database, deploy
+- **Telemetry, optional since it became opt-in (decision 9 amended
+  2026-11-02):** DNS for `culm.dev`, create the D1 database, deploy
   `telemetry/worker/` (its README has the steps), then point
   `DEFAULT_ENDPOINT` at it.
-- **Registries:** claim `culm` and `@zunetra` on npm and the `culm`
-  crate; add `NPM_TOKEN` and `CARGO_REGISTRY_TOKEN`; create
-  `zunetra/homebrew-tap` and `HOMEBREW_TAP_TOKEN`.
-- **Release:** tag v0.1.0, then run `release.yml` by hand with `publish`.
+- **Registries:** the `culm` crate is published (0.1.0). Still open:
+  claim `culm` and `@zunetra` on npm, add `NPM_TOKEN`; create
+  `zunetra/homebrew-tap` and `HOMEBREW_TAP_TOKEN`; add
+  `CARGO_REGISTRY_TOKEN` if crates.io publishing should go through
+  `release.yml`.
+- **Release:** no tag exists yet. Tag v0.1.1 so `release.yml` builds the
+  binaries the shell installer and Homebrew need, then publish 0.1.1.
 - **Benchmark:** run and publish it, once the harness exists.
 - **Docs site:** `TELEMETRY.md` currently points at GitHub.
 - **Klassivox as a published preset** (decision 17), paused by choice.

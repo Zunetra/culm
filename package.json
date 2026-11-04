@@ -1,6 +1,6 @@
 {
   "name": "culm",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "Workspace tooling for polyglot repositories. One binary that scaffolds a workspace and then runs its tasks.",

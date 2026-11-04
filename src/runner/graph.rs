@@ -116,6 +116,9 @@ impl TaskGraph {
             closure.extend(ancestors_of(&self.graph, *index));
             closure.extend(descendants_of(&self.graph, *index));
         }
+        /* A persistent task never exits, so pulling one in would turn a check
+         * into a run that only Ctrl+C ends. It stays reachable by name. */
+        closure.retain(|index| !self.graph[*index].persistent);
         Ok(self.ordered(&closure))
     }
 
@@ -249,6 +252,7 @@ mod tests {
             depends_on: depends_on.iter().map(|s| (*s).to_owned()).collect(),
             cacheable: false,
             declared_env: Vec::new(),
+            persistent: false,
         }
     }
 
@@ -378,6 +382,39 @@ mod tests {
             names.iter().position(|n| *n == "test").unwrap()
                 < names.iter().position(|n| *n == "deploy").unwrap()
         );
+    }
+
+    /* The scaffolded `dev` has no inputs, so it is always a seed; without this
+     * rule `--affected` would start a server that never exits. */
+    #[test]
+    fn affected_never_includes_a_persistent_task() {
+        let dev = Task {
+            persistent: true,
+            ..task("dev", &["build"])
+        };
+        let graph = TaskGraph::build(
+            vec![task("build", &[]), dev, task("test", &["build"])],
+            &path(),
+        )
+        .unwrap();
+
+        let order = graph.affected_order(&["build", "dev"], &path()).unwrap();
+        let names: Vec<&str> = order.iter().map(|t| t.name.as_str()).collect();
+
+        assert_eq!(names.len(), 2);
+        assert!(names.contains(&"build"));
+        assert!(names.contains(&"test"));
+    }
+
+    #[test]
+    fn a_persistent_task_still_runs_when_named() {
+        let dev = Task {
+            persistent: true,
+            ..task("dev", &[])
+        };
+        let graph = TaskGraph::build(vec![dev], &path()).unwrap();
+        let order = graph.execution_order("dev", &path()).unwrap();
+        assert_eq!(order.len(), 1);
     }
 
     #[test]
