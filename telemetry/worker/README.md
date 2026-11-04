@@ -15,8 +15,8 @@ installed locally, to run `wrangler` - Cloudflare's own CLI.
 From this directory (`telemetry/worker/`):
 
 ```sh
-npm install
-npx wrangler login
+pnpm install
+pnpm exec wrangler login
 ```
 
 The second command opens a browser to authorize `wrangler` against your
@@ -25,7 +25,7 @@ Cloudflare account. Nothing is created yet.
 ## Create the database
 
 ```sh
-npx wrangler d1 create culm-telemetry
+pnpm exec wrangler d1 create culm-telemetry
 ```
 
 This prints a `database_id`. Copy it into `wrangler.toml`, replacing
@@ -34,17 +34,17 @@ This prints a `database_id`. Copy it into `wrangler.toml`, replacing
 ## Apply the schema
 
 ```sh
-npm run db:migrate:remote
+pnpm run db:migrate:remote
 ```
 
 Runs `schema.sql` against the real, hosted database. Use
-`npm run db:migrate:local` first if you want to try it against wrangler's
+`pnpm run db:migrate:local` first if you want to try it against wrangler's
 local D1 emulator before touching the real one.
 
 ## Deploy
 
 ```sh
-npm run deploy
+pnpm run deploy
 ```
 
 Prints the Worker's live URL, something like
@@ -66,21 +66,21 @@ Two places need that URL:
 before schema 3 needs the new columns added once:
 
 ```sh
-npm run db:migrate:3:remote
+pnpm run db:migrate:3:remote
 ```
 
-Do this, then `npm run deploy`, **before** publishing the culm release
+Do this, then `pnpm run deploy`, **before** publishing the culm release
 that sends schema 3. docs/DEPLOY.md, "Rolling out schema 3", has the
-full order and checks. `npm test` runs the receiver's validation tests.
+full order and checks. `pnpm test` runs the receiver's validation tests.
 
 ## Querying what lands
 
 ```sh
-npx wrangler d1 execute culm-telemetry --remote \
+pnpm exec wrangler d1 execute culm-telemetry --remote \
   --command "SELECT layers, COUNT(*) FROM events GROUP BY layers ORDER BY COUNT(*) DESC LIMIT 20"
 ```
 
-Or `npx wrangler d1 execute culm-telemetry --remote --command "SELECT COUNT(DISTINCT machine_id) FROM events"`
+Or `pnpm exec wrangler d1 execute culm-telemetry --remote --command "SELECT COUNT(DISTINCT machine_id) FROM events"`
 for a distinct-machine count. There's no dashboard here on purpose - this is
 the minimum that works, not a product. A real dashboard (Grafana pointed at
 D1, or exporting to somewhere with charts) is worth building once there's
@@ -89,7 +89,7 @@ enough data for it to say something.
 ## Watching it live
 
 ```sh
-npm run tail
+pnpm run tail
 ```
 
 Streams every request the Worker handles as it happens - useful right after

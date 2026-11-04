@@ -1,6 +1,6 @@
 {
   "name": "culm",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "description": "Workspace tooling for polyglot repositories. One binary that scaffolds a workspace and then runs its tasks.",
@@ -30,7 +30,7 @@
     "node": ">=24",
     "pnpm": ">=10"
   },
-  "packageManager": "pnpm@11.13.0",
+  "packageManager": "pnpm@12.16.1",
   "directories": {
     "doc": "docs",
     "test": "tests"
@@ -43,6 +43,24 @@
     "lint": "cargo clippy --all-targets -- -D warnings",
     "format": "cargo fmt",
     "format:check": "cargo fmt --check",
-    "test": "cargo test"
+    "test": "cargo test",
+    "telemetry:test": "pnpm --filter culm-telemetry-worker run test",
+    "telemetry:dev": "pnpm --filter culm-telemetry-worker run dev",
+    "telemetry:deploy": "pnpm --filter culm-telemetry-worker run deploy",
+    "telemetry:deploy:dry-run": "pnpm --filter culm-telemetry-worker exec wrangler deploy --dry-run",
+    "telemetry:tail": "pnpm --filter culm-telemetry-worker run tail",
+    "telemetry:migrate": "pnpm telemetry:migrate:remote",
+    "telemetry:migrate:local": "pnpm --filter culm-telemetry-worker run db:migrate:local",
+    "telemetry:migrate:remote": "pnpm --filter culm-telemetry-worker run db:migrate:remote",
+    "telemetry:migrate:3:local": "pnpm --filter culm-telemetry-worker run db:migrate:3:local",
+    "telemetry:migrate:3:remote": "pnpm --filter culm-telemetry-worker run db:migrate:3:remote",
+    "telemetry:wrangler": "pnpm --filter culm-telemetry-worker exec wrangler",
+    "dashboard:test": "pnpm --filter culm-telemetry-dashboard run test",
+    "dashboard:dev": "pnpm --filter culm-telemetry-dashboard run dev",
+    "dashboard:deploy": "pnpm --filter culm-telemetry-dashboard run deploy",
+    "dashboard:deploy:dry-run": "pnpm --filter culm-telemetry-dashboard exec wrangler deploy --dry-run",
+    "dashboard:tail": "pnpm --filter culm-telemetry-dashboard run tail",
+    "dashboard:wrangler": "pnpm --filter culm-telemetry-dashboard exec wrangler",
+    "workers:test": "pnpm telemetry:test && pnpm dashboard:test"
   }
 }

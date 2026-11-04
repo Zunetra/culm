@@ -1,0 +1,9 @@
+# The telemetry Workers' Node dependencies (wrangler), installed together
+# with one `pnpm install` at the repository root and pinned in the root
+# pnpm-lock.yaml. culm itself is a Rust crate and needs none of this.
+packages:
+  - telemetry/worker
+  - telemetry/dashboard
+allowBuilds:
+  esbuild: true
+  workerd: true

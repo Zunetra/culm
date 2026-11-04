@@ -1,6 +1,6 @@
 # Deploying and releasing
 
-culm has exactly two things that leave this repository:
+culm has exactly three things that leave this repository:
 
 | What | Where it goes | How often | Section |
 | --- | --- | --- | --- |
@@ -12,6 +12,30 @@ Nothing else is deployed. There is no website and no server for the CLI
 itself: a user's `cargo install culm` is the whole delivery.
 
 Back to the [README](../README.md).
+
+## 📍 Where things stand
+
+As of 2026-11-04:
+
+| Piece | State |
+| --- | --- |
+| crates.io | `0.1.1` published (sends telemetry schema 2). `Cargo.toml` is at `0.1.2` (schema 3), not published yet |
+| Receiver | Live at `https://culm-telemetry.shownzy001.workers.dev`. Schema 3 migration applied (40 columns), redeployed, accepts schema 2 and 3 |
+| Database | D1 `culm-telemetry` (`58896687-7bdd-42be-b1a6-a95b711d5425`), account `Shownzy001@gmail.com's Account` |
+| Dashboard | Deployed at `https://culm-telemetry-dashboard.shownzy001.workers.dev`. Cloudflare Access **not set up yet**, so it answers `403 Forbidden` to everyone |
+| npm, Homebrew, GitHub binaries | Not set up yet |
+
+What is left, in order:
+
+1. Set up Cloudflare Access for the dashboard:
+   [Deploying the dashboard](#-deploying-the-dashboard), steps 3 to 7.
+2. Publish 0.1.2 and tag it: [Releasing culm](#-releasing-culm).
+3. The npm and Homebrew channels:
+   [Publish to the other channels](#publish-to-the-other-channels).
+
+Every command in this file also runs from the repository root, as
+`pnpm telemetry:*` and `pnpm dashboard:*`; see
+[Every command, from the repository root](#every-command-from-the-repository-root).
 
 ---
 
@@ -67,8 +91,8 @@ version, never both.
 
 ```bash
 git checkout main && git pull
-git tag -s v0.1.1 -m "v0.1.1"
-git push origin v0.1.1
+git tag -s v0.1.2 -m "v0.1.2"
+git push origin v0.1.2
 ```
 
 The tag must match `Cargo.toml`'s version with a `v` in front. Pushing it
@@ -121,25 +145,61 @@ and `DEFAULT_ENDPOINT` points at this receiver, so keep it running. culm
 itself works the same either way: a failed send is silent and never
 delays a command by more than 500 ms.
 
+### Every command, from the repository root
+
+Each step below also works from inside the Worker's folder, but you never
+have to `cd`: every command has a root shortcut in the root
+`package.json`.
+
+| From the root | Does |
+| --- | --- |
+| `pnpm install` | Installs wrangler for both Workers |
+| `pnpm telemetry:test` | The receiver's validation tests |
+| `pnpm telemetry:dev` | Runs the receiver locally |
+| `pnpm telemetry:deploy:dry-run` | Checks the receiver's config without deploying |
+| `pnpm telemetry:deploy` | Deploys the receiver |
+| `pnpm telemetry:tail` | Watches the live receiver's requests |
+| `pnpm telemetry:migrate` | Creates the table and indexes from `schema.sql` on the live database, if missing; safe to rerun |
+| `pnpm telemetry:migrate:local` / `pnpm telemetry:migrate:remote` | Creates the table from `schema.sql` |
+| `pnpm telemetry:migrate:3:local` / `pnpm telemetry:migrate:3:remote` | Adds the schema 3 columns to an older table, once |
+| `pnpm dashboard:test` | The dashboard's security and rendering tests |
+| `pnpm dashboard:dev` | Runs the dashboard locally |
+| `pnpm dashboard:deploy:dry-run` | Checks the dashboard's config without deploying |
+| `pnpm dashboard:deploy` | Deploys the dashboard |
+| `pnpm dashboard:tail` | Watches the live dashboard's requests |
+| `pnpm workers:test` | Both Workers' tests |
+| `pnpm telemetry:wrangler <args>` | Any wrangler command, run for the receiver |
+| `pnpm dashboard:wrangler <args>` | Any wrangler command, run for the dashboard |
+
+The two `wrangler` shortcuts take anything wrangler does, for example:
+
+```bash
+pnpm telemetry:wrangler login
+pnpm telemetry:wrangler d1 list
+pnpm telemetry:wrangler d1 execute culm-telemetry --remote --command "SELECT COUNT(*) FROM events"
+```
+
 ### What it needs
 
 - A Cloudflare account. The free tier is plenty: 100,000 Worker requests
   and 5 million D1 rows read per day, and 5 GB of storage.
-- Node.js, to run `wrangler`, Cloudflare's CLI. It is installed into the
-  folder by `npm install`; nothing global is needed.
+- Node.js and pnpm, to run `wrangler`, Cloudflare's CLI. One
+  `pnpm install` installs it for both Workers; nothing global is needed.
 
-> **Run every command below from `telemetry/worker/`.** Its own
-> `package.json` holds the `npm run ...` scripts. From the repository
-> root, `npm run db:migrate:remote` fails with `Missing script`, and a
-> bare `npx wrangler ...` will not find `wrangler.toml`.
+> **Where to run these.** The steps below are written from inside
+> `telemetry/worker/`. From the repository root, use the shortcut instead
+> (table above): `pnpm telemetry:deploy` rather than `pnpm run deploy`,
+> and `pnpm telemetry:wrangler ...` rather than `pnpm exec wrangler ...`.
+> A plain `pnpm run db:migrate:remote` at the root fails with
+> `Missing script`, because that script belongs to the Worker.
 
 ### Step 1. Install and log in
 
 ```bash
 cd telemetry/worker
 cp .env.example .env
-npm install
-npx wrangler login
+pnpm install
+pnpm exec wrangler login
 ```
 
 `.env` is optional when deploying from your own machine, since
@@ -151,21 +211,41 @@ wrangler reads `.env` from this folder by itself.
 your login can see:
 
 ```bash
-npx wrangler whoami
+pnpm exec wrangler whoami
 ```
 
 If it lists more than one account, set the right one's id as
 `account_id` in `wrangler.toml` (step 3), or wrangler will ask every time.
 
-The line `npm warn Unknown user config "minimum-release-age"` comes from
-a pnpm setting in `~/.npmrc`. npm ignores it; so can you.
+**The first `pnpm install` stops with `ERR_PNPM_IGNORED_BUILDS`.** pnpm
+does not run a dependency's install scripts until you approve them, and
+wrangler needs two: `esbuild` and `workerd` download their binaries that
+way. From the repository root, run
+
+```bash
+pnpm approve-builds
+```
+
+tick `esbuild`, `workerd`, and `sharp` (wrangler's own dependencies),
+confirm, and run `pnpm install` again. pnpm records the approval in
+`pnpm-workspace.yaml`; commit it so the next install needs no prompt.
+
+The two Worker folders form a pnpm workspace with the repository root
+(`pnpm-workspace.yaml`), so one `pnpm install` from any of them installs
+both, into the root `pnpm-lock.yaml`. Any `pnpm run ...` checks the
+install first and installs if it is missing.
+
+These folders use pnpm, like the rest of the repository. `pnpm install`
+honours `minimum-release-age` in `~/.npmrc`, so a wrangler release
+younger than that is refused until it is old enough: that is the same
+supply-chain guard culm applies to the workspaces it scaffolds.
 
 ### Step 2. Create the database
 
 Only once, ever, per account:
 
 ```bash
-npx wrangler d1 create culm-telemetry
+pnpm exec wrangler d1 create culm-telemetry
 ```
 
 It prints a snippet like this:
@@ -186,7 +266,7 @@ It prints a snippet like this:
 TOML, so wrangler then fails with `Invalid TOML document`. Copy only the
 `database_id` value.
 
-If you have lost it: `npx wrangler d1 list`.
+If you have lost it: `pnpm exec wrangler d1 list`.
 
 ### Step 3. Fill in `wrangler.toml`
 
@@ -218,7 +298,7 @@ an API token for the account, so the file is committed.
 Check the file parses and the binding is right, without deploying:
 
 ```bash
-npx wrangler deploy --dry-run
+pnpm exec wrangler deploy --dry-run
 ```
 
 It must list `env.DB (culm-telemetry)  D1 Database`.
@@ -226,8 +306,8 @@ It must list `env.DB (culm-telemetry)  D1 Database`.
 ### Step 4. Create the table
 
 ```bash
-npm run db:migrate:local     # optional: rehearse on wrangler's local emulator
-npm run db:migrate:remote    # the real database; answer "yes"
+pnpm run db:migrate:local     # optional: rehearse on wrangler's local emulator
+pnpm run db:migrate:remote    # the real database; answer "yes"
 ```
 
 `db:migrate:local` touches only `.wrangler/` on your machine, so it
@@ -238,7 +318,7 @@ running it twice is harmless.
 Check the table exists:
 
 ```bash
-npx wrangler d1 execute culm-telemetry --remote \
+pnpm exec wrangler d1 execute culm-telemetry --remote \
   --command "SELECT name FROM sqlite_master WHERE type = 'table'"
 ```
 
@@ -247,7 +327,7 @@ It must list `events`.
 ### Step 5. Deploy
 
 ```bash
-npm run deploy
+pnpm run deploy
 ```
 
 It prints the Worker's URL, such as
@@ -260,7 +340,7 @@ a `POST` on any path, so the endpoint culm uses is that URL plus
 In one terminal, from `telemetry/worker/`, watch requests live:
 
 ```bash
-npm run tail
+pnpm run tail
 ```
 
 In another, build culm from the repository root, then send one real
@@ -279,7 +359,7 @@ rm -rf /tmp/telemetry-check
 The tail shows a `POST` answered `204`. Then confirm the row:
 
 ```bash
-npx wrangler d1 execute culm-telemetry --remote \
+pnpm exec wrangler d1 execute culm-telemetry --remote \
   --command "SELECT received_at, command, exit, shape FROM events ORDER BY event_id DESC LIMIT 5"
 ```
 
@@ -290,9 +370,11 @@ deploy the receiver from the same commit as the culm that sent it.
 ### Step 7. Point culm at it
 
 Set `DEFAULT_ENDPOINT` in `src/telemetry/mod.rs` to the URL plus
-`/events`, and remove the comment above it saying there is no working
-default. The change reaches users only in the next published version of
-culm, so do this **before** [publishing](#publish-to-cratesio).
+`/events`. It already is:
+`https://culm-telemetry.shownzy001.workers.dev/events`. Change it only if
+the receiver moves (a new account, or your own domain below). The change
+reaches users only in the next published version of culm, so do it
+**before** [publishing](#publish-to-cratesio).
 
 Anyone can still redirect their own runs with `CULM_TELEMETRY_ENDPOINT`.
 
@@ -306,13 +388,16 @@ Routes, Add, Custom domain**, and enter `telemetry.culm.dev`. Update
 
 ### Day to day
 
-| Task | Command, from `telemetry/worker/` |
+| Task | From the repository root |
 | --- | --- |
-| Watch live | `npm run tail` |
-| Count distinct machines | `npx wrangler d1 execute culm-telemetry --remote --command "SELECT COUNT(DISTINCT machine_id) FROM events"` |
-| Most chosen layer sets | `npx wrangler d1 execute culm-telemetry --remote --command "SELECT layers, COUNT(*) FROM events GROUP BY layers ORDER BY COUNT(*) DESC LIMIT 20"` |
-| Redeploy after changing `src/index.js` | `npm run deploy` |
-| Roll back a bad deploy | `npx wrangler rollback` |
+| Watch live | `pnpm telemetry:tail` |
+| Count distinct machines | `pnpm telemetry:wrangler d1 execute culm-telemetry --remote --command "SELECT COUNT(DISTINCT machine_id) FROM events"` |
+| Most chosen layer sets | `pnpm telemetry:wrangler d1 execute culm-telemetry --remote --command "SELECT layers, COUNT(*) FROM events GROUP BY layers ORDER BY COUNT(*) DESC LIMIT 20"` |
+| Redeploy after changing `src/index.js` | `pnpm telemetry:test && pnpm telemetry:deploy` |
+| See past deploys | `pnpm telemetry:wrangler deployments list` |
+| Roll back a bad deploy | `pnpm telemetry:wrangler rollback` |
+
+Or open the dashboard, once Access is set up.
 
 ### Changing the payload
 
@@ -331,34 +416,36 @@ decision 9 change first. When one changes:
 
 Schema 3 adds error codes, toolchain versions, time saved by the cache,
 `--verify` mismatches, and more ([TELEMETRY.md](TELEMETRY.md)). culm
-0.1.1 sends schema 2; the next release sends schema 3. Do these in
-order, from `telemetry/worker/`, **before** publishing that release:
+0.1.1 sends schema 2; 0.1.2 sends schema 3. Steps 1 to 3 were done on
+2026-11-04; they are kept here for a fresh database or account. Do these
+in order, from `telemetry/worker/` (root shortcuts in brackets),
+**before** publishing 0.1.2:
 
 1. **Run the receiver's own tests:**
    ```bash
-   npm test
+   pnpm test                       # (pnpm telemetry:test)
    ```
 2. **Add the new columns to the live database** (once only; a second
    run fails with `duplicate column name` and changes nothing):
    ```bash
-   npm run db:migrate:3:remote
+   pnpm run db:migrate:3:remote    # (pnpm telemetry:migrate:3:remote)
    ```
    Answer `yes`. Check it worked:
    ```bash
-   npx wrangler d1 execute culm-telemetry --remote \
+   pnpm exec wrangler d1 execute culm-telemetry --remote \
      --command "SELECT COUNT(*) AS columns FROM pragma_table_info('events')"
    ```
    It must say `40`.
 3. **Deploy the receiver:**
    ```bash
-   npm run deploy
+   pnpm run deploy                 # (pnpm telemetry:deploy)
    ```
    It now accepts schema 2 and schema 3, so 0.1.1 users keep working.
 4. **Prove a schema 3 event lands**, as in
    [Step 6](#step-6-prove-an-event-lands), using a culm built from this
    repository. Then check the new columns:
    ```bash
-   npx wrangler d1 execute culm-telemetry --remote \
+   pnpm exec wrangler d1 execute culm-telemetry --remote \
      --command "SELECT schema, error_code, tool_rustc, tool_node FROM events ORDER BY event_id DESC LIMIT 3"
    ```
 5. **Only now** publish the culm release that sends schema 3
@@ -367,8 +454,8 @@ order, from `telemetry/worker/`, **before** publishing that release:
 ### Taking it down
 
 ```bash
-npx wrangler delete                      # removes the Worker
-npx wrangler d1 delete culm-telemetry    # removes the database and every event in it
+pnpm exec wrangler delete                      # removes the Worker
+pnpm exec wrangler d1 delete culm-telemetry    # removes the database and every event in it
 ```
 
 Telemetry is on by default, so first change `DEFAULT_ENDPOINT` or the
@@ -401,6 +488,17 @@ While its settings are still `REPLACE_ME`, the dashboard refuses
 **everyone**, you included. Deploying it before setting up Access is
 safe; it just shows `Forbidden` until step 6 is done.
 
+**Your Cloudflare account is not the same as Cloudflare Access.** The
+account is your login to Cloudflare, used to deploy. Cloudflare Access is
+a product inside that account (under **Zero Trust**) that puts a sign-in
+page in front of a website. Having the account does not set Access up;
+steps 3 to 6 do.
+
+The steps are written from `telemetry/dashboard/`. From the repository
+root, use `pnpm dashboard:deploy` for `pnpm run deploy`, `pnpm
+dashboard:dev` for `pnpm run dev`, and `pnpm dashboard:wrangler ...` for
+`pnpm exec wrangler ...`.
+
 Cloudflare Access is part of Cloudflare Zero Trust, which is free for up
 to 50 users. It may ask for a payment method when you first enable Zero
 Trust; the free plan is not charged.
@@ -410,24 +508,33 @@ Trust; the free plan is not charged.
 From `telemetry/dashboard/`:
 
 ```bash
-npm install
+pnpm install
 cp .dev.vars.example .dev.vars        # sets a local-only sign-in bypass
-npm run dev
+pnpm exec wrangler d1 execute culm-telemetry --local --file=../worker/schema.sql
+pnpm run dev
 ```
 
-Open <http://localhost:8787>. Locally it reads wrangler's local copy of
-the database, which is empty unless you ran the receiver's migrations
-with `--local`. The bypass in `.dev.vars` works **only** for requests to
-`localhost` or `127.0.0.1`, and `.dev.vars` is never deployed and is
-gitignored.
+From the root, the last two are
+`pnpm dashboard:wrangler d1 execute culm-telemetry --local --file=../worker/schema.sql`
+and `pnpm dashboard:dev`.
+
+Open <http://localhost:8787>. Locally the dashboard reads its **own**
+local copy of the database, in `telemetry/dashboard/.wrangler/`. It is
+separate from the receiver's local copy, which is why the third command
+creates the table for it. It starts empty, so every page says there is
+nothing yet; that is expected. The live data is only reachable through
+the deployed dashboard.
+
+The bypass in `.dev.vars` works **only** for requests to `localhost` or
+`127.0.0.1`, `.dev.vars` is never deployed, and it is gitignored.
 
 ### Step 2. Deploy the Worker
 
 ```bash
 cd telemetry/dashboard
-npm install
-npx wrangler login        # skip if already logged in
-npm run deploy
+pnpm install
+pnpm exec wrangler login        # skip if already logged in
+pnpm run deploy
 ```
 
 It prints the dashboard's address, such as
@@ -516,7 +623,7 @@ None of these is a secret: they let the dashboard *check* a token, never
 create one. Then deploy again:
 
 ```bash
-npm run deploy
+pnpm run deploy
 ```
 
 ### Step 7. Check both locks
@@ -538,17 +645,21 @@ npm run deploy
 
 | You see | Cause and fix |
 | --- | --- |
-| `Forbidden` after signing in | A setting in `wrangler.toml` does not match: the team domain, the AUD tag, or your email (`ALLOWED_EMAILS` is compared without case). Fix it and `npm run deploy` again |
+| `Forbidden` after signing in | A setting in `wrangler.toml` does not match: the team domain, the AUD tag, or your email (`ALLOWED_EMAILS` is compared without case). Fix it and `pnpm run deploy` again |
 | The dashboard opens without any sign-in page | The Access application's hostname does not match the dashboard's address. Fix it in step 5. The dashboard still refuses without a token, so you see `Forbidden`, not data |
 | GitHub sign-in fails | The OAuth app's callback URL must be exactly `https://<team>.cloudflareaccess.com/cdn-cgi/access/callback` |
-| `Something went wrong reading the telemetry database` | The database is missing columns. Run the schema 3 migration ([Rolling out schema 3](#rolling-out-schema-3)) |
+| `Something went wrong reading the telemetry database` (live) | The database is missing columns. Run the schema 3 migration ([Rolling out schema 3](#rolling-out-schema-3)) |
+| `Something went wrong reading the telemetry database` (local) | The local copy has no table yet. Run the `d1 execute ... --local --file=../worker/schema.sql` line from step 1 |
+| `Forbidden` on `localhost` | `.dev.vars` is missing, or `DEV_BYPASS_EMAIL` in it is empty. Copy it from `.dev.vars.example` and restart `pnpm run dev` |
 
 ### Day to day
 
 - Sign out: the **Sign out** link at the top right.
 - Change who can see it: edit the Access policy **and** `ALLOWED_EMAILS`,
-  then `npm run deploy`.
-- Remove it: `npx wrangler delete` from `telemetry/dashboard/`, then
-  delete the Access application. The receiver and its data are not
-  affected.
+  then `pnpm run deploy`.
+- Ship a change: `pnpm dashboard:test && pnpm dashboard:deploy` from the
+  root.
+- Undo a bad deploy: `pnpm dashboard:wrangler rollback`.
+- Remove it: `pnpm dashboard:wrangler delete`, then delete the Access
+  application. The receiver and its data are not affected.
 

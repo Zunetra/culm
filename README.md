@@ -48,6 +48,7 @@ are all `culm`.
 - [Repository layout](#-repository-layout)
 - [Rules worth knowing](#-rules-worth-knowing)
 - [Working on culm](#-working-on-culm)
+- [Telemetry receiver and dashboard](#-telemetry-receiver-and-dashboard)
 - [CI and releases](#-ci-and-releases)
 - [Distribution](#-distribution)
 - [Troubleshooting](#-troubleshooting)
@@ -868,6 +869,10 @@ Use whichever column you prefer; they run the same thing.
 | `cargo fmt --check` | `pnpm format:check` | Fail instead of rewriting, as CI does |
 | `cargo install --path .` | | Install your local build as `culm`, replacing the crates.io one |
 
+The telemetry receiver and dashboard (`telemetry/`) also run from the
+root, with `pnpm telemetry:*` and `pnpm dashboard:*`. Every command is
+explained in [Telemetry receiver and dashboard](#-telemetry-receiver-and-dashboard).
+
 Single test suites:
 
 ```bash
@@ -931,6 +936,145 @@ first:
 - **No em dash** in any comment, commit message, document, or PR
   description.
 
+## 📡 Telemetry receiver and dashboard
+
+culm's telemetry has two small Cloudflare Workers, kept in this
+repository and run with pnpm **from the repository root**: you never
+need to `cd` into their folders.
+
+| Part | Folder | What it is | Who can reach it |
+| --- | --- | --- | --- |
+| **Receiver** | `telemetry/worker/` | Accepts the anonymous events culm sends and stores one row each in a Cloudflare D1 database | Public, write only: it accepts a `POST` of a valid event and nothing else |
+| **Dashboard** | `telemetry/dashboard/` | A private website over that database: overview, every event, machines, scaffolding, runner, errors, toolchains, CSV and JSON export | Only you, through Cloudflare Access (email code or GitHub). It also refuses everyone until its settings are filled in |
+
+You only need this section to deploy or change them. Using culm, or
+working on its Rust code, needs none of it.
+
+### Before the first command
+
+1. **Node and pnpm.** pnpm is pinned in the root `package.json`
+   (`packageManager`); check with `pnpm --version`.
+2. **Install wrangler** (Cloudflare's CLI) for both Workers at once:
+   ```bash
+   pnpm install
+   ```
+   The first time, pnpm stops with `ERR_PNPM_IGNORED_BUILDS`, because it
+   does not run a dependency's install scripts until you approve them.
+   Approve wrangler's, then install again:
+   ```bash
+   pnpm approve-builds     # tick esbuild, workerd and sharp, then confirm
+   pnpm install
+   ```
+   Commit `pnpm-workspace.yaml` and `pnpm-lock.yaml` afterwards, so the
+   next install needs no prompt and uses the same versions.
+3. **Log in to Cloudflare** once per machine. A browser opens; approve
+   it:
+   ```bash
+   pnpm telemetry:wrangler login
+   pnpm telemetry:wrangler whoami      # check: lists the Shownzy001@gmail.com's Account account
+   ```
+   To deploy without a browser (CI, a server), use an API token instead:
+   `cp telemetry/worker/.env.example telemetry/worker/.env` and fill in
+   `CLOUDFLARE_API_TOKEN`.
+
+### Every command
+
+All of these run from the repository root.
+
+**Receiver**
+
+| Command | What it does | When to use it |
+| --- | --- | --- |
+| `pnpm telemetry:test` | Runs the receiver's validation tests, offline | Before every receiver deploy |
+| `pnpm telemetry:dev` | Runs the receiver on your machine, against a local copy of the database | Trying a change without touching the live one |
+| `pnpm telemetry:deploy:dry-run` | Checks `wrangler.toml` and the database binding, deploys nothing | After editing its config |
+| `pnpm telemetry:deploy` | Deploys the receiver; prints its URL | After changing `telemetry/worker/src/` |
+| `pnpm telemetry:tail` | Streams the live receiver's requests as they arrive | Checking that events really land |
+| `pnpm telemetry:migrate` | Creates the events table and its indexes on the **live** database, if missing. Every statement is `IF NOT EXISTS`, so it is safe to run again | First deploy, or if unsure whether the table exists |
+| `pnpm telemetry:migrate:local` | The same, on the local database `telemetry:dev` uses | Before the first `telemetry:dev` |
+| `pnpm telemetry:migrate:remote` | Same as `telemetry:migrate` | |
+| `pnpm telemetry:migrate:3:remote` | Adds the schema 3 columns to a table created before schema 3. **Once only**: a second run fails with `duplicate column name` and changes nothing | Only for a database older than schema 3. The live one already has them |
+| `pnpm telemetry:migrate:3:local` | The same, on the local database | |
+| `pnpm telemetry:wrangler <args>` | Any wrangler command, run for the receiver | Everything else, examples below |
+
+**Dashboard**
+
+| Command | What it does | When to use it |
+| --- | --- | --- |
+| `pnpm dashboard:test` | Runs the dashboard's security, filtering, and export tests, offline | Before every dashboard deploy |
+| `pnpm dashboard:dev` | Runs the dashboard on your machine. First `cp telemetry/dashboard/.dev.vars.example telemetry/dashboard/.dev.vars`, which allows sign-in on `localhost` only | Looking at a change before deploying |
+| `pnpm dashboard:deploy:dry-run` | Checks its config, deploys nothing; shows whether `TEAM_DOMAIN` is still `REPLACE_ME` | After editing its `wrangler.toml` |
+| `pnpm dashboard:deploy` | Deploys the dashboard; prints its URL | After changing its code or settings |
+| `pnpm dashboard:tail` | Streams the live dashboard's requests | Debugging a `Forbidden` |
+| `pnpm dashboard:wrangler <args>` | Any wrangler command, run for the dashboard | |
+
+**Both**
+
+| Command | What it does |
+| --- | --- |
+| `pnpm workers:test` | Runs the receiver's and the dashboard's tests |
+
+The `wrangler` shortcuts pass along whatever you type after them:
+
+```bash
+pnpm telemetry:wrangler d1 list
+pnpm telemetry:wrangler d1 execute culm-telemetry --remote --command "SELECT COUNT(*) AS events FROM events"
+pnpm telemetry:wrangler deployments list
+pnpm telemetry:wrangler rollback        # undo a bad receiver deploy
+```
+
+### First-time setup, in order
+
+The receiver and its database are already live. For a new account, or to
+see the whole path:
+
+1. `pnpm workers:test`: both test suites pass.
+2. `pnpm telemetry:wrangler d1 create culm-telemetry`, then put the
+   printed `database_id` into **both** `telemetry/worker/wrangler.toml`
+   and `telemetry/dashboard/wrangler.toml`. Keep `binding = "DB"`.
+3. `pnpm telemetry:migrate`: creates the table.
+4. `pnpm telemetry:deploy`: note the URL it prints, and set
+   `DEFAULT_ENDPOINT` in `src/telemetry/mod.rs` to that URL plus
+   `/events`.
+5. `pnpm dashboard:deploy`: opening it shows `Forbidden`, which is
+   correct until Access is set up.
+6. Set up Cloudflare Access (email code and GitHub, only your email),
+   fill in `TEAM_DOMAIN`, `ACCESS_AUD`, and `ALLOWED_EMAILS` in
+   `telemetry/dashboard/wrangler.toml`, then `pnpm dashboard:deploy`
+   again. Every click is in
+   [docs/DEPLOY.md, "Deploying the dashboard"](docs/DEPLOY.md#-deploying-the-dashboard).
+7. Open the dashboard in a private window: Cloudflare's sign-in page
+   first, then your data.
+
+### Day to day
+
+| You want to | Run |
+| --- | --- |
+| Ship a receiver change | `pnpm telemetry:test && pnpm telemetry:deploy` |
+| Ship a dashboard change | `pnpm dashboard:test && pnpm dashboard:deploy` |
+| See events arrive live | `pnpm telemetry:tail` |
+| Count events | `pnpm telemetry:wrangler d1 execute culm-telemetry --remote --command "SELECT COUNT(*) FROM events"` |
+| Look at the data | Open the dashboard, or export CSV from its Events page |
+| Undo a bad deploy | `pnpm telemetry:wrangler rollback` or `pnpm dashboard:wrangler rollback` |
+
+**Changing what culm sends** is a decision 9 change first. The Rust
+payload, `telemetry/worker/schema.sql`, the receiver's validation, a new
+numbered file in `telemetry/worker/migrations/`, and
+[docs/TELEMETRY.md](docs/TELEMETRY.md) change together, and the receiver
+is deployed **before** the culm version that sends the new fields. The
+full order is in [docs/DEPLOY.md](docs/DEPLOY.md#changing-the-payload).
+
+### If something goes wrong
+
+| You see | Fix |
+| --- | --- |
+| `Missing script: db:migrate:3:remote` | That is the Worker's own script name. From the root, use `pnpm telemetry:migrate:3:remote` |
+| `ERR_PNPM_IGNORED_BUILDS` | `pnpm approve-builds`, tick esbuild, workerd, and sharp, then `pnpm install` |
+| `Invalid TOML document` from wrangler | Something JSON-shaped was pasted into a `wrangler.toml`; it must stay TOML |
+| `Invalid uuid [code: 7400]` | `database_id` in `wrangler.toml` is still a placeholder |
+| `duplicate column name` | The schema 3 migration already ran on that database. Nothing changed; ignore it |
+| The dashboard says `Forbidden` after you signed in | Its `TEAM_DOMAIN`, `ACCESS_AUD`, or `ALLOWED_EMAILS` does not match Access. Fix and `pnpm dashboard:deploy` |
+
 ## 🔁 CI and releases
 
 | Workflow | Runs | What it proves |
@@ -945,8 +1089,8 @@ first:
    version you are releasing.
 2. Tag and push the tag:
    ```bash
-   git tag -s v0.1.1 -m "v0.1.1"
-   git push origin v0.1.1
+   git tag -s v0.1.2 -m "v0.1.2"
+   git push origin v0.1.2
    ```
    This alone builds the binaries and creates the GitHub release. It
    publishes nothing to any registry.

@@ -17,11 +17,11 @@ A private, read-only website over the telemetry database that
 Setup, step by step: [docs/DEPLOY.md, "Deploying the dashboard"](../../docs/DEPLOY.md#-deploying-the-dashboard).
 
 ```sh
-npm install
-npm test                          # auth, filters, escaping, CSV export
+pnpm install
+pnpm test                          # auth, filters, escaping, CSV export
 cp .dev.vars.example .dev.vars    # local-only sign-in bypass
-npm run dev                       # http://localhost:8787
-npm run deploy
+pnpm run dev                       # http://localhost:8787
+pnpm run deploy
 ```
 
 `src/codes.js` explains each error code. It is generated from culm's
