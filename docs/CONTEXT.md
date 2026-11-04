@@ -150,6 +150,12 @@ other value is off, so `DO_NOT_TRACK` and `CI` no longer need rules of
 their own. The payload, the first-run notice, and the "never sent" list
 are unchanged. Accepted cost: far fewer events, so the layer selection
 data above arrives only from people who chose to send it.
+**Amended 2026-11-04 by the owner: back to opt-out**, now that the
+receiver is deployed. On unless `CULM_TELEMETRY` is `0`, `false`, `off`,
+or `no`, or `DO_NOT_TRACK=1`, or `CI` is set; `CULM_TELEMETRY` set to `1`,
+`true`, `on`, or `yes` turns it back on in CI. Takes effect from 0.1.1.
+The first-run notice printing the exact payload is what makes the
+default acceptable, so it must never be removed or summarised.
 
 **10. This project is culm, and ipile is the bootstrap tool.** Grain was
 abandoned for colliding with the Grain programming language. Four

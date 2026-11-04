@@ -18,10 +18,10 @@ use std::time::Duration;
 
 pub use payload::{ErrorKind, Event, Exit, Install, Outcome, RunStats, Scaffold, SelectedVia};
 
-/// The default collector. Overridable so a deployment (or a test) can point
-/// elsewhere without a rebuild; there is no working default until the
-/// receiver in `telemetry/worker/` is deployed and this constant is updated.
-const DEFAULT_ENDPOINT: &str = "https://telemetry.culm.dev/events";
+/// The default collector: the `telemetry/worker/` receiver, deployed 2026-11-04.
+/// `CULM_TELEMETRY_ENDPOINT` overrides it without a rebuild, for a test or another receiver.
+/// A move to `telemetry.culm.dev` waits on that domain; docs/DEPLOY.md has the steps.
+const DEFAULT_ENDPOINT: &str = "https://culm-telemetry.shownzy001.workers.dev/events";
 
 /// Where the first-run notice sends a reader for the full specification.
 const SPEC_URL: &str = "https://github.com/Zunetra/culm/blob/main/docs/TELEMETRY.md";
@@ -31,21 +31,33 @@ const SPEC_URL: &str = "https://github.com/Zunetra/culm/blob/main/docs/TELEMETRY
 /// that a dead endpoint is not something anyone waits on.
 const SEND_BUDGET: Duration = Duration::from_millis(500);
 
-/// Whether telemetry is off, as a pure function of the variable that decides
-/// it, so the rule is testable without mutating process-wide environment
-/// state, which `#![forbid(unsafe_code)]` disallows outright
+/// Whether telemetry is off, as a pure function of the three variables that
+/// decide it, so the rule is testable without mutating process-wide
+/// environment state, which `#![forbid(unsafe_code)]` disallows outright
 /// (`std::env::set_var` is `unsafe` as of edition 2024).
 ///
-/// Opt-in, per decision 9 as amended 2026-11-02: only `CULM_TELEMETRY` set to
-/// `1`, `true`, `on`, or `yes` turns it on, and an explicit opt-in holds even
-/// in CI. Anything else, unset included, leaves it off, so `DO_NOT_TRACK` and
-/// `CI` need no rule of their own.
-fn disabled(culm_telemetry: Option<&str>) -> bool {
-    let Some(value) = culm_telemetry else {
+/// Opt-out, per decision 9 as amended 2026-11-04. `CULM_TELEMETRY` wins when
+/// set: `0`, `false`, `off`, or `no` turns it off, and `1`, `true`, `on`, or
+/// `yes` turns it on even in CI. Otherwise `DO_NOT_TRACK=1` turns it off, and
+/// so does a set `CI`, since CI runs would swamp the numbers and make them
+/// meaningless.
+fn disabled(culm_telemetry: Option<&str>, do_not_track: Option<&str>, ci: Option<&str>) -> bool {
+    if let Some(value) = culm_telemetry {
+        let value = value.trim().to_ascii_lowercase();
+        if matches!(value.as_str(), "0" | "false" | "off" | "no") {
+            return true;
+        }
+        if matches!(value.as_str(), "1" | "true" | "on" | "yes") {
+            return false;
+        }
+    }
+    if do_not_track.is_some_and(|value| value.trim() == "1") {
         return true;
-    };
-    let value = value.trim().to_ascii_lowercase();
-    return !matches!(value.as_str(), "1" | "true" | "on" | "yes");
+    }
+    return ci.is_some_and(|value| {
+        let value = value.trim().to_ascii_lowercase();
+        !value.is_empty() && value != "false" && value != "0"
+    });
 }
 
 /// Records one command, unless telemetry is disabled.
@@ -54,7 +66,12 @@ fn disabled(culm_telemetry: Option<&str>) -> bool {
 /// touch the network or this machine's real telemetry id as a side effect of
 /// running `cargo test`.
 pub fn record(outcome: Outcome) {
-    if disabled(std::env::var("CULM_TELEMETRY").ok().as_deref()) {
+    let var = |name: &str| std::env::var(name).ok();
+    if disabled(
+        var("CULM_TELEMETRY").as_deref(),
+        var("DO_NOT_TRACK").as_deref(),
+        var("CI").as_deref(),
+    ) {
         return;
     }
 
@@ -112,23 +129,48 @@ mod tests {
     use super::*;
 
     #[test]
-    fn off_when_unset() {
-        assert!(disabled(None));
+    fn on_when_nothing_is_set() {
+        assert!(!disabled(None, None, None));
     }
 
     #[test]
-    fn any_plain_yes_turns_it_on() {
-        for value in ["1", "true", "ON", "yes", " True "] {
-            assert!(!disabled(Some(value)), "{value}");
+    fn any_plain_no_turns_it_off() {
+        for value in ["0", "false", "OFF", "no", " False "] {
+            assert!(disabled(Some(value), None, None), "{value}");
         }
     }
 
-    /* Anything short of a clear yes stays off, including an empty value and a
-     * typo: guessing consent is the wrong direction to err in. */
+    /* Only a recognised no turns it off: an empty value or a typo is not a
+     * decision, so the default stands. */
     #[test]
-    fn anything_else_leaves_it_off() {
-        for value in ["0", "false", "off", "no", "", "2", "yess"] {
-            assert!(disabled(Some(value)), "{value}");
+    fn an_unrecognised_value_keeps_the_default() {
+        for value in ["", "2", "nope"] {
+            assert!(!disabled(Some(value), None, None), "{value}");
         }
+    }
+
+    #[test]
+    fn do_not_track_is_honoured() {
+        assert!(disabled(None, Some("1"), None));
+        assert!(!disabled(None, Some("0"), None));
+    }
+
+    /* CI would otherwise dominate the numbers, including culm's own
+     * templates.yml. An explicit yes is the one way back in. */
+    #[test]
+    fn ci_is_off_unless_explicitly_opted_in() {
+        assert!(disabled(None, None, Some("true")));
+        assert!(disabled(None, None, Some("1")));
+        assert!(!disabled(None, None, Some("false")));
+        assert!(!disabled(None, None, Some("")));
+        for value in ["1", "true", "on", "yes"] {
+            assert!(!disabled(Some(value), None, Some("true")), "{value}");
+        }
+    }
+
+    #[test]
+    fn an_explicit_opt_out_beats_everything() {
+        assert!(disabled(Some("0"), None, Some("true")));
+        assert!(disabled(Some("off"), Some("0"), None));
     }
 }

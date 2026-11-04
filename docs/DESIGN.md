@@ -432,10 +432,10 @@ Needs accounts, secrets, or time rather than code.
 
 - **The r0.2 checkpoint:** two weeks of real use with `--verify` runs,
   every hit checked. Decides whether the held runner work happens at all.
-- **Telemetry, optional since it became opt-in (decision 9 amended
-  2026-11-02):** DNS for `culm.dev`, create the D1 database, deploy
-  `telemetry/worker/` (its README has the steps), then point
-  `DEFAULT_ENDPOINT` at it.
+- **Telemetry:** the receiver is deployed (2026-11-04) at
+  `culm-telemetry.shownzy001.workers.dev`, and `DEFAULT_ENDPOINT` points
+  at it from 0.1.1. Optional later: serve it at `telemetry.culm.dev`
+  once that domain is on the account (docs/DEPLOY.md).
 - **Registries:** the `culm` crate is published (0.1.0). Still open:
   claim `culm` and `@zunetra` on npm, add `NPM_TOKEN`; create
   `zunetra/homebrew-tap` and `HOMEBREW_TAP_TOKEN`; add
