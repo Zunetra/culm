@@ -2,8 +2,8 @@
 
 Accepts the anonymous usage payload `src/telemetry/mod.rs` sends (decision 9
 in `docs/CONTEXT.md`) and stores one row per event in a Cloudflare D1
-database. Nothing here is deployed yet - this is the code and the exact
-steps to deploy it, whenever you're ready.
+database. The full, tested deploy walkthrough, including the mistakes that are
+easy to make, is in [docs/DEPLOY.md](../../docs/DEPLOY.md).
 
 ## What it needs
 

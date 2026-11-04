@@ -669,7 +669,17 @@ Full design: [docs/DESIGN.md section 3](docs/DESIGN.md).
 
 ## 🌍 Environment variables
 
-All optional.
+All optional. Using culm needs none of them. To set them while working
+on culm itself, start from the example file in the repository root:
+
+```bash
+cp .env.example .env              # then edit .env
+set -a && . ./.env && set +a      # load it into this shell; culm does not read .env itself
+```
+
+`.env.example` documents each variable, and `.env` is gitignored. The
+telemetry receiver has its own, `telemetry/worker/.env.example`; see
+[docs/DEPLOY.md](docs/DEPLOY.md).
 
 ```bash
 # Telemetry is off by default. 1, true, on, or yes opts in, even in CI.
@@ -764,11 +774,13 @@ culm/
 │   ├── LAYERS.md                  # The layer model, every shipped layer, authoring
 │   ├── INTERNALS.md               # The merge engine, scaffold pipeline, library use
 │   ├── TELEMETRY.md               # The exact telemetry payload
+│   ├── DEPLOY.md                  # Releasing culm and deploying the telemetry receiver
 │   └── Logo/                      # The culm marks
-├── telemetry/worker/              # The telemetry receiver, written, not deployed
+├── telemetry/worker/              # The telemetry receiver, a Cloudflare Worker and D1
 ├── npm/                           # npm launcher and platform package staging
 ├── packaging/homebrew/            # Formula template for the tap
 ├── installer.sh                   # Shell installer, verifies SHA256SUMS
+├── .env.example                   # Optional environment for working on culm; cp to .env
 ├── .cargo/config.toml             # cargo culm and cargo lint aliases
 ├── .github/workflows/             # ci, templates (weekly), release
 ├── deny.toml                      # cargo deny policy
@@ -814,6 +826,14 @@ These catch people out. The reasons are in
 Rust with edition 2024 support, via [rustup](https://rustup.rs/).
 Nothing else: no system packages, database, or container. Node and pnpm
 are only needed to run the optional `pnpm` scripts.
+
+Optional environment, for example to opt in to telemetry while testing
+a receiver:
+
+```bash
+cp .env.example .env
+set -a && . ./.env && set +a
+```
 
 ### Commands
 
@@ -1079,6 +1099,7 @@ linted otherwise.
 | [docs/LAYERS.md](docs/LAYERS.md) | You want the full layer list, the selection rules, or to write a layer |
 | [docs/INTERNALS.md](docs/INTERNALS.md) | You are changing the merge engine or scaffold pipeline, or using culm as a Rust library |
 | [docs/TELEMETRY.md](docs/TELEMETRY.md) | You want the exact telemetry payload, field by field |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | You are releasing a version of culm, or deploying the telemetry receiver |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | You are opening a pull request |
 | [handbook/naming/NAMING.md](../handbook/naming/NAMING.md) | You wonder why it is called culm |
 

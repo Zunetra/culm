@@ -2,10 +2,14 @@ name = "culm-telemetry"
 main = "src/index.js"
 compatibility_date = "2026-09-08"
 
-# `database_id` is filled in after `wrangler d1 create` - see README.md. It is
-# not a secret, but it is specific to your account, which is why it is not
-# guessed here.
+# Pinned so wrangler never asks which account to use. Not a secret: it is
+# useless without a logged-in session or an API token for that account.
+account_id = "1c29aac31ddeb3c8d571d04cccbe3949"
+
+# Not a secret either, but specific to this account's database. `binding`
+# stays `DB` because `src/index.js` reads `env.DB`; `wrangler d1 create`
+# suggests a different name, which would leave the Worker without a database.
 [[d1_databases]]
 binding = "DB"
 database_name = "culm-telemetry"
-database_id = "REPLACE_ME_AFTER_D1_CREATE"
+database_id = "58896687-7bdd-42be-b1a6-a95b711d5425"
